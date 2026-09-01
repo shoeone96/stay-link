@@ -40,7 +40,7 @@
 - **JOURNAL 구조**: 단계별 구성 + 공통 소제목 4종. 포기·미구현 항목 정리는 실제 포기 결정이 나오는 시점에 섹션 추가 예정. 부하/동시성 테스트는 vthread 서빙 모델 선택의 근거 실험을 겸해 실측하기로.
 
 #### 막힌 지점·해결
-- 없음 (세팅 단계).
+- Initializr 기본값으로 스켈레톤이 Spring Boot 4.1.1로 생성돼 확정 스택(3.5.x)과 어긋남 → 3.5.16(3.5 라인 최신 패치 확인)으로 정렬하고, Boot 4 계열 스타터명(`starter-webmvc` 등)을 3.x 체계(`starter-web`·`starter-webflux`)로 교체. WebClient 사용을 위한 webflux 스타터 추가. group도 `com.stay`로 정리(철자 오류 교정). 컴파일 검증 완료.
 
 #### 참고
 - Spring Boot System Requirements — https://docs.spring.io/spring-boot/system-requirements.html
