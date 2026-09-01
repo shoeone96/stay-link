@@ -61,7 +61,7 @@
 - **AI 답변 요약**: 병합 후 점검에서 스켈레톤이 Initializr 기본값(Spring Boot 4.1.1)으로 생성돼 확정 스택(3.5.x)과 어긋난 것과 group 철자 오류(accomodate)를 발견해 보고. 3.5 라인 최신 패치(3.5.16) 확인 후 정렬안 제시.
 - **결정**: 수용 — Boot 3.5.16으로 정렬, 스타터를 3.x 체계(web·webflux·data-jpa)로 교체, group `com.stay`(사용자 지정)로 변경, 패키지 com.stay 이동. 컴파일 검증 통과.
 
-### 11. 프로젝트 루트 통합
-- **상황**: 문서 체계(git 저장소·JOURNAL·ai-history)가 있는 디렉토리와, 사용자가 새로 세팅한 Gradle 스켈레톤 디렉토리가 서로 다른 경로에 분리되어 있었음. AI가 전자에 문서를 반입하자 사용자가 "작업은 스켈레톤 쪽에서 하려고 세팅해 뒀다"고 정정.
-- **AI 답변 요약**: git 히스토리(원격 포함)와 문서 체계를 스켈레톤 디렉토리로 이전해 하나의 루트로 통합. .gitignore는 더 포괄적인 스켈레톤 쪽 내용으로 병합(.DS_Store 추가), 비게 된 옛 디렉토리는 제거.
-- **결정**: 수용 — 스켈레톤 디렉토리가 단일 프로젝트 루트로 확정.
+### 12. domain-analysis 스킬에 "쉬운 시각 해설 모드" 추가
+- **요구**: "Explain like I'm someone who knows nothing about this topic, using a HTML artifact with big pictures and few words." 문구를 도메인 스킬에 포함할 것.
+- **AI 답변 요약**: SKILL.md에 「쉬운 시각 해설 모드 (HTML)」 섹션 신설 — 해당 문구를 지침 원문으로 넣고, 운용 규칙(사전 지식 0 기준 용어 풀이 / 그림 주인공·글 보조 / 구체 사례 기반 SVG / 디자인 시스템 준수 / docs/ 반입 전 검사)을 명시. 트리거 문구("쉽게 설명해줘", "그림으로 이해하게 해줘")도 description에 추가.
+- **결정**: 수용.
