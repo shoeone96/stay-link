@@ -34,7 +34,7 @@
 
 #### 의사결정
 - **프로젝트명 stay-link**: stay-hub·hotel-link·lodge-bridge 등과 비교. "stay"는 숙박 업계 표준 용어라 API 리소스(`/stays/search`)·내부 모델(Stay/RoomType/Supplier)과 용어가 한 벌로 정리되고, "link"가 연동이라는 시스템 정체성을 드러냄. 직관성만 보면 hotel-link가 우위였으나 비호텔 숙소까지 포괄하는 도메인 정확성에서 stay 선택.
-- **Java 25 (21 아님)**: Virtual Thread를 실제 서빙 모델로 쓸 계획이라 21 대비 실질 개선이 있는 25 선택 — JDK 24 JEP 491(synchronized pinning 해소), JDK 25 JEP 506(Scoped Values 정식화). Spring Boot 3.5.x의 Java 25 지원을 공식 문서로 확인. Structured Concurrency는 25에서도 preview(JEP 505)라 정식 기능으로는 쓰지 않기로.
+- **Java 25 (21 아님)**: Virtual Thread를 실제 서빙 모델로 쓸 계획이라 21 대비 실질 개선이 있는 25 선택 — JDK 24 JEP 491(synchronized pinning 해소), JDK 25 JEP 506(Scoped Values 정식화). Spring Boot 3.5.x의 Java 25 호환을 공식 문서로 확인. Structured Concurrency는 25에서도 preview(JEP 505)라 정식 기능으로는 쓰지 않기로.
 - **Kotlin 대신 Java**: 최근 실무 비중이 높아 가장 확신 있게 작성·설명할 수 있는 언어. 7일이라는 기간 제약에서 이 프로젝트의 본질은 언어가 아니라 설계 판단이므로, 언어 전환 마찰 대신 WebClient/Reactor 제어에 집중. 빌드 스크립트만 Kotlin DSL.
 - **WebFlux 전면 도입 안 함**: 논블로킹이 필수인 구간은 공급사 호출뿐. 리액티브는 Supplier fan-out 경계 안에만 가두고(timeout·onErrorResume·zip 연산자로 병렬·타임아웃·부분 실패 제어), 요청 서빙은 MVC + Virtual Thread로 단순하게 유지 — 디버깅 용이성과 숙련도 기반 리스크 관리.
 - **JOURNAL 구조**: 단계별 구성 + 공통 소제목 4종. 포기·미구현 항목 정리는 실제 포기 결정이 나오는 시점에 섹션 추가 예정. 부하/동시성 테스트는 vthread 서빙 모델 선택의 근거 실험을 겸해 실측하기로.
@@ -44,13 +44,29 @@
 
 #### 참고
 - Spring Boot System Requirements — https://docs.spring.io/spring-boot/system-requirements.html
-- Spring Boot Java 25 지원 논의 — https://github.com/spring-projects/spring-boot/issues/47245
+- Spring Boot Java 25 호환 논의 — https://github.com/spring-projects/spring-boot/issues/47245
 
 ---
 
 ## 1. 도메인 분석
 
-(진행 예정)
+### Day 0 (2026-09-01, 화)
+
+#### 수행 내용
+- 요구사항 배경(자사 상품 외에 외부 공급사 상품을 왜, 어떻게 연동해 파는가) 분석 문서 작성 → [docs/domain-background.html](docs/domain-background.html)
+- 구성: 배경 해설 / 유즈케이스 다이어그램 / 두 페이즈 시퀀스(사전 매핑 · 실시간 검색) / Supplier A·B 표현 차이 / 고객 화면 목업 / 상황의 MECE 분해 — 다이어그램 5장은 inline SVG로 직접 작성 (렌더링 의존성 없는 단일 HTML)
+
+#### 의사결정
+- **시스템 정체성을 "번역기 + 합성기"로 규정**: 공급사별 방언(요금 단위·세금 기준·실패 표현)을 자사 표준 모델로 번역(정규화)하고, 여러 공급사 결과를 하나로 합성(병합)하되 부분 실패를 허용하는 백엔드. 이후 설계 문서의 관점 축으로 사용.
+- **출처 공급사 필드는 내부용으로 해석**: "고객은 어느 공급사 상품인지와 무관하게 동일한 형태를 본다"는 원칙에 따라, 검색 응답의 출처 필드는 운영·추적 용도로 읽고 고객 화면 노출을 전제하지 않기로.
+- **상황 분해 3축 + 보조축 확정**: 요청 레벨(전체 성공/부분 실패/전체 실패) × 상품 레벨(가능/불가/미반환) × 출처 레벨(자사/A만/B만/중복), 보조축으로 실패 형태(HTTP 오류형·200 위장형·무응답형). 이 MECE 분해를 이후 테스트 케이스 목록(장애 시나리오·엣지 케이스)의 뼈대로 사용 예정.
+- **문서 반입 기준**: 개인 작업 공간에서 만든 원본에서 언급 금지 표현·수령 문서 직접 참조를 정제한 사본만 저장소에 반입 (수령 원문 문서는 저장소 밖 유지).
+
+#### 막힌 지점·해결
+- 분석 문서에 스펙 예시값(예시 숙소명·요금)이 들어가는 것의 공개 적정성 검토 → Mock 구성과 동일한 "응답 형태" 수준의 재서술이고 수령 원문 자체가 아니므로 반입 가능으로 판단.
+
+#### 참고
+- 외부 출처 미인용 — 확인된 공개 출처가 없는 업계 일반론은 단정하지 않고 요구사항 문서 서술 범위로 한정 (출처 날조 금지 규칙).
 
 ## 2. 설계
 

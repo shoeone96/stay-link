@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>stay-link — 연동 도메인 배경 분석</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     색/폰트/그림자는 반드시 이 변수로만 참조한다 (임의 hex 금지).
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <!-- ===================== COVER ===================== -->
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>stay-link · 연동 도메인 분석</span>
+      <h1 class="title">숙박 플랫폼은 왜<br><span class="hl">공급사를 연동</span>하는가</h1>
+      <p class="lede">요구사항 배경의 완전 분해 — 숙박 시스템에서 <b>채널연동(Supplier 연동)</b>이 무엇이고, 어떤 흐름으로 동작하며, <b>고객 화면에는 어떻게 드러나는지</b>를 유즈케이스·시퀀스·화면 목업으로 정리합니다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">TOPIC</span><span class="v">OTA 채널연동 백엔드</span></div>
+        <div class="chip"><span class="k">SOURCE</span><span class="v">요구사항 문서 (비공개)</span></div>
+        <div class="chip"><span class="k">OUTPUT</span><span class="v">배경 해설 · 유즈케이스 SVG · MECE 분해</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== TOC ===================== -->
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">배경 — 무엇이 문제인가<span class="hint">상세 설명</span></a></li>
+      <li><a href="#s2">등장인물과 유즈케이스<span class="hint">FIG 01</span></a></li>
+      <li><a href="#s3">연동 흐름 — 두 단계 조회<span class="hint">FIG 02</span></a></li>
+      <li><a href="#s4">Supplier A vs B — 같은 방, 다른 언어<span class="hint">FIG 03</span></a></li>
+      <li><a href="#s5">고객 화면에는 어떻게 보이는가<span class="hint">FIG 04</span></a></li>
+      <li><a href="#s6">상황의 MECE 분해<span class="hint">FIG 05</span></a></li>
+      <li><a href="#refs">참고 자료</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- ===================== SECTION 1 ===================== -->
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">BACKGROUND</p><h2 class="sec">배경 — 무엇이 문제인가</h2></div>
+    </div>
+
+    <p class="lead">숙박 플랫폼(OTA)의 상품은 두 경로로 들어옵니다. 자사에 직접 등록된 숙소, 그리고 외부 공급사(Supplier)에서 연동해 오는 상품입니다.</p>
+
+    <p>국내 대형 숙박 플랫폼 앱을 떠올리면, 화면에 뜨는 모든 숙소가 그 플랫폼 회사와 직접 계약한 숙소처럼 보입니다. 실제로는 <strong>자사 직등록 상품 외에, 외부 공급사의 상품을 API로 끌어와 함께 판매</strong>합니다<a href="#r1" class="cite">[1]</a>. 이렇게 외부 판매 채널(공급사)과 상품·재고·요금을 주고받는 연동 계층이 이 시스템이 다루는 <em>채널연동</em>입니다. 공급사를 하나 붙일 때마다 팔 수 있는 숙소가 늘어나므로, 플랫폼 입장에서는 상품 커버리지를 넓히는 핵심 수단입니다.</p>
+
+    <h3>문제의 본질 — 공급사마다 "언어"가 다르다</h3>
+    <p>연동 자체보다, <strong>공급사마다 API가 다르다</strong>는 점이 문제입니다. 요구사항 문서가 명시하는 이질성은 세 축입니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>이질성 축</th><th>Supplier A 방식</th><th>Supplier B 방식</th></tr></thead>
+        <tbody>
+          <tr><td>요금 단위</td><td>날짜별 1박 단가 (<span class="term">dailyRates[].nightlyRate</span>)</td><td>숙박 전체 총액 (<span class="term">totalPrice</span>)</td></tr>
+          <tr><td>세금</td><td>별도(net) — <span class="term">taxAmount</span> 필드로 따로 줌</td><td>포함(gross) — <span class="term">taxIncluded: true</span>만 알려줌</td></tr>
+          <tr><td>실패 표현</td><td>HTTP 상태 코드 (400 / 401 / 429 / 500 / 503)</td><td>항상 HTTP 200 + 본문 <span class="term">resultCode</span> (E400~E503)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>그 외에도 식별자 체계(<span class="term">hotelCode</span> vs <span class="term">propertyId</span>), 조식 포함 여부(같은 객실도 공급사마다 다름), 재고 표현(날짜별 잔여 객실 수) 등 표현 방식이 전부 제각각입니다. 요컨대 <strong>같은 "숙박 상품"을 서로 다른 언어로 말하는 두 상대</strong>와 동시에 대화해야 하는 상황입니다.</p>
+
+    <blockquote>
+      <p>이 차이를 고객에게 그대로 노출할 수는 없다. 고객은 어느 공급사에서 온 상품인지와 무관하게, 동일한 형태의 검색 결과를 봐야 한다.</p>
+      <cite>— 요구사항 문서 (요지)<a href="#r1" class="cite">[1]</a></cite>
+    </blockquote>
+
+    <h3>숨은 전제 — 조회는 두 단계다</h3>
+    <p>숙박 시스템 기준으로 이 연동의 성격을 결정짓는 제약이 하나 더 있습니다. <strong>공급사는 "서울 숙소 보여줘" 같은 지역 검색을 제공하지 않습니다.</strong> 공급사 API는 성격이 다른 두 개로 나뉩니다<a href="#r1" class="cite">[1]</a>.</p>
+    <ul class="checklist">
+      <li><span class="box"></span><b>① 숙소 목록 API</b> — 공급사가 취급하는 숙소·객실 타입 전체 목록. 조건 파라미터 없음, 요금·재고 없음, 자주 안 바뀌는 <em>정적 콘텐츠</em> <span class="tag">사전</span></li>
+      <li><span class="box"></span><b>② 재고·요금 조회 API</b> — 숙소 코드 목록(최대 50개)을 넘겨 한 번에 조회. 호출할 때마다 값이 바뀌는 <em>동적 데이터</em> <span class="tag">실시간</span></li>
+    </ul>
+    <p>즉 <strong>어떤 숙소를 물어볼지는 플랫폼이 미리 알고 있어야</strong> 합니다. ①로 목록을 미리 받아 자사 식별자와 매핑해 두고(조회의 전제), 고객 검색이 들어오면 그 매핑에서 코드를 꺼내 ②를 공급사별로 호출하는 구조입니다. "숙소 목록은 잘 안 바뀌고, 재고·요금은 매번 바뀐다"는 성격 차이가 설계 전체를 관통합니다.</p>
+
+    <div class="note key"><span class="tag">핵심</span>이 시스템은 결국 <strong>번역기 + 합성기</strong>입니다. 공급사별 방언(요금·세금·실패 표현)을 자사 표준 모델로 <strong>번역(정규화)</strong>하고, 여러 공급사의 결과를 <strong>하나의 검색 결과로 합성(병합)</strong>하되, 한 공급사가 죽어도 나머지로 응답하는(부분 실패 허용) 백엔드입니다.</div>
+
+    
+  </section>
+
+  <!-- ===================== SECTION 2 ===================== -->
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">USE CASE</p><h2 class="sec">등장인물과 유즈케이스</h2></div>
+    </div>
+
+    <p class="lead">액터는 셋입니다. 검색하는 고객, 그리고 시스템 바깥의 외부 시스템인 Supplier A와 B. 유즈케이스는 "실시간 검색 계열 4개 + 사전 매핑 1개"로 정리됩니다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 720 560" role="img" aria-label="채널연동 유즈케이스 다이어그램. 고객이 통합 숙소 검색을 실행하면 재고·요금 병렬 조회, 표준 모델 정규화, 결과 병합으로 이어지고, Supplier A와 B는 재고·요금 조회와 사전 숙소 매핑 동기화에 연결된다.">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <!-- 시스템 경계 -->
+          <rect x="140" y="28" width="430" height="505" rx="20" fill="#FFFFFF" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="355" y="58" text-anchor="middle" fill="#191F28">숙박 플랫폼 · 채널연동 백엔드</text>
+          <text class="svg-s" x="160" y="84" fill="#3182F6">실시간 — 고객 검색 시</text>
+          <line x1="152" y1="436" x2="558" y2="436" stroke="#8B95A1" stroke-width="1" stroke-dasharray="5 4"/>
+          <text class="svg-s" x="160" y="456" fill="#0A8F5B">사전 — 주기적 매핑 구축</text>
+
+          <!-- 액터: 고객 -->
+          <g stroke="#4E5968" stroke-width="2" fill="none" stroke-linecap="round">
+            <circle cx="62" cy="212" r="12" fill="#F2F4F6"/>
+            <line x1="62" y1="224" x2="62" y2="256"/>
+            <line x1="44" y1="236" x2="80" y2="236"/>
+            <line x1="62" y1="256" x2="48" y2="278"/>
+            <line x1="62" y1="256" x2="76" y2="278"/>
+          </g>
+          <foreignObject x="22" y="284" width="80" height="28"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t" style="font-size:13px">고객</div></div></foreignObject>
+
+          <!-- 액터: Supplier A -->
+          <g stroke="#4E5968" stroke-width="2" fill="none" stroke-linecap="round">
+            <circle cx="650" cy="150" r="12" fill="#F2F4F6"/>
+            <line x1="650" y1="162" x2="650" y2="194"/>
+            <line x1="632" y1="174" x2="668" y2="174"/>
+            <line x1="650" y1="194" x2="636" y2="216"/>
+            <line x1="650" y1="194" x2="664" y2="216"/>
+          </g>
+          <foreignObject x="600" y="220" width="104" height="28"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="s">Supplier A</div></div></foreignObject>
+
+          <!-- 액터: Supplier B -->
+          <g stroke="#4E5968" stroke-width="2" fill="none" stroke-linecap="round">
+            <circle cx="650" cy="390" r="12" fill="#F2F4F6"/>
+            <line x1="650" y1="402" x2="650" y2="434"/>
+            <line x1="632" y1="414" x2="668" y2="414"/>
+            <line x1="650" y1="434" x2="636" y2="456"/>
+            <line x1="650" y1="434" x2="664" y2="456"/>
+          </g>
+          <foreignObject x="600" y="460" width="104" height="28"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="s">Supplier B</div></div></foreignObject>
+
+          <!-- UC1 통합 숙소 검색 -->
+          <ellipse cx="280" cy="130" rx="108" ry="36" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="180" y="98" width="200" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">통합 숙소 검색</div><div class="s">날짜·인원 → 동일 형태 결과</div></div></foreignObject>
+
+          <!-- UC2 재고·요금 병렬 조회 -->
+          <ellipse cx="430" cy="225" rx="105" ry="35" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="333" y="194" width="194" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">재고·요금 병렬 조회</div><div class="s">코드 50개씩 bulk 호출</div></div></foreignObject>
+
+          <!-- UC3 표준 모델 정규화 -->
+          <ellipse cx="262" cy="308" rx="105" ry="35" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="165" y="277" width="194" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">표준 모델 정규화</div><div class="s">요금·세금·실패 통일</div></div></foreignObject>
+
+          <!-- UC4 결과 병합 -->
+          <ellipse cx="430" cy="390" rx="105" ry="34" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="333" y="360" width="194" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">결과 병합</div><div class="s">부분 실패 허용</div></div></foreignObject>
+
+          <!-- UC5 매핑 동기화 -->
+          <ellipse cx="355" cy="486" rx="140" ry="34" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+          <foreignObject x="225" y="456" width="260" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">숙소·객실 매핑 동기화</div><div class="s">공급사 코드 ↔ 내부 식별자 저장</div></div></foreignObject>
+
+          <!-- 연결: 고객 → UC1 -->
+          <line x1="86" y1="222" x2="170" y2="142" stroke="#4E5968" stroke-width="1.5" marker-end="url(#a1)"/>
+
+          <!-- include 파이프라인 -->
+          <line x1="330" y1="160" x2="392" y2="197" stroke="#3182F6" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a1)"/>
+          <text class="svg-l" x="386" y="172" text-anchor="middle" fill="#1B64DA">«include»</text>
+          <line x1="388" y1="255" x2="308" y2="282" stroke="#3182F6" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a1)"/>
+          <line x1="312" y1="336" x2="390" y2="366" stroke="#3182F6" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a1)"/>
+
+          <!-- Supplier 연결 -->
+          <line x1="633" y1="182" x2="540" y2="217" stroke="#4E5968" stroke-width="1.3" marker-start="url(#a1)"/>
+          <line x1="643" y1="212" x2="500" y2="472" stroke="#0A8F5B" stroke-width="1.3" marker-start="url(#a1)"/>
+          <line x1="638" y1="398" x2="540" y2="240" stroke="#4E5968" stroke-width="1.3" marker-start="url(#a1)"/>
+          <line x1="633" y1="430" x2="500" y2="480" stroke="#0A8F5B" stroke-width="1.3" marker-start="url(#a1)"/>
+          <text class="svg-l" x="588" y="270" text-anchor="middle" fill="#4E5968">② 재고·요금</text>
+          <text class="svg-l" x="590" y="452" text-anchor="middle" fill="#0A8F5B">① 숙소 목록</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 1.</b> 채널연동 유즈케이스 다이어그램. 고객은 "통합 숙소 검색" 하나만 보지만, 그 뒤에서 병렬 조회 → 정규화 → 병합이 «include»로 이어집니다. Supplier A·B는 사람 아닌 <b>외부 시스템 액터</b>이며, 실시간 ②재고·요금 조회와 사전 ①숙소 목록 동기화 두 지점에서만 시스템과 만납니다.</figcaption>
+    </figure>
+
+    <h3>각 유즈케이스가 놓인 상황</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>유즈케이스</th><th>트리거 · 시점</th><th>하는 일</th></tr></thead>
+        <tbody>
+          <tr><td>숙소·객실 매핑 동기화</td><td>앱 기동 시 / 주기적 (설계 판단)</td><td>①숙소 목록 API로 공급사 코드를 받아 (공급사, 숙소 코드) → 내부 숙소 식별자, (공급사, 숙소 코드, 객실 코드) → 내부 객실 타입 식별자 매핑을 DB에 저장</td></tr>
+          <tr><td>통합 숙소 검색</td><td>고객이 날짜·인원 입력</td><td><span class="term">GET /api/v1/stays/search</span> — 자사가 보유한 전체 숙소 대상, 아래 3개를 포함해 실행</td></tr>
+          <tr><td>재고·요금 병렬 조회</td><td>검색 내부</td><td>매핑에서 공급사별 코드를 꺼내 50개씩 묶어 A·B ②API를 WebClient로 동시 호출</td></tr>
+          <tr><td>표준 모델 정규화</td><td>응답 수신 직후</td><td>공급사별 요금·세금·재고·실패 표현을 자사 표준 숙박 상품 모델로 변환</td></tr>
+          <tr><td>결과 병합</td><td>정규화 후</td><td>공급사별 결과를 하나로 합침. 한쪽이 실패해도 나머지로 응답하고 실패 사실을 드러냄</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== SECTION 3 ===================== -->
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">FLOW</p><h2 class="sec">연동 흐름 — 두 단계 조회</h2></div>
+    </div>
+
+    <p class="lead">시간 축으로 보면 흐름은 정확히 두 페이즈입니다. 검색이 오기 전에 끝나 있어야 하는 "매핑 구축", 그리고 검색 1건마다 도는 "병렬 조회 → 정규화 → 병합"입니다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="SEQUENCE">
+        <svg viewBox="0 0 1120 700" role="img" aria-label="채널연동 시퀀스 다이어그램. 사전 페이즈에서 플랫폼이 Supplier A와 B의 숙소 목록을 받아 매핑 DB에 저장하고, 실시간 페이즈에서 고객 검색 요청을 받아 매핑 DB에서 코드를 꺼내 A와 B를 병렬 조회한 뒤 정규화와 병합을 거쳐 통합 결과를 반환한다.">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <!-- 라이프라인 헤더 -->
+          <g>
+            <rect x="15" y="16" width="150" height="46" rx="12" fill="#F2F4F6" stroke="#B0B8C1"/>
+            <foreignObject x="15" y="16" width="150" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">고객</div></div></foreignObject>
+            <rect x="255" y="16" width="150" height="46" rx="12" fill="#E8F3FF" stroke="#3182F6"/>
+            <foreignObject x="255" y="16" width="150" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">통합 검색 백엔드</div></div></foreignObject>
+            <rect x="480" y="16" width="150" height="46" rx="12" fill="#E7F9F1" stroke="#15C47E"/>
+            <foreignObject x="480" y="16" width="150" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">매핑 DB</div></div></foreignObject>
+            <rect x="715" y="16" width="150" height="46" rx="12" fill="#F2F4F6" stroke="#B0B8C1"/>
+            <foreignObject x="715" y="16" width="150" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Supplier A</div></div></foreignObject>
+            <rect x="945" y="16" width="150" height="46" rx="12" fill="#F2F4F6" stroke="#B0B8C1"/>
+            <foreignObject x="945" y="16" width="150" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Supplier B</div></div></foreignObject>
+          </g>
+          <g stroke="#B0B8C1" stroke-width="1" stroke-dasharray="4 5">
+            <line x1="90" y1="62" x2="90" y2="676"/>
+            <line x1="330" y1="62" x2="330" y2="676"/>
+            <line x1="555" y1="62" x2="555" y2="676"/>
+            <line x1="790" y1="62" x2="790" y2="676"/>
+            <line x1="1020" y1="62" x2="1020" y2="676"/>
+          </g>
+
+          <!-- PHASE 0 band -->
+          <rect x="30" y="92" width="1062" height="176" rx="14" fill="#E7F9F1" fill-opacity="0.55" stroke="#BFECD8"/>
+          <text class="svg-l" x="46" y="114" fill="#0A8F5B">PHASE 0 — 사전 · 매핑 구축 (기동 시 / 주기적: 설계 판단)</text>
+          <line x1="330" y1="138" x2="790" y2="138" stroke="#4E5968" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text class="svg-l" x="560" y="130" text-anchor="middle" fill="#4E5968">① GET /a/v1/hotels — 숙소 목록</text>
+          <line x1="790" y1="164" x2="330" y2="164" stroke="#8B95A1" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <text class="svg-s" x="560" y="157" text-anchor="middle" fill="#6B7684">숙소·객실 타입 목록 (요금·재고 없음)</text>
+          <line x1="330" y1="196" x2="1020" y2="196" stroke="#4E5968" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text class="svg-l" x="675" y="188" text-anchor="middle" fill="#4E5968">① GET /b/api/properties — 숙소 목록</text>
+          <line x1="1020" y1="222" x2="330" y2="222" stroke="#8B95A1" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <text class="svg-s" x="675" y="215" text-anchor="middle" fill="#6B7684">숙소·객실 타입 목록</text>
+          <line x1="330" y1="252" x2="555" y2="252" stroke="#0A8F5B" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text class="svg-l" x="442" y="244" text-anchor="middle" fill="#0A8F5B">공급사 코드 ↔ 내부 식별자 매핑 저장</text>
+
+          <!-- PHASE 1 band -->
+          <rect x="30" y="286" width="1062" height="380" rx="14" fill="#F4F9FF" stroke="#E8F3FF"/>
+          <text class="svg-l" x="46" y="308" fill="#1B64DA">PHASE 1 — 실시간 · 고객 검색 1건</text>
+          <line x1="90" y1="334" x2="330" y2="334" stroke="#4E5968" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text class="svg-s" x="210" y="326" text-anchor="middle" fill="#4E5968">GET /stays/search?checkIn·checkOut·adults</text>
+          <line x1="330" y1="364" x2="555" y2="364" stroke="#4E5968" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text class="svg-s" x="442" y="356" text-anchor="middle" fill="#4E5968">보유 숙소의 공급사 코드 조회</text>
+          <line x1="555" y1="392" x2="330" y2="392" stroke="#8B95A1" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <text class="svg-s" x="442" y="385" text-anchor="middle" fill="#6B7684">공급사별 코드 묶음 (50개씩)</text>
+
+          <!-- par frame -->
+          <rect x="308" y="412" width="780" height="136" rx="12" fill="none" stroke="#3182F6" stroke-width="1.3" stroke-dasharray="7 5"/>
+          <rect x="308" y="412" width="196" height="26" rx="8" fill="#E8F3FF"/>
+          <text class="svg-l" x="322" y="429" fill="#1B64DA">par · WebClient 병렬 호출</text>
+          <line x1="330" y1="456" x2="790" y2="456" stroke="#4E5968" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text class="svg-s" x="560" y="449" text-anchor="middle" fill="#4E5968">② GET /a/v1/availability?hotelCodes=…</text>
+          <line x1="790" y1="482" x2="330" y2="482" stroke="#8B95A1" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <text class="svg-s" x="560" y="475" text-anchor="middle" fill="#6B7684">날짜별 단가(net) + 세금 + 재고</text>
+          <line x1="330" y1="512" x2="1020" y2="512" stroke="#4E5968" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text class="svg-s" x="675" y="505" text-anchor="middle" fill="#4E5968">② GET /b/api/search?propertyIds=…</text>
+          <line x1="1020" y1="538" x2="330" y2="538" stroke="#8B95A1" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <text class="svg-s" x="675" y="531" text-anchor="middle" fill="#6B7684">기간 총액(gross) + 재고 — 200 + resultCode</text>
+
+          <!-- 자기 처리 -->
+          <rect x="342" y="566" width="290" height="52" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="342" y="566" width="290" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t" style="font-size:13px">정규화 → 표준 모델 · 병합</div><div class="s">타임아웃·부분 실패 처리 포함</div></div></foreignObject>
+          <line x1="330" y1="644" x2="90" y2="644" stroke="#1B64DA" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <text class="svg-l" x="210" y="636" text-anchor="middle" fill="#1B64DA">통합 검색 결과 (+ 부분 실패 사실)</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 2.</b> 두 페이즈 시퀀스. 매핑(PHASE 0)이 먼저 있어야 검색(PHASE 1)이 성립합니다 — ②재고·요금 API는 <b>숙소 코드를 알아야만</b> 호출할 수 있기 때문입니다. 병렬 호출 구간(par)이 WebClient를 채택한 이유입니다.</figcaption>
+    </figure>
+
+    <div class="note"><span class="tag">참고</span>요구사항 핵심 흐름 요약 — <strong>[사전]</strong> 공급사 숙소 목록 조회 → 매핑 저장. <strong>[검색]</strong> 고객 요청(날짜·인원) → 보유 숙소를 공급사별 코드로 묶음(50개씩) → A·B 병렬 조회 → 표준 모델 정규화 → 병합(한쪽 실패해도 응답) → 통합 결과 반환. 이 한 줄기가 <strong>끊김 없이 동작하는 것</strong>이 시스템의 최우선 목표입니다.</div>
+  </section>
+
+  <!-- ===================== SECTION 4 ===================== -->
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">SUPPLIER A vs B</p><h2 class="sec">같은 방, 다른 언어</h2></div>
+    </div>
+
+    <p class="lead">공급사 스펙 예시에서 A의 A-10023과 B의 B77120은 실제로 같은 숙소·같은 객실(Riverside Hotel Seoul · Deluxe Twin)입니다. 그런데 두 공급사가 말하는 방식은 이렇게 다릅니다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 03">
+        <svg viewBox="0 0 720 448" role="img" aria-label="Supplier A와 B의 서로 다른 응답이 연동 어댑터의 정규화를 거쳐 자사 표준 숙박 상품 모델 하나로 수렴하는 다이어그램">
+          <defs>
+            <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <text class="svg-s" x="360" y="30" text-anchor="middle" fill="#8B95A1">같은 숙소 · 같은 객실 (Riverside Hotel Seoul · Deluxe Twin · 3박)</text>
+
+          <rect x="34" y="48" width="308" height="158" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="34" y="48" width="308" height="158"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Supplier A — hotelCode "A-10023"</div><div class="s">날짜별 1박 단가 · 세금 별도(net)</div><div class="s">(120,000+12,000) + (150,000+15,000) + (120,000+12,000) = 429,000원</div><div class="s">조식 불포함 · 실패 = HTTP 4xx/5xx</div></div></foreignObject>
+
+          <rect x="378" y="48" width="308" height="158" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="378" y="48" width="308" height="158"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Supplier B — propertyId "B77120"</div><div class="s">숙박 전체 총액 · 세금 포함(gross)</div><div class="s">totalPrice = 452,000원 (날짜별 요금 없음)</div><div class="s">조식 포함 · 실패 = 항상 200 + resultCode</div></div></foreignObject>
+
+          <line x1="188" y1="208" x2="300" y2="262" stroke="#3182F6" stroke-width="1.8" marker-end="url(#a3)"/>
+          <line x1="532" y1="208" x2="420" y2="262" stroke="#3182F6" stroke-width="1.8" marker-end="url(#a3)"/>
+
+          <rect x="230" y="266" width="260" height="62" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="230" y="266" width="260" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">연동 어댑터 — 정규화</div><div class="s">요금 합산 · 세금 기준 · 실패 판정 통일</div></div></foreignObject>
+
+          <line x1="360" y1="330" x2="360" y2="360" stroke="#0A8F5B" stroke-width="1.8" marker-end="url(#a3)"/>
+
+          <rect x="164" y="364" width="392" height="64" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+          <foreignObject x="164" y="364" width="392" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">자사 표준 숙박 상품 모델</div><div class="s">내부 식별자 · 기간 요금 · 예약 가능 객실 수 · 조식 · 출처</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>그림 3.</b> 정규화의 실체. 값만 다른 게 아니라 <b>조건이 다릅니다</b> — A 합산 429,000원(조식 미포함) vs B 452,000원(조식 포함). 단순히 싼 쪽을 고르면 조건이 다른 상품을 비교하게 되므로, 무엇을 내부 표준으로 삼을지가 이 설계의 핵심 판단입니다.</figcaption>
+    </figure>
+
+    <h3>식별자까지 다르다 — 매핑이 조회의 전제인 이유</h3>
+    <p>객실 타입 코드는 <strong>해당 숙소 안에서만 유일</strong>합니다. 다른 숙소에 같은 <span class="term">roomTypeCode</span>가 존재할 수 있으므로, 객실 하나를 유일하게 가리키려면 <strong>(공급사, 숙소 코드, 객실 타입 코드) 세 값</strong>이 필요합니다. 또 두 공급사가 같은 숙소를 취급해도 <strong>그 사실을 알려주는 공통 키는 없습니다</strong> — A의 A-10023과 B의 B77120이 같은 건물이라는 걸 스펙 어디에도 적어 주지 않습니다. 그래서 기본 동작은 "공급사가 다르면 내부 식별자도 다르다"이고, 이를 하나로 합치는 중복 상품 병합은 선택 구현으로 분리되어 있습니다.</p>
+
+    <div class="cols">
+      <div class="col x"><h4><span class="mk">숙소 목록</span> 정적 — 가끔 바뀜</h4><p>이름·객실 구성 같은 콘텐츠. 미리 받아 매핑으로 저장해 두고, 언제 갱신할지(기동 시·주기적)는 설계 판단으로 남겨져 있습니다.</p></div>
+      <div class="col o"><h4><span class="mk">재고·요금</span> 동적 — 매번 바뀜</h4><p>날짜별 잔여 객실 수와 가격. 검색할 때마다 실시간으로 물어봐야 하며, 이 성격 차이를 설계에 어떻게 반영하는지가 관건입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== SECTION 5 ===================== -->
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">USER SCREEN</p><h2 class="sec">고객 화면에는 어떻게 보이는가</h2></div>
+    </div>
+
+    <p class="lead">고객이 날짜(9/1–9/4)와 인원(성인 2)만 넣고 검색했을 때, 공급사 스펙의 예시 데이터가 화면에서 어떻게 표기되는지를 그대로 그려 보면 &quot;동일한 형태&quot; 요구가 무엇인지 선명해집니다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 04">
+        <svg viewBox="0 0 720 570" role="img" aria-label="숙박 앱 검색 결과 화면 목업. 같은 숙소의 카드가 공급사별로 두 장 나오고, 재고가 없는 숙소는 예약 불가으로, 공급사 장애 시에는 일부 상품 미표시 안내가 나온다.">
+          <defs>
+            <marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <!-- 폰 프레임 -->
+          <rect x="40" y="22" width="320" height="526" rx="26" fill="#FFFFFF" stroke="#D1D6DB" stroke-width="1.6"/>
+          <rect x="56" y="44" width="288" height="38" rx="12" fill="#F2F4F6"/>
+          <text class="svg-s" x="72" y="67" fill="#4E5968">9.1 – 9.4 (3박) · 성인 2</text>
+
+          <!-- 카드 1: A 상품 -->
+          <rect x="56" y="98" width="288" height="92" rx="14" fill="#FFFFFF" stroke="#E5E8EB" stroke-width="1.3"/>
+          <text class="svg-t" x="72" y="126" fill="#191F28">리버사이드 호텔 서울</text>
+          <text class="svg-s" x="72" y="148" fill="#6B7684">디럭스 트윈 · 조식 불포함 · 남은 객실 1</text>
+          <text class="svg-t" x="72" y="176" fill="#1B64DA">3박 총 429,000원</text>
+
+          <!-- 카드 2: B 상품 -->
+          <rect x="56" y="202" width="288" height="92" rx="14" fill="#FFFFFF" stroke="#E5E8EB" stroke-width="1.3"/>
+          <text class="svg-t" x="72" y="230" fill="#191F28">리버사이드 호텔 서울</text>
+          <text class="svg-s" x="72" y="252" fill="#6B7684">디럭스 트윈 · 조식 포함 · 남은 객실 1</text>
+          <text class="svg-t" x="72" y="280" fill="#1B64DA">3박 총 452,000원</text>
+
+          <!-- 카드 3: 예약 불가 -->
+          <rect x="56" y="306" width="288" height="92" rx="14" fill="#F2F4F6" stroke="#E5E8EB" stroke-width="1.3"/>
+          <text class="svg-t" x="72" y="334" fill="#8B95A1">남산 가든 스테이</text>
+          <text class="svg-s" x="72" y="356" fill="#B0B8C1">스탠다드 더블 · 조식 불포함</text>
+          <text class="svg-t" x="72" y="384" fill="#C9303C">예약 불가</text>
+
+          <!-- 부분 실패 배너 -->
+          <rect x="56" y="410" width="288" height="52" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1" stroke-dasharray="5 4"/>
+          <foreignObject x="56" y="410" width="288" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="s">⚠ 일부 제휴사 상품이 잠시 표시되지 않아요</div><div class="s" style="color:#8B95A1">(공급사 장애 시에만 나타나는 상태)</div></div></foreignObject>
+
+          <text class="svg-s" x="200" y="500" text-anchor="middle" fill="#B0B8C1">어느 카드에도 "공급사 A/B"는</text>
+          <text class="svg-s" x="200" y="518" text-anchor="middle" fill="#B0B8C1">표시되지 않는다</text>
+
+          <!-- 주석 ① -->
+          <rect x="400" y="98" width="292" height="106" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.1"/>
+          <foreignObject x="400" y="98" width="292" height="106"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t" style="font-size:13px">① 같은 숙소, 카드 2장</div><div class="s">A·B가 같은 방을 각자 코드로 판매. 공통 키가 없어 기본은 각각 노출 — 병합은 선택 구현. 가격만 아니라 조건(조식)도 달라 단순 최저가 병합은 위험</div></div></foreignObject>
+          <line x1="398" y1="140" x2="348" y2="150" stroke="#3182F6" stroke-width="1.3" marker-end="url(#a4)"/>
+          <line x1="398" y1="180" x2="348" y2="240" stroke="#3182F6" stroke-width="1.3" marker-end="url(#a4)"/>
+
+          <!-- 주석 ② -->
+          <rect x="400" y="218" width="292" height="84" rx="14" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.1"/>
+          <foreignObject x="400" y="218" width="292" height="84"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t" style="font-size:13px">② 남은 객실 1 = 기간 전체의 최솟값</div><div class="s">날짜별 재고 3·1·5 → 3박을 통째로 예약할 수 있는 수는 min = 1. N박 판정 기준을 직접 정의해야 함</div></div></foreignObject>
+          <line x1="398" y1="258" x2="348" y2="252" stroke="#8B95A1" stroke-width="1.3" marker-end="url(#a4)"/>
+
+          <!-- 주석 ③ -->
+          <rect x="400" y="316" width="292" height="84" rx="14" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.1"/>
+          <foreignObject x="400" y="316" width="292" height="84"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t" style="font-size:13px">③ 하루라도 재고 0이면 예약 불가</div><div class="s">9/2 잔여 0 → 기간 전체 불가. "0으로 노출"할지 "응답에서 뺄지"는 선택 (근거를 README에)</div></div></foreignObject>
+          <line x1="398" y1="356" x2="348" y2="352" stroke="#8B95A1" stroke-width="1.3" marker-end="url(#a4)"/>
+
+          <!-- 주석 ④ -->
+          <rect x="400" y="414" width="292" height="84" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.1"/>
+          <foreignObject x="400" y="414" width="292" height="84"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t" style="font-size:13px">④ 부분 실패는 감추지 않는다</div><div class="s">A가 죽어도 B 결과만으로 응답. 단, 일부가 빠졌다는 사실은 응답에 드러나야 함 (표현 방식 자유)</div></div></foreignObject>
+          <line x1="398" y1="450" x2="348" y2="438" stroke="#F04452" stroke-width="1.3" marker-end="url(#a4)"/>
+        </svg>
+      </div>
+      <figcaption><b>그림 4.</b> 스펙 예시 데이터로 재구성한 검색 결과 화면. 카드 3장이 각각 "중복 취급 상품(A·B)", "예약 불가 상품"의 상황을 보여 주고, 하단 배너가 "부분 실패"의 화면 표현입니다.</figcaption>
+    </figure>
+
+    <h3>화면 요소 ↔ 데이터의 대응</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>화면 요소</th><th>원천 데이터</th><th>정규화에서 하는 일</th></tr></thead>
+        <tbody>
+          <tr><td>숙소명 · 객실명</td><td>①숙소 목록 (매핑 시 확보)</td><td>공급사 코드가 아닌 <strong>자사 내부 식별자</strong> 기준으로 노출</td></tr>
+          <tr><td>총 요금</td><td>A: 날짜별 <span class="term">nightlyRate+taxAmount</span> 합산 / B: <span class="term">totalPrice</span></td><td>세금 포함 기준으로 통일해 비교 가능하게</td></tr>
+          <tr><td>조식 뱃지</td><td><span class="term">breakfastIncluded</span> (②응답에만 있음)</td><td>같은 방이라도 공급사마다 다르므로 상품 조건으로 노출</td></tr>
+          <tr><td>남은 객실 / 예약 불가</td><td>날짜별 <span class="term">remainingRooms</span></td><td>기간 전체 예약 가능 수로 환산, 0이면 예약 불가</td></tr>
+          <tr><td>일부 미표시 안내</td><td>공급사 호출 실패 (타임아웃·5xx·E5xx)</td><td>부분 실패 사실을 응답에 명시 → UI가 안내로 변환</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">핵심</span>통합 검색 API 응답에는 <strong>출처 공급사</strong>가 필수로 담기지만, 이것이 "고객 화면에 A/B를 보여 주라"는 뜻은 아닙니다. 요구사항의 원칙이 <strong>"고객은 어느 공급사 상품인지와 무관하게 동일한 형태를 본다"</strong>이므로, 출처 필드는 운영·추적·정산 같은 내부 용도로 읽는 것이 자연스럽습니다.</div>
+  </section>
+
+  <!-- ===================== SECTION 6 ===================== -->
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">MECE</p><h2 class="sec">상황의 MECE 분해</h2></div>
+    </div>
+
+    <p class="lead">"검색 한 번에 일어날 수 있는 모든 경우"를 겹침 없이, 빠짐없이 나누면 세 개의 독립된 축이 나옵니다 — 요청 축, 상품 축, 출처 축입니다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 05">
+        <svg viewBox="0 0 720 480" role="img" aria-label="고객 검색 1건의 결과를 MECE로 분해한 트리. 1단계는 전체 성공, 부분 실패, 전체 실패로 나뉘고, 성공 응답의 각 상품은 예약 가능, 예약 불가, 응답에 없음으로 나뉘며, 부분 실패에는 실패 공급사 상품 누락 잎이 추가된다.">
+          <defs>
+            <marker id="a5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="250" y="16" width="220" height="54" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="250" y="16" width="220" height="54"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">고객 검색 요청 1건</div><div class="s">축 1 — 공급사 응답 조합</div></div></foreignObject>
+
+          <line x1="300" y1="72" x2="135" y2="112" stroke="#8B95A1" stroke-width="1.4" marker-end="url(#a5)"/>
+          <line x1="360" y1="72" x2="360" y2="112" stroke="#8B95A1" stroke-width="1.4" marker-end="url(#a5)"/>
+          <line x1="420" y1="72" x2="585" y2="112" stroke="#8B95A1" stroke-width="1.4" marker-end="url(#a5)"/>
+
+          <rect x="30" y="116" width="205" height="82" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="30" y="116" width="205" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">전체 성공</div><div class="s">A ✓ · B ✓</div><div class="s">모든 상품으로 정상 응답</div></div></foreignObject>
+
+          <rect x="258" y="116" width="205" height="82" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3" stroke-dasharray="6 4"/>
+          <foreignObject x="258" y="116" width="205" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">부분 실패</div><div class="s">A·B 중 하나만 ✓</div><div class="s">성공분으로 응답 + 실패 표기</div></div></foreignObject>
+
+          <rect x="486" y="116" width="205" height="82" rx="14" fill="#FEEFEF" stroke="#C9303C" stroke-width="1.6"/>
+          <foreignObject x="486" y="116" width="205" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">전체 실패</div><div class="s">A ✗ · B ✗</div><div class="s">빈 결과 + 실패 사실 (설계 선택)</div></div></foreignObject>
+
+          <!-- 상품 축 브래킷 -->
+          <line x1="132" y1="200" x2="200" y2="240" stroke="#8B95A1" stroke-width="1.4" marker-end="url(#a5)"/>
+          <line x1="330" y1="200" x2="280" y2="240" stroke="#8B95A1" stroke-width="1.4" marker-end="url(#a5)"/>
+          <rect x="30" y="244" width="440" height="42" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="244" width="440" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t" style="font-size:13px">축 2 — 성공한 공급사의 각 상품 (숙소 × 객실 타입)</div></div></foreignObject>
+
+          <line x1="120" y1="286" x2="115" y2="320" stroke="#8B95A1" stroke-width="1.3" marker-end="url(#a5)"/>
+          <line x1="250" y1="286" x2="285" y2="320" stroke="#8B95A1" stroke-width="1.3" marker-end="url(#a5)"/>
+          <line x1="380" y1="286" x2="455" y2="320" stroke="#8B95A1" stroke-width="1.3" marker-end="url(#a5)"/>
+          <line x1="420" y1="198" x2="610" y2="320" stroke="#F04452" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#a5)"/>
+
+          <rect x="30" y="324" width="160" height="112" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="30" y="324" width="160" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t" style="font-size:13px">예약 가능</div><div class="s">모든 숙박일 재고 ≥ 1 → 가격·조건과 함께 노출</div></div></foreignObject>
+
+          <rect x="204" y="324" width="160" height="112" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="204" y="324" width="160" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t" style="font-size:13px">예약 불가</div><div class="s">하루라도 재고 0 → "0"으로 노출 or 제외 (선택)</div></div></foreignObject>
+
+          <rect x="378" y="324" width="160" height="112" rx="14" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="6 4"/>
+          <foreignObject x="378" y="324" width="160" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t" style="font-size:13px">응답에 없음</div><div class="s">인원 미수용 — 공급사가 아예 반환하지 않음 (maxOccupancy)</div></div></foreignObject>
+
+          <rect x="552" y="324" width="140" height="112" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <foreignObject x="552" y="324" width="140" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t" style="font-size:13px">통째로 누락</div><div class="s">실패 공급사의 전 상품 — 부분 실패 사실로 표기</div></div></foreignObject>
+
+          <text class="svg-s" x="360" y="466" text-anchor="middle" fill="#8B95A1">아래 4개 잎은 상호배타적이며, 상품 하나는 반드시 이 중 하나에 속한다</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 5.</b> 검색 1건의 결과 공간 분해. 축 1(요청 레벨)과 축 2(상품 레벨)는 서로 독립이며, 각 레벨 안에서 상호배타·전체포괄(MECE)입니다.</figcaption>
+    </figure>
+
+    <h3>축 1 — 요청 레벨: 공급사 응답 조합 (2×2 → 3상태)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>조합</th><th>분류</th><th>시스템의 응답</th></tr></thead>
+        <tbody>
+          <tr><td>A ✓ · B ✓</td><td>전체 성공</td><td>두 공급사 상품을 병합해 정상 응답</td></tr>
+          <tr><td>A ✓ · B ✗ / A ✗ · B ✓</td><td>부분 실패</td><td>성공한 쪽 결과만으로 응답 + 실패 사실을 응답에 명시</td></tr>
+          <tr><td>A ✗ · B ✗</td><td>전체 실패</td><td>노출 상품 0 — 빈 결과로 줄지, 오류로 줄지는 설계 선택</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>축 2 — 상품 레벨: 성공 응답 안의 각 상품</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>상태</th><th>판정 조건</th><th>화면 표기</th></tr></thead>
+        <tbody>
+          <tr><td>예약 가능</td><td>요청 기간 <em>모든 날짜</em>의 잔여 객실 ≥ 1 (가능 수 = 기간 최솟값)</td><td>가격·조식·남은 객실 수와 함께 카드 노출</td></tr>
+          <tr><td>예약 불가</td><td>기간 중 <em>하루라도</em> 잔여 0</td><td>"예약 불가" 표시 또는 목록에서 제외 (선택 + 근거)</td></tr>
+          <tr><td>응답에 없음</td><td>adults+children &gt; maxOccupancy — 공급사가 반환 안 함</td><td>화면에 아예 등장하지 않음</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>축 3 — 출처 레벨: 한 상품은 어디서 왔는가</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>출처</th><th>예시 (부록 A 데이터)</th><th>화면에서의 모습</th></tr></thead>
+        <tbody>
+          <tr><td>자사 직등록</td><td>(존재하는 경로 — 이번 구현 범위 밖)</td><td>동일 포맷의 카드</td></tr>
+          <tr><td>Supplier A만</td><td>Namsan Garden Stay (A-10044)</td><td>카드 1장</td></tr>
+          <tr><td>Supplier B만</td><td>(예시엔 없음 — 구조상 존재 가능)</td><td>카드 1장</td></tr>
+          <tr><td>A·B 모두 취급</td><td>Riverside Hotel Seoul (A-10023 = B77120)</td><td>기본은 카드 2장 — 병합은 선택 구현</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>보조 축 — "실패"의 형태 (내부적으로 하나로 통일해야 하는 것)</h3>
+    <ul class="checklist">
+      <li><span class="box"></span><b>HTTP 오류형</b> — Supplier A: 4xx/5xx 상태 코드로 실패를 알림 <span class="tag">A</span></li>
+      <li><span class="box"></span><b>200 위장형</b> — Supplier B: 장애여도 HTTP 200 + 본문 <span class="term">resultCode E5xx</span>. 본문을 안 보면 장애를 정상으로 처리하게 됨 <span class="tag">B</span></li>
+      <li><span class="box"></span><b>무응답형</b> — 연결은 되나 응답이 안 옴 → 타임아웃으로 끊어야 함 <span class="tag">공통</span></li>
+    </ul>
+    <p>이 세 형태는 표현만 다를 뿐 모두 "그 공급사 조회 실패"라는 <strong>같은 내부 상태</strong>로 수렴해야 하며, 그것이 요구사항이 말하는 <em>실패 판정 통일</em>입니다.</p>
+
+    <div class="note key"><span class="tag">정리</span>어떤 검색이든 결과는 <strong>축 1의 세 상태 중 정확히 하나</strong>에 속하고, 응답에 담긴 상품 각각은 <strong>축 2의 상태 중 정확히 하나</strong>, 출처는 <strong>축 3 중 정확히 하나</strong>에 속합니다. 세 축이 서로 독립이므로 겹침도, 빠짐도 없습니다.</div>
+  </section>
+
+  <!-- ===================== REFERENCES ===================== -->
+  <section id="refs" class="fade">
+    <div class="sec-head">
+      <div class="sec-num" style="background:var(--g700);box-shadow:none">§</div>
+      <div><p class="sec-eyebrow">SOURCES</p><h2 class="sec">참고 자료</h2></div>
+    </div>
+    <div class="ref primary" id="r1"><span class="n">1</span><span class="b"><b>수령한 요구사항·공급사 연동 스펙 문서</b> — 배경 · 필수 구현 · 핵심 흐름 · Supplier A/B 스펙. 본 문서의 모든 사실 서술의 원천.<span class="src">비공개 문서 — 공개 URL 없음</span><span class="pr p1">1차 출처</span></span></div>
+    <p style="font-size:14px;color:var(--g500)">외부 출처는 인용하지 않았습니다. 업계 일반론(OTA·채널 매니저 관행 등)은 검증된 공개 문서를 확인하지 못해 본문에서 단정하지 않고, 요구사항 문서가 직접 서술한 범위로만 설명했습니다.</p>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    stay-link 도메인 배경 분석 — 연동 구조 · 유즈케이스 · MECE<br>
+    Source: 요구사항 문서 (비공개)
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>
