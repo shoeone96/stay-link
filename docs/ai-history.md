@@ -89,3 +89,8 @@
 - **요구**: 기술 설계를 위한 레퍼런스 탐색·비교·추천용 에이전트와 스킬, 그리고 레퍼런스 정확도 확인용 에이전트를 설계.
 - **AI 답변 요약**: 탐색자와 검증자를 분리(탐색 에이전트가 자기 출처를 스스로 통과시키지 못하게)하는 구조로 스킬 1 + 에이전트 2 설계 — `tech-research` 스킬이 출처 tier·비교 조건·검사 조건의 단일 원본을 갖고, `tech-reference-scout`(탐색·비교표·추천)와 `reference-verifier`(항목별 PASS/FAIL/UNVERIFIED 판정)를 파이프라인으로 호출. 검증은 생략 불가. 사용자 피드백 반영: 한국 기업 공식 기술블로그를 2차 tier에 명시, 비교는 대안 3개 이상 + 기준 축 비교표 필수, 절차·조건·제한은 스킬로 모으고 에이전트는 역할만 얇게 유지.
 - **결정**: 수용 — 스킬·에이전트 파일 반입.
+
+### 17. 기본 설계용 기술 레퍼런스 6주제 병렬 조사·검증 (tech-research 파이프라인 실기동)
+- **요구**: ① 멀티 공급사 저장(어댑터 패턴 + DB 키 매핑 저장) ② WebClient 사용 패턴 ③ resilience(fallback·retry·지터·서킷브레이커) ④ 외부 연동 rate limit(+캐싱 필요 판단) ⑤ 캐싱 전략(스탬피드 single-flight, 비소유 데이터 stale 대응) ⑥ 멀티 채널 연동 조회 시스템 실사례 — 를 에이전트 기반으로 병렬 탐색하고 HTML로 정리해 docs/에 반입.
+- **AI 답변 요약**: 탐색 에이전트 6기 병렬 실행 → 각 출처 목록을 독립 검증 에이전트 6기가 3검사(실재·내용 일치·tier 적합) — 총 74건 중 PASS 72 / 주장 문구 불일치 2건(출처는 유효, 원문에 맞게 문구 수정 후 기재) / 제외 0건. 결론: ① 포트+공급사별 어댑터(경량 헥사고날+ACL), 필드 매핑은 코드 기반(매핑 테이블은 YAGNI) ② fan-out만 WebClient·단발 동기는 RestClient, 타임아웃 3계층+zip/onErrorResume 부분 실패 ③ Resilience4j 단일 채택, 공급사별 인스턴스 분리, Reactor Retry.backoff 지터 내장 ④ Resilience4j RateLimiter(고정 윈도 한계 명시), 429는 대기 대신 부분 결과, 캐시 도입 판정식 ⑤ Caffeine 직접 사용(AsyncLoadingCache single-flight 내장) + expireAfterWrite/refreshAfterWrite, Redis는 YAGNI ⑥ 동기 병렬 fan-out + 타임아웃 예산 + 부분 응답(사전 수집은 QPS 한도 실측 후의 진화 경로). 산출물 `docs/tech-reference-research.html`(참고문헌 72건 전부 검증 통과분), 금지 표현 검사 0건.
+- **결정**: 수용 — 문서 반입.

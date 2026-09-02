@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>stay-link 기술 레퍼런스 조사 — 연동 백엔드 6주제</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  .tbl-wrap.scroll{overflow-x:auto}
+  .tbl-wrap.scroll table{min-width:760px}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>TECH RESEARCH · 검증 통과 출처만 기재</span>
+      <h1 class="title">연동 백엔드 설계<br><span class="hl">레퍼런스 조사 6주제</span></h1>
+      <p class="lede">여러 공급사 API를 표준 모델로 통합하는 stay-link의 기본 설계에 앞서, <b>저장 구조 · WebClient · 회복탄력성 · rate limit · 캐싱 · 집계 아키텍처</b> 6개 주제를 병렬 조사했다. 탐색 에이전트가 수집한 모든 출처는 <b>독립 검증 에이전트가 실재 · 내용 일치 · 출처 등급을 재확인</b>했고, 통과한 것만 이 문서에 남겼다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">STACK</span><span class="v">Java 25 · Boot 3.5 · MVC+VT · WebClient</span></div>
+        <div class="chip"><span class="k">METHOD</span><span class="v">탐색 6 에이전트 + 검증 6 에이전트 분리</span></div>
+        <div class="chip"><span class="k">DATE</span><span class="v">2026-09-03 (KST)</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">멀티 공급사 저장 — 어댑터 구조와 필드 매핑<span class="hint">ACL</span></a></li>
+      <li><a href="#s2">WebClient 사용 패턴<span class="hint">fan-out</span></a></li>
+      <li><a href="#s3">회복탄력성 — retry · 지터 · 서킷브레이커<span class="hint">Resilience4j</span></a></li>
+      <li><a href="#s4">공급사 rate limit 대응<span class="hint">429</span></a></li>
+      <li><a href="#s5">캐싱 전략 — 스탬피드와 비소유 데이터<span class="hint">Caffeine</span></a></li>
+      <li><a href="#s6">멀티 채널 집계 아키텍처 사례<span class="hint">scatter-gather</span></a></li>
+      <li><a href="#refs">참고문헌</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- ============ 1. 어댑터 + 필드 매핑 ============ -->
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">STORAGE STRUCTURE</p><h2 class="sec">멀티 공급사 저장 — 어댑터 구조와 필드 매핑</h2></div>
+    </div>
+
+    <p class="lead">이종 공급사 응답을 표준 모델로 바꿔 저장하는 구조는 두 가지 결정으로 나뉜다 — 변환 계층을 어디에 둘 것인가, 필드 매핑을 무엇으로 관리할 것인가.</p>
+
+    <div class="note key"><span class="tag">추천</span><strong>도메인 포트 + 공급사별 어댑터(경량 헥사고날 + ACL 통합)</strong>로 변환 계층을 두고, 필드 매핑은 <strong>코드 기반 정적 매퍼</strong>(수동 변환, 필요 시 MapStruct)로 관리한다. DB 매핑 테이블은 현 규모에서 YAGNI.</div>
+
+    <h3>구조의 원전 — ACL과 Normalizer</h3>
+    <p>Azure Architecture Center는 Anti-Corruption Layer를 <em>"의미론이 다른 서브시스템 사이에 Facade/Adapter 층을 두어 요청을 번역하고, 외부 시스템 의존이 자사 설계를 제약하지 못하게 하는 패턴"</em>으로 정의한다<a href="#r1" class="cite">[1]</a>. AWS Prescriptive Guidance도 적용 조건을 <em>"두 시스템의 의미론(semantics)이 달라 데이터를 교환해야 할 때"</em>로 명시한다<a href="#r2" class="cite">[2]</a> — 공급사 2개의 이종 API를 자사 표준 모델로 바꾸는 stay-link가 정확히 이 시나리오다.</p>
+    <p>구조 원형은 EIP의 <strong>Normalizer</strong> 패턴이다: <em>"의미는 같지만 포맷이 다른 메시지를 타입별 Message Translator로 라우팅해 공통 포맷으로 만든다"</em><a href="#r4" class="cite">[4]</a>. Message Translator 자체가 <em>"GoF Adapter 패턴의 메시징 등가물"</em>로 정의되어 있어<a href="#r6" class="cite">[6]</a>, "공급사별 어댑터가 변환을 책임진다"는 설계는 패턴 카탈로그의 원전 정의와 일치한다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 720 250" role="img" aria-label="공급사 A·B API가 각각의 어댑터를 거쳐 표준 숙박 상품 모델로 변환되어 DB에 저장되는 구조. 서비스는 포트 인터페이스만 안다.">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <g>
+            <rect x="20" y="40" width="150" height="64" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+            <foreignObject x="20" y="40" width="150" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Supplier A API</div><div class="s">고유 포맷 응답</div></div></foreignObject>
+          </g>
+          <g>
+            <rect x="20" y="146" width="150" height="64" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+            <foreignObject x="20" y="146" width="150" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Supplier B API</div><div class="s">고유 포맷 응답</div></div></foreignObject>
+          </g>
+          <line x1="172" y1="72" x2="228" y2="72" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="172" y1="178" x2="228" y2="178" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
+          <g>
+            <rect x="232" y="40" width="186" height="64" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="232" y="40" width="186" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">A 어댑터</div><div class="s">DTO → 표준 모델 변환</div></div></foreignObject>
+          </g>
+          <g>
+            <rect x="232" y="146" width="186" height="64" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="232" y="146" width="186" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">B 어댑터</div><div class="s">DTO → 표준 모델 변환</div></div></foreignObject>
+          </g>
+          <rect x="222" y="26" width="206" height="198" rx="18" fill="none" stroke="#8B95A1" stroke-width="1.2" stroke-dasharray="5 4"/>
+          <text class="svg-l" x="325" y="16" text-anchor="middle" fill="#6B7684">포트(인터페이스) 뒤에 격리</text>
+          <line x1="420" y1="72" x2="486" y2="115" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="420" y1="178" x2="486" y2="135" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
+          <g>
+            <rect x="490" y="92" width="210" height="66" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="490" y="92" width="210" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">표준 숙박 상품 모델</div><div class="s">자사 컬럼명으로 DB 저장</div></div></foreignObject>
+          </g>
+          <text class="svg-s" x="595" y="188" text-anchor="middle" fill="#6B7684">서비스 레이어는 이 모델만 안다</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 1.</b> 도메인 포트 + 공급사별 어댑터 구조 — 변환 책임은 어댑터에, 서비스는 표준 모델만 의존한다<a href="#r3" class="cite">[3]</a>.</figcaption>
+    </figure>
+
+    <p>표준 모델(Canonical Data Model)의 정량 근거도 원전에 있다: 표준 모델 없이 N개 시스템을 잇는 변환기는 N×(N-1)개가 필요하지만, 표준 모델을 두면 2N개로 줄어든다 — EIP 원문의 예시로 <em>6개 앱 기준 30개 → 12개</em><a href="#r5" class="cite">[5]</a>. 공급사 추가 시 "어댑터 1개만 추가"라는 확장성 주장의 근거다. 국내 프로덕션 실사례로는 카카오뱅크가 세컨더리 어댑터(Redis·JPA·Kafka 포트-아웃 구현체)를 모듈로 분리한 멀티모듈 헥사고날을 공개했는데<a href="#r8" class="cite">[8]</a>, 공급사 2개·단일 서비스 규모에서 멀티모듈은 과하다 — 단일 모듈 안에서 패키지 규율로 같은 경계를 유지하는 것이 적정선이다.</p>
+
+    <div class="tbl-wrap scroll">
+      <table>
+        <thead><tr><th>기준</th><th>A1. 서비스 내 변환 메서드</th><th>A2. 포트 + 공급사별 어댑터 (추천)</th><th>A3. 멀티모듈 헥사고날</th><th>A4. 원본(raw) 저장 후 조회 시 변환</th></tr></thead>
+        <tbody>
+          <tr><td>구현 복잡도</td><td>최소</td><td>낮음~중간 — 인터페이스 1 + 어댑터 2</td><td>높음 — Gradle 멀티모듈 관리</td><td>낮아 보이나 조회 경로마다 변환 중복</td></tr>
+          <tr><td>스택 적합성</td><td>서비스가 공급사 DTO에 오염됨</td><td>WebClient fan-out을 어댑터에 격리, 서비스는 표준 모델만</td><td>맞으나 이 규모엔 과함</td><td>"자사 컬럼명 저장" 방향과 충돌</td></tr>
+          <tr><td>운영 관리</td><td>공급사 추가 시 서비스 수정 확산</td><td>공급사 추가 = 어댑터 1개 (N→2N 근거)</td><td>모듈 경계 유지 비용</td><td>공급사 스키마 변경이 조회 시점 장애로 지연 폭발</td></tr>
+          <tr><td>문서 성숙도</td><td>GoF Adapter 수준</td><td>Azure·AWS ACL 공식 + EIP + 실사례</td><td>AWS 가이드 + 카카오뱅크 사례</td><td>원전 근거 빈약</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>필드 매핑 — 코드 기반이냐, DB 매핑 테이블이냐</h3>
+    <p>"공급사 필드명 → 자사 컬럼명" 매핑을 DB에 저장하는 configuration-driven 방식은 실재하는 패턴이다. AWS 공식 사례 두 건이 원전인데, 하나는 보안 로그를 표준 스키마(OCSF)로 바꾸는 ETL에서 매핑을 CSV로 정의해 DynamoDB에 저장하고 코드 수정 없이 소스를 추가하는 구조<a href="#r9" class="cite">[9]</a>, 다른 하나는 메타데이터 테이블로 파이프라인을 구성하는 재사용 ETL 프레임워크다<a href="#r10" class="cite">[10]</a>. 그러나 <strong>두 사례 모두 소스가 수십~수백 개이고 매핑 변경이 배포보다 잦은 데이터 플랫폼 맥락</strong>이다.</p>
+    <div class="note warn"><span class="tag">주의 — YAGNI</span>공급사 2개 규모에서 DB 매핑 테이블은 <strong>타입 변환·중첩 구조를 행으로 표현하기 어렵고, 컴파일 타임 검증을 잃으며, 매핑 데이터 자체가 새 운영 부담</strong>이 된다. 매핑 테이블이 정당화되는 조건(소스 수십 개 + 매핑 변경이 배포보다 잦음)을 문서에 남겨두고, 지금은 코드 기반으로 간다.</div>
+    <p>코드 기반을 택할 때 MapStruct는 <span class="term">@Mapping(target, source)</span>으로 이름이 다른 필드를 컴파일 타임 코드 생성으로 매핑하고, <span class="term">unmappedTargetPolicy</span>를 ERROR로 올리면 매핑 누락을 빌드에서 잡는다(기본값은 WARN)<a href="#r11" class="cite">[11]</a>. 다만 공급사 응답이 중첩·이종 구조라 수동 변환 메서드로도 충분하며, 의존성 추가는 매핑 메서드가 실제로 늘어난 뒤에 결정해도 늦지 않다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>기준</th><th>B2. DB 매핑 테이블</th><th>B3. 설정 파일(YAML/CSV)</th><th>B1. 코드 기반 정적 매퍼 (추천)</th></tr></thead>
+        <tbody>
+          <tr><td>구현 복잡도</td><td>높음 — 로더 + 동적 바인딩 엔진 필요</td><td>중간 — 파서 필요, 표현력 한계 동일</td><td>낮음 — 어댑터 안의 명시적 변환 코드</td></tr>
+          <tr><td>검증 시점</td><td>런타임</td><td>런타임</td><td>컴파일 타임 (리뷰·테스트에 태워짐)</td></tr>
+          <tr><td>운영 관리</td><td>재배포 없는 매핑 추가 ↔ 매핑 데이터 정합성 관리 부담</td><td>파일-코드 불일치 시 런타임 실패</td><td>매핑 변경 = 코드 변경 + 배포</td></tr>
+          <tr><td>원전</td><td>AWS 공식 사례 2건 (대규모 ETL 전제)</td><td>표준 원전 확인 못 함</td><td>MapStruct 공식 레퍼런스</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>운영 관점 보강으로, 우아한형제들은 복수 벤더 연동 시 <em>"9:1 혹은 8:2 비율로 전환 대상 서비스와도 상시로 트래픽을 주고받아 연동 상태를 늘 확인"</em>하는 병행 운영 전략을 공개했다<a href="#r12" class="cite">[12]</a> — 공급사 fan-out 설계에서 어댑터가 대칭 구조여야 하는 이유이기도 하다.</p>
+  </section>
+
+  <!-- ============ 2. WebClient ============ -->
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">HTTP CLIENT</p><h2 class="sec">WebClient 사용 패턴</h2></div>
+    </div>
+
+    <p class="lead">WebClient를 고르는 정직한 근거는 성능이 아니라, 공급사 병렬 fan-out을 zip · timeout · retry 연산자로 선언적으로 조합할 수 있다는 것이다.</p>
+
+    <div class="note key"><span class="tag">추천</span><strong>공급사 fan-out 계층에만 WebClient</strong>를 쓰고, 단발 동기 호출이 생기면 <strong>RestClient</strong>를 쓰는 이원 구성. RestTemplate은 Spring Framework 7.0부터 deprecated라 신규 채택 근거가 없다<a href="#r15" class="cite">[15]</a>.</div>
+
+    <p>Java 25에서는 JEP 491(JDK 24 반영)로 <span class="term">synchronized</span>로 인한 virtual thread pinning이 해소되어<a href="#r20" class="cite">[20]</a>, "RestClient + Virtual Thread 병렬 호출"이라는 동기 대안도 기능상 충분하다. 그럼에도 WebClient를 택하는 이유는 부분 실패 허용 · 타임아웃 예산 · 재시도를 <em>연산자 조합</em>으로 표현할 수 있어서다. 이 선택이 잃는 것: reactor-netty 의존성과 리액티브 러닝커브, <span class="term">block()</span> 경계 관리 책임, direct buffer 기반의 native memory 관리 포인트<a href="#r22" class="cite">[22]</a>.</p>
+
+    <h3>공식 문서로 확인된 핵심 패턴</h3>
+    <ul class="checklist">
+      <li><span class="box"></span><b>Bean 구성</b> — Boot이 자동 구성하는 <span class="term">WebClient.Builder</span>(프로토타입 빈)를 주입받아 공급사별 baseUrl 인스턴스를 각각 빈으로 만든다<a href="#r16" class="cite">[16]</a>.</li>
+      <li><span class="box"></span><b>Connection pool 기본값</b> — Reactor Netty는 호스트당 최대 활성 채널 500 / pending 획득 대기 1,000 / 획득 타임아웃 45초. <span class="term">ConnectionProvider.builder()</span>로 조정한다<a href="#r18" class="cite">[18]</a>.</li>
+      <li><span class="box"></span><b>타임아웃 계층</b> — connect(<span class="term">CONNECT_TIMEOUT_MILLIS</span>) / response(<span class="term">responseTimeout</span>) / read·write 핸들러 / 전체 메서드(<span class="term">timeout()</span> 연산자)<a href="#r13" class="cite">[13]</a>. 우아한형제들 사례가 <em>"Connection·Read·Method 세 가지를 모두 설정해야 한다"</em>를 실전 교훈으로 남겼다<a href="#r21" class="cite">[21]</a>.</li>
+      <li><span class="box"></span><b>에러 핸들링</b> — <span class="term">retrieve()</span>는 4xx/5xx에서 <span class="term">WebClientResponseException</span>(상태코드별 서브클래스)을 던지고, <span class="term">onStatus(...)</span>가 자사 도메인 예외로 변환하는 공식 지점이다<a href="#r14" class="cite">[14]</a>.</li>
+      <li><span class="box"></span><b>fan-out과 blocking 경계</b> — 전 공급사 결과를 결합하면 <span class="term">Mono.zip</span>, 도착 순 처리면 <span class="term">Flux.merge</span>. zip은 하나가 에러면 전체 에러이므로 공급사별 <span class="term">onErrorResume</span>으로 빈 결과 대체(부분 실패 허용). <span class="term">block()</span> 계열은 non-blocking 전용 스케줄러에서 예외를 던지므로<a href="#r17" class="cite">[17]</a> 리액티브 체인 내부 금지 — MVC 서빙 스레드(virtual thread)에서 최종 1회만. VT는 blocking에서 carrier를 해제하므로<a href="#r19" class="cite">[19]</a> 이 대기가 저렴하다.</li>
+    </ul>
+
+    <div class="note warn"><span class="tag">운영 주의</span>토스는 WebClient 요청이 cancel될 때 응답 바디의 Netty buffer reference count가 해제되지 않아 <strong>direct buffer native memory leak</strong>이 발생한 운영 사례를 공개했다<a href="#r22" class="cite">[22]</a>. <span class="term">.cache()</span> 등으로 응답 Mono를 재사용할 때 cancel 경로를 특히 조심할 것.</div>
+
+    <div class="tbl-wrap scroll">
+      <table>
+        <thead><tr><th>기준</th><th>RestTemplate</th><th>WebClient (+Reactor) — 추천</th><th>RestClient + VT 병렬</th><th>OpenFeign</th></tr></thead>
+        <tbody>
+          <tr><td>구현 복잡도</td><td>낮음 (레거시 API)</td><td>높음 — 연산자·block 경계 학습</td><td>낮음 — 동기 코드 + Future 직접 관리</td><td>낮음 — 인터페이스 선언, 단 설정 함정 다수<a href="#r23" class="cite">[23]</a></td></tr>
+          <tr><td>fan-out 적합성</td><td>병렬 조합 불가, 7.0 deprecated</td><td>zip/merge/timeout/retry 선언적 조합 — 최적</td><td>충분하나 조합 로직 수작업</td><td>병렬 조합은 결국 별도 코드</td></tr>
+          <tr><td>운영 관리</td><td>유지보수 모드</td><td>pool 기본값 · 3계층 타임아웃 · buffer leak 인지</td><td>스레드·타임아웃 관리 단순 (JEP 491)</td><td>Spring Cloud 버전 동행</td></tr>
+          <tr><td>문서 성숙도</td><td>높으나 하향</td><td>Spring/Reactor 공식 + 국내 사례 다수<a href="#r24" class="cite">[24]</a></td><td>Boot 공식이 1순위로 안내, 실전 사례는 적음</td><td>높음, 단 HTTP Interface와 역할 중복</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note"><span class="tag">확인 못 한 것 (조사에서 비워둔 영역)</span>① "MVC에서 WebClient 결과를 block()으로 받아도 된다"는 직접적 공식 문장 — Reactor의 block() 연산자 정의로 간접 뒷받침만 됨. ② <span class="term">spring.http.clients.*</span> 전역 타임아웃 속성이 Boot 3.5.x에 그 이름으로 존재하는지 — 확인된 문서는 최신(Boot 4.x) 기준이므로 구현 시 3.5 레퍼런스 대조 필요. ③ OpenFeign 유지보수 모드 공식 공지 — 실재 URL 확인 못 해 비교 근거에서 제외.</div>
+  </section>
+
+  <!-- ============ 3. Resilience ============ -->
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">RESILIENCE</p><h2 class="sec">회복탄력성 — retry · 지터 · 서킷브레이커 · fallback</h2></div>
+    </div>
+
+    <p class="lead">외부 연동을 자주 하는 서비스의 회복탄력성은 한 라이브러리로 일관되게 — 공급사별 인스턴스를 분리해 한 공급사의 장애가 다른 공급사 호출로 번지지 않게 한다.</p>
+
+    <div class="note key"><span class="tag">추천</span><strong>Resilience4j(resilience4j-spring-boot3) 단일 채택.</strong> 공급사 어댑터 경계에는 어노테이션(<span class="term">@CircuitBreaker</span> + <span class="term">@Retry</span> + fallbackMethod), WebClient fan-out 내부에는 Reactor 자체 <span class="term">Retry.backoff</span>(지수 백오프 + 지터 기본 내장) 또는 resilience4j-reactor 연산자를 조합하는 하이브리드. 공급사별 CircuitBreaker/Retry <strong>인스턴스 분리</strong>가 부분 실패 허용의 핵심이다<a href="#r31" class="cite">[31]</a>.</div>
+
+    <h3>왜 지터인가</h3>
+    <p>지수 백오프만 쓰면 실패한 클라이언트들이 같은 시각에 재시도를 반복한다(재시도 폭주). AWS Architecture Blog의 시뮬레이션 결론은 <em>"해법은 백오프를 빼는 게 아니라 지터를 더하는 것"</em>이며, Full Jitter는 <strong>총 호출량(서버 부하)을 가장 줄이고</strong>, 지터를 적용한 백오프가 원격 클라이언트의 표준 접근으로 권장된다<a href="#r25" class="cite">[25]</a>. AWS Well-Architected도 "재시도는 횟수 제한 + 백오프 + 지터"를 공식 베스트 프랙티스로 명시한다<a href="#r26" class="cite">[26]</a>. WebClient 체인에서는 Reactor의 <span class="term">Retry.backoff</span>가 기본으로 지터(jitter factor 0.5 — 계산된 지연의 최대 50%)를 포함하므로<a href="#r33" class="cite">[33]</a> 이것만으로 지터 요건이 충족된다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 02">
+        <svg viewBox="0 0 720 250" role="img" aria-label="서킷브레이커 상태 전이: CLOSED에서 실패율 임계 초과 시 OPEN, 대기 시간 경과 후 HALF_OPEN, 시험 호출 성공이면 CLOSED로 복귀, 실패면 다시 OPEN.">
+          <defs>
+            <marker id="b1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <g>
+            <rect x="40" y="80" width="170" height="70" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="40" y="80" width="170" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">CLOSED</div><div class="s">정상 호출 · 실패율 집계</div></div></foreignObject>
+          </g>
+          <g>
+            <rect x="280" y="80" width="170" height="70" rx="16" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+            <foreignObject x="280" y="80" width="170" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">OPEN</div><div class="s">즉시 거부 → fallback</div></div></foreignObject>
+          </g>
+          <g>
+            <rect x="520" y="80" width="170" height="70" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="520" y="80" width="170" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">HALF_OPEN</div><div class="s">시험 호출 일부 허용</div></div></foreignObject>
+          </g>
+          <line x1="212" y1="105" x2="276" y2="105" stroke="#F04452" stroke-width="2" marker-end="url(#b1)"/>
+          <text class="svg-l" x="244" y="93" text-anchor="middle" fill="#C9303C">실패율 ≥ 임계</text>
+          <line x1="452" y1="105" x2="516" y2="105" stroke="#3182F6" stroke-width="2" marker-end="url(#b1)"/>
+          <text class="svg-l" x="484" y="93" text-anchor="middle" fill="#1B64DA">대기 경과</text>
+          <path d="M560 152 C520 215 210 215 135 154" fill="none" stroke="#15C47E" stroke-width="2" marker-end="url(#b1)"/>
+          <text class="svg-l" x="360" y="222" text-anchor="middle" fill="#0A8F5B">시험 호출 성공 → 복귀</text>
+          <path d="M540 78 C500 30 420 30 380 74" fill="none" stroke="#F04452" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#b1)"/>
+          <text class="svg-l" x="462" y="30" text-anchor="middle" fill="#C9303C">시험 실패 → 재차 OPEN</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 2.</b> CircuitBreaker 상태 전이 — OPEN에서는 <span class="term">CallNotPermittedException</span>이 즉시 던져지고, 이를 fallback이 받아 대체 응답(캐시 · 빈 목록 · 남은 공급사 결과)을 준다<a href="#r28" class="cite">[28]</a>.</figcaption>
+    </figure>
+
+    <h3>설정에서 알아야 할 것</h3>
+    <p>공식 기본값: <span class="term">failureRateThreshold</span> 50%, <span class="term">slidingWindowSize</span> 100, <span class="term">minimumNumberOfCalls</span> 100, <span class="term">waitDurationInOpenState</span> 60초, 느린 호출(slow call)도 장애로 집계 가능<a href="#r28" class="cite">[28]</a>. Retry는 <span class="term">maxAttempts</span> 3(최초 호출 포함) · <span class="term">waitDuration</span> 500ms이 기본이고 <span class="term">retryExceptions</span>로 재시도 대상을 제한한다 — 5xx·타임아웃만 재시도하고 4xx는 제외하는 설계가 여기서 나온다<a href="#r27" class="cite">[27]</a>.</p>
+    <div class="note warn"><span class="tag">기본값 함정</span><strong><span class="term">minimumNumberOfCalls</span>=100이면 호출이 100번 쌓이기 전까지 실패율을 계산하지 않는다.</strong> 트래픽이 적은 데모 환경에서는 서킷이 영원히 열리지 않으므로 반드시 낮춰 잡는다.</div>
+    <p>어노테이션(AOP) 방식의 데코레이터 기본 순서는 <span class="term">Retry(CircuitBreaker(RateLimiter(TimeLimiter(Bulkhead(Function)))))</span> — Retry가 최외곽이라 각 재시도가 서킷브레이커를 통과하고, OPEN이면 재시도도 즉시 차단된다. 순서 변경은 aspectOrder 프로퍼티, 정밀 제어는 <span class="term">Decorators</span> 함수형 체이닝<a href="#r29" class="cite">[29]</a>. Reactor 체인에는 <span class="term">transformDeferred(CircuitBreakerOperator.of(cb))</span> 형태로 끼운다<a href="#r30" class="cite">[30]</a>.</p>
+
+    <div class="tbl-wrap scroll">
+      <table>
+        <thead><tr><th>기준</th><th>Spring Retry</th><th>Resilience4j — 추천</th><th>Reactor 연산자만</th><th>Spring Cloud Circuit Breaker</th></tr></thead>
+        <tbody>
+          <tr><td>구성 요소</td><td>@Retryable/@Recover 중심, 서킷은 부수 기능 수준<a href="#r34" class="cite">[34]</a></td><td>CB + Retry + TimeLimiter + RateLimiter 통합, spring-boot3 전용 모듈</td><td>retryWhen/timeout만 — 서킷브레이커 개념 자체가 없음</td><td>Resilience4j 등 구현체 위의 추상화 계층<a href="#r35" class="cite">[35]</a></td></tr>
+          <tr><td>스택 적합성</td><td>동기 AOP 중심 — Reactor 체인에 못 끼움</td><td>동기(MVC) + Reactor 모두 공식 제공</td><td>Reactor 체인엔 자연스러움</td><td>구현체 교체 요구가 없으면 불필요한 간접층 (YAGNI)</td></tr>
+          <tr><td>운영 관리</td><td>재시도 메트릭 위주</td><td>상태 이벤트 · Micrometer 메트릭 기본, 공급사별 인스턴스 격리 관측</td><td>표준 메트릭 없음 — 직접 구현 = 라이브러리 재발명</td><td>설정 이중화</td></tr>
+          <tr><td>잃는 것</td><td>서킷 정밀 제어 · slow-call 감지</td><td>고정 aspect 순서 · 초기 튜닝 비용</td><td>장애 차단·fallback 자동화 전체</td><td>추상층 유지비</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Netflix Hystrix는 공식 README가 maintenance mode(신규 개발·릴리스 중단)를 선언하고 신규 프로젝트에 Resilience4j를 권장하므로 후보에서 제외했다<a href="#r36" class="cite">[36]</a>. 국내 실전 사례로 우아한형제들은 <span class="term">CallNotPermittedException</span> 전용 fallback과 상태 전이 이벤트 로깅·메트릭 대시보드까지를 적용 범위로 보여주고<a href="#r37" class="cite">[37]</a>, 올리브영은 예외 유형별 fallback 오버로딩으로 Redis 장애 시 RDB로 자동 우회하는 대체 경로 설계를 공개했다<a href="#r38" class="cite">[38]</a>.</p>
+    <div class="note"><span class="tag">확인 못 한 것</span>지수+무작위를 결합한 IntervalFunction의 정확한 API명(<span class="term">ofExponentialRandomBackoff</span> 여부)과 yml 프로퍼티명은 공식 문서 원문으로 확정하지 못했다 — 구현 시 라이브러리 소스로 재확인. (공식 문서에서 확정된 것은 <span class="term">ofExponentialBackoff()</span>·<span class="term">ofRandomized()</span>까지<a href="#r27" class="cite">[27]</a>.)</div>
+  </section>
+
+  <!-- ============ 4. Rate limit ============ -->
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">RATE LIMIT</p><h2 class="sec">공급사 rate limit 대응</h2></div>
+    </div>
+
+    <p class="lead">공급사 호출량 한도는 클라이언트 측 rate limiter로 선제 관리하고, 429 응답은 검색 경로에서 기다리지 않는다 — 해당 공급사만 빼고 부분 결과를 돌려준다.</p>
+
+    <div class="note key"><span class="tag">추천</span><strong>Resilience4j RateLimiter</strong> — 3장의 CircuitBreaker·Retry와 같은 라이브러리라 의존성·설정·메트릭 체계가 하나로 통일되고, Reactor 어댑터로 WebClient 파이프라인에 끼울 수 있다<a href="#r39" class="cite">[39]</a>. 단일 인스턴스 시작이므로 Bucket4j의 분산 백엔드는 현재 YAGNI.</div>
+
+    <p>단, Resilience4j의 알고리즘은 엄밀한 토큰 버킷이 아니라 <em>"각 주기 시작 시 허가 수를 limitForPeriod로 리셋"</em>하는 고정 윈도 방식이다<a href="#r39" class="cite">[39]</a>. 윈도 경계에서 순간 버스트(최대 2×limit)가 가능하므로, 공급사가 초당 집계를 엄격히 한다면 <span class="term">limitRefreshPeriod</span>를 잘게 쪼개 보정한다. 매끄러운 토큰 리필이 실제로 필요해지면 그때 Bucket4j(정통 토큰 버킷, 분산 백엔드 제공<a href="#r40" class="cite">[40]</a>)로 교체하는 편이 낫다.</p>
+
+    <div class="tbl-wrap scroll">
+      <table>
+        <thead><tr><th>기준</th><th>Guava RateLimiter</th><th>Resilience4j RateLimiter — 추천</th><th>Bucket4j</th><th>Reactor 연산자 제어</th></tr></thead>
+        <tbody>
+          <tr><td>알고리즘</td><td>permits/sec 평활 + warmup, blocking acquire<a href="#r41" class="cite">[41]</a></td><td>고정 윈도 리프레시 (주기마다 허가 리셋)</td><td>정통 토큰 버킷 — 점진 리필·다중 대역</td><td>알고리즘 아님 — limitRate는 backpressure 배치 분할<a href="#r42" class="cite">[42]</a>, delayElements는 요소별 지연<a href="#r43" class="cite">[43]</a></td></tr>
+          <tr><td>구현 복잡도</td><td>코드 2줄, 단 타임아웃·메트릭 수동</td><td>낮음 — yml 설정 + 어노테이션/연산자</td><td>중간 — 수동 빈 구성 (공식 스타터 없음)</td><td>파이프라인(구독)당 제어라 "공급사별 전역 한도"가 안 됨</td></tr>
+          <tr><td>스택 적합성</td><td>blocking이라 VT와는 자연스러우나 리액티브 체인엔 부적합</td><td>Reactor 어댑터 공식 제공, 3장과 동일 라이브러리</td><td>blocking consume은 VT와 궁합, 리액티브 경로는 async API 별도</td><td>fan-out 동시성 제한(flatMap concurrency)에는 유효 — rate limiter의 보완재</td></tr>
+          <tr><td>잃는 것</td><td>세부 제어·모니터링</td><td>엄밀한 토큰 버킷 평활화·분산</td><td>Spring 통합 편의 — 지금 규모엔 과투자</td><td>전역 호출량 제한이라는 요구 자체 미충족</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>429 / Retry-After 처리 관행</h3>
+    <p>표준부터: RFC 6585이 429를 rate limiting 상태로 정의하고 Retry-After 헤더를 포함할 수 있다(MAY)고 규정하며<a href="#r44" class="cite">[44]</a>, RFC 9110 §10.2.3에 따라 Retry-After 값은 <em>초 단위 정수 또는 HTTP-date</em> 두 형식이므로 클라이언트는 둘 다 파싱해야 한다<a href="#r45" class="cite">[45]</a><a href="#r46" class="cite">[46]</a>. 재시도 관행은 3장과 동일 원전 — 지수 백오프 + 지터, 서버가 Retry-After를 주면 계산된 백오프보다 우선, 재시도 횟수·총량에 반드시 상한<a href="#r25" class="cite">[25]</a><a href="#r26" class="cite">[26]</a>.</p>
+    <p><strong>stay-link 연결점</strong>: 검색은 사용자가 대기 중인 동기 경로이므로 긴 Retry-After를 그대로 기다리는 것은 부적절하다. 429를 받은 공급사는 그 요청에서 제외하고 부분 결과를 반환하며, 429 관측치는 자체 rate limiter 임계를 보정하는 신호로 쓴다. 429를 서킷브레이커 실패로 집계할지는 3장 설정과 함께 결정할 문제다. 참고로 Stripe는 실서비스 API에 토큰 버킷 기반 rate limiter를 사용한다고 공개했고<a href="#r48" class="cite">[48]</a>, Cloudflare는 슬라이딩 윈도 카운터(이전·현재 윈도 가중 평균)로 오차 0.003%의 근사 집계를 실측했다<a href="#r49" class="cite">[49]</a> — 공급사 측이 어떤 방식으로 집계할지 가늠하는 배경지식이 된다.</p>
+
+    <h3>rate limit 때문에 캐싱이 필요해지는 판단 기준</h3>
+    <p>Amazon Builders' Library가 원전이다 — <em>"의존 대상이 throttling을 시작하거나 예상 부하를 감당하지 못할 것으로 판단될 때"</em>가 캐시 도입 사유이며, 판단 기준은 세 가지다<a href="#r47" class="cite">[47]</a>:</p>
+    <ul class="checklist">
+      <li><span class="box"></span><b>재사용성(히트율)</b> — 응답이 여러 요청에 걸쳐 재사용되는가. stay-link에선 인기 목적지·날짜 조합 검색이 반복되는가가 관건.</li>
+      <li><span class="box"></span><b>신선도 허용치</b> — 재고·가격의 stale 허용 TTL을 정의할 수 있는가.</li>
+      <li><span class="box"></span><b>캐시 불능 시 동작</b> — cold start·캐시 장애 시 트래픽이 그대로 공급사로 향해도 견디는가.</li>
+    </ul>
+    <div class="note key"><span class="tag">도입 판정식</span>(예상 공급사 호출률 × 안전 마진 &gt; 공급사 한도) <strong>AND</strong> (히트율 유의미) <strong>AND</strong> (stale 허용 TTL 정의 가능) — 셋 다 참일 때만 호출 절감용 캐시를 도입한다. 하나라도 거짓이면 rate limiter + fan-out 동시성 제한만으로 시작한다. 캐싱 전략 상세는 5장.</div>
+  </section>
+
+  <!-- ============ 5. 캐싱 ============ -->
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">CACHING</p><h2 class="sec">캐싱 전략 — 스탬피드와 비소유 데이터</h2></div>
+    </div>
+
+    <p class="lead">캐시할 데이터가 우리 것이 아니라는 사실이 전략을 결정한다 — 쓰기가 공급사 쪽에서 일어나므로 write-through는 원천 불가능하고, cache-aside + TTL이 구조적으로 유일한 기본기다.</p>
+
+    <div class="note key"><span class="tag">추천</span><strong>Caffeine을 Spring Cache 추상화 없이 직접 사용(AsyncLoadingCache)</strong>하고, <span class="term">expireAfterWrite</span>(하드 TTL) + <span class="term">refreshAfterWrite</span>(더 짧은 소프트 TTL) 조합으로 stale-while-revalidate 계열 정책을 구성한다. 단일 인스턴스에서 Redis는 유일한 이점(서버 간 공유)이 없어 순수 비용 — YAGNI.</div>
+
+    <h3>캐시 스탬피드 방지 — "하나가 조회하는 동안 나머지는 기다린다"</h3>
+    <p>Caffeine의 AsyncCache는 키에 대한 매핑을 <span class="term">CompletableFuture</span>로 즉시 만들어, 같은 키의 동시 miss가 <strong>진행 중(in-flight) future를 공유</strong>하게 한다 — 공식 FAQ가 이를 <em>"protecting against a cache stampede"</em>라고 직접 서술한다<a href="#r51" class="cite">[51]</a>. 별도의 락·플래그 구현 없이 요청 병합(single-flight)이 라이브러리에 내장돼 있다는 뜻이다. 같은 계열의 대규모 원전으로, Facebook은 memcache에 lease 토큰을 도입해 thundering herd를 해결하며 DB 피크 질의율 <em>17K/s → 1.3K/s</em>를 실측했고<a href="#r57" class="cite">[57]</a>, Instagram은 값 대신 promise를 캐싱해 동시 miss를 백엔드 1회 호출로 병합하는 동일 구조의 패턴을 공개했다<a href="#r58" class="cite">[58]</a>.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 03">
+        <svg viewBox="0 0 720 250" role="img" aria-label="같은 키로 동시에 들어온 요청 셋 중 하나만 공급사를 호출하고, 나머지 둘은 진행 중인 future를 공유해 결과를 기다리는 single-flight 구조.">
+          <defs>
+            <marker id="c1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <g>
+            <rect x="20" y="24" width="150" height="54" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+            <foreignObject x="20" y="24" width="150" height="54"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">요청 1</div><div class="s">키: 호텔X·9/10</div></div></foreignObject>
+          </g>
+          <g>
+            <rect x="20" y="98" width="150" height="54" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+            <foreignObject x="20" y="98" width="150" height="54"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">요청 2</div><div class="s">같은 키 · 동시 miss</div></div></foreignObject>
+          </g>
+          <g>
+            <rect x="20" y="172" width="150" height="54" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+            <foreignObject x="20" y="172" width="150" height="54"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">요청 3</div><div class="s">같은 키 · 동시 miss</div></div></foreignObject>
+          </g>
+          <line x1="172" y1="51" x2="248" y2="98" stroke="#3182F6" stroke-width="2" marker-end="url(#c1)"/>
+          <line x1="172" y1="125" x2="248" y2="125" stroke="#8B95A1" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#c1)"/>
+          <line x1="172" y1="199" x2="248" y2="152" stroke="#8B95A1" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#c1)"/>
+          <text class="svg-l" x="210" y="222" text-anchor="middle" fill="#6B7684">future 공유 대기</text>
+          <g>
+            <rect x="252" y="88" width="210" height="74" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="252" y="88" width="210" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">AsyncCache</div><div class="s">in-flight CompletableFuture</div></div></foreignObject>
+          </g>
+          <line x1="464" y1="125" x2="536" y2="125" stroke="#15C47E" stroke-width="2" marker-end="url(#c1)"/>
+          <text class="svg-l" x="500" y="112" text-anchor="middle" fill="#0A8F5B">원본 조회 1회</text>
+          <g>
+            <rect x="540" y="88" width="160" height="74" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="540" y="88" width="160" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">공급사 API</div><div class="s">호출량 키당 1회 보장</div></div></foreignObject>
+          </g>
+        </svg>
+      </div>
+      <figcaption><b>그림 3.</b> single-flight(요청 병합) — 동시 miss 중 하나만 원본을 조회하고 나머지는 그 future를 공유한다<a href="#r51" class="cite">[51]</a>.</figcaption>
+    </figure>
+
+    <div class="tbl-wrap scroll">
+      <table>
+        <thead><tr><th>기준</th><th>락 기반 (@Cacheable sync=true)</th><th>① single-flight + ④ 백그라운드 refresh — 추천</th><th>확률적 조기 만료 (XFetch)</th><th>외부 재계산 (스케줄러 웜업)</th></tr></thead>
+        <tbody>
+          <tr><td>원리</td><td>1스레드 계산, 나머지 블록<a href="#r53" class="cite">[53]</a></td><td>동시 miss는 future 공유 + 소프트 TTL 경과 시 stale 반환하며 비동기 갱신<a href="#r50" class="cite">[50]</a></td><td>만료 전 남은 시간에 반비례한 확률로 미리 재계산<a href="#r56" class="cite">[56]</a></td><td>요청 경로 밖 워커가 주기적으로 캐시를 채움</td></tr>
+          <tr><td>원본 호출 절감</td><td>키당 1회 보장</td><td>키당 1회 보장 (Facebook lease 실측 17K→1.3K/s<a href="#r57" class="cite">[57]</a>)</td><td>확률적 — 만료 순간 몰림 완화만</td><td>요청 경로 호출 0, 대신 조회 안 되는 키까지 갱신</td></tr>
+          <tr><td>구현 복잡도</td><td>낮음 — 단 Spring 문서가 "optional feature, provider가 미제공일 수 있음" 명시<a href="#r53" class="cite">[53]</a></td><td>낮음 — Caffeine 내장, AsyncCacheLoader가 WebClient future와 자연 결합</td><td>중간 — 직접 구현 필요 (라이브러리 미내장)</td><td>중간 — 스케줄러 + 키 목록 관리</td></tr>
+          <tr><td>이 프로젝트 적합성</td><td>블로킹 대기, refreshAfterWrite 등 고유 기능은 추상화 밖</td><td>기본값 — Caffeine 하나로 ①+④ 모두</td><td>트래픽 커진 뒤 핫키에만 (지금은 YAGNI)</td><td>숙소×날짜 키 공간을 미리 알 수 없어 부적합</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>비소유(공급사) 데이터의 stale 정책</h3>
+    <p>정답 TTL은 없다 — AWS 캐싱 백서도 cache-aside/write-through 모두 <em>"무엇을 얼마나 캐싱할지는 애플리케이션 책임"</em>으로 규정한다<a href="#r59" class="cite">[59]</a>. 대신 RFC 5861의 어휘를 내부 정책으로 차용하면 stale 허용 범위가 3구간으로 정리된다<a href="#r55" class="cite">[55]</a>:</p>
+    <ul class="checklist">
+      <li><span class="box"></span><b>fresh 구간</b> — 무조건 캐시로 서빙.</li>
+      <li><span class="box"></span><b>stale-while-revalidate 구간</b> — stale을 서빙하되 백그라운드 갱신. Caffeine 매핑: <span class="term">refreshAfterWrite</span>가 이 경계<a href="#r50" class="cite">[50]</a>. Cloudflare도 CDN 레벨에서 "만료된 응답을 즉시 stale로 서빙하며 백그라운드에서 갱신"하는 같은 구조를 상용 적용한다<a href="#r62" class="cite">[62]</a>.</li>
+      <li><span class="box"></span><b>stale-if-error 구간</b> — 공급사 장애 시에만 서빙. "refresh 실패 시 기존 값 유지"라는 Caffeine 기본 동작과 사실상 일치.</li>
+    </ul>
+    <p>무효화 선택지는 (a) TTL 만료 — 공급사가 변경 이벤트를 주지 않으면 사실상 유일한 수단, (b) 공급사 웹훅 수신 시 명시적 evict, (c) 버전 키 — 올리브영이 로컬 캐시 키에 버전 번호를 넣어 최신 버전만 로드하게 한 방식<a href="#r60" class="cite">[60]</a>, (d) TTL + Redis Pub/Sub 브로드캐스트 — 카카오페이 방식<a href="#r61" class="cite">[61]</a>. (c)·(d)는 다중 인스턴스 대비책이므로 단일 인스턴스 현 단계에서는 (a) + 가능 시 (b)만 해당한다. 로컬 캐시의 적용 기준으로 카카오페이는 <em>"최종적 일관성을 허용할 수 있는 조회용 데이터"</em>를 제시하는데<a href="#r61" class="cite">[61]</a>, 같은 논리로 검색·목록 경로는 캐시 대상이지만 가격·재고를 '확정'하는 경로는 캐시를 우회해 공급사를 재확인하는 판단이 도출된다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>기준</th><th>Spring Cache 추상화(+Caffeine)</th><th>Caffeine 직접 사용 — 추천</th><th>Redis (외부 캐시)</th></tr></thead>
+        <tbody>
+          <tr><td>구현 복잡도</td><td>최저 — @Cacheable 한 줄</td><td>낮음 — 빌더 몇 줄, 어노테이션 마법 없음</td><td>높음 — 인프라 + 직렬화 + 연결 관리</td></tr>
+          <tr><td>스탬피드 방지</td><td>sync=true (optional feature<a href="#r53" class="cite">[53]</a>), refreshAfterWrite는 추상화로 제어 불가</td><td>AsyncCache future 공유 내장<a href="#r51" class="cite">[51]</a></td><td>미내장 — 분산 락/lease 직접 구현</td></tr>
+          <tr><td>현 단계 적합성</td><td>동기 메서드 캐싱에 최적화 — 공급사별 정책 미세 제어에 부적합</td><td>AsyncCacheLoader ↔ WebClient 자연 결합, per-key 정책 자유</td><td>단일 인스턴스에선 '서버 간 공유' 이점이 없음</td></tr>
+          <tr><td>잃는 것</td><td>Caffeine 고유 기능 접근성</td><td>선언형 스타일 · 캐시 계층 교체 용이성</td><td>로컬 캐시의 무지연·무인프라 단순성</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>확장 경로</strong>: 다중 인스턴스로 가면 Caffeine을 버리는 게 아니라 올리브영식 "로컬(Caffeine) + 글로벌(Redis) 2계층 + 버전 동기화"로 증축한다 — TPS 478% 증가, Redis 송신량 99.1% 감소가 실측된 경로다<a href="#r60" class="cite">[60]</a>. 지금 Redis를 미리 넣는 것은 YAGNI. refresh 호출이 몰릴 때는 Reactor로 reload를 배치 병합하는 공식 예제(coalescing bulk loader)도 있다<a href="#r52" class="cite">[52]</a>.</p>
+
+    <div class="note"><span class="tag">확인 못 한 것</span>"결제·확정 직전에 캐시를 우회해 공급사를 실시간 재확인한다"는 관행의 <strong>직접 출처는 허용 등급 안에서 찾지 못했다</strong> — 위 문단의 해당 판단은 카카오페이의 적용 기준에서 도출한 추론이지 직접 인용이 아니다. 또한 AWS 캐싱 백서에는 "historical reference only" 배너가 있어 패턴 정의 인용 용도로만 쓴다. 확률적 조기 만료의 원전 논문 용어는 "probabilistic early expiration"과 XFetch이며, 흔히 쓰이는 약어 표기는 논문에 등장하지 않는다<a href="#r56" class="cite">[56]</a>.</div>
+  </section>
+
+  <!-- ============ 6. 집계 사례 ============ -->
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">AGGREGATOR CASES</p><h2 class="sec">멀티 채널 집계 아키텍처 사례</h2></div>
+    </div>
+
+    <p class="lead">여러 제공자 API를 fan-out 조회해 정규화 · 집계하는 시스템은 공개된 원형과 실사례가 모두 있다 — 그리고 실사례들은 하나같이 실측된 문제(QPS 한도)가 생긴 뒤에야 구조를 바꿨다.</p>
+
+    <div class="note key"><span class="tag">추천</span><strong>요청 시 동기 병렬 fan-out(Scatter-Gather / Gateway Aggregation) + 전체 타임아웃 예산 + 부분 응답 반환.</strong> 사전 수집(배치 ingest)이 정당화되는 조건은 "공급사 QPS 한도 &lt; 자사 검색 트래픽"인데, 이 문제의식이 현 규모에는 존재하지 않는다 — YAGNI.</div>
+
+    <h3>패턴 원전이 규정하는 부분 실패 관행</h3>
+    <p>요구사항(한 번의 검색 → 여러 공급사 병렬 조회 → 정규화 → 집계, 부분 실패 허용)은 Azure의 Gateway Aggregation 패턴 문서가 기술하는 시나리오와 일치하며, 그 문서가 부분 실패 처리를 직접 규정한다: <em>"일부 호출이 너무 오래 걸리면 타임아웃 후 부분 데이터 집합을 반환하는 것이 허용될 수 있다"</em>, <em>"실패 대비 failover로 캐시된 데이터 반환을 고려하라"</em>, 그리고 <em>"부분 응답을 줄지 전체 실패로 처리할지를 정책으로 명시해 클라이언트가 예측 가능하게 하라"</em><a href="#r63" class="cite">[63]</a>. EIP Scatter-Gather는 집계의 완료 조건이 하나가 아님을 보여준다 — <em>"전부 대기 / 첫 응답(First Best) / 시간 초과"</em> 중 선택하는 것<a href="#r64" class="cite">[64]</a>. MSA 맥락의 같은 구조는 API Composition(호출 결과의 in-memory join) 패턴으로 정식화되어 있다<a href="#r65" class="cite">[65]</a>.</p>
+    <p>타임아웃·재시도의 원칙은 AWS Builders' Library가 원전이다: <em>모든 원격 호출에 connection 타임아웃과 request 타임아웃을 함께 설정</em>하고, <em>재시도는 하류 부하를 증폭시키므로 capped exponential backoff + 지터로 제한</em>한다<a href="#r71" class="cite">[71]</a>. fan-out에서 타임아웃 예산이 필수인 이론적 근거는 The Tail at Scale이다 — fan-out 시스템에서는 드문 꼬리 지연도 전체 요청의 상당 비율에 전파되며, p95 초과 시에만 보조 요청을 보내는 hedged request는 <em>추가 부하 약 5%로 꼬리 지연을 크게 단축</em>한다<a href="#r72" class="cite">[72]</a>.</p>
+
+    <div class="tbl-wrap scroll">
+      <table>
+        <thead><tr><th>기준</th><th>캐시 우선 + miss 시 실시간</th><th>A. 동기 실시간 fan-out — 추천</th><th>사전 수집 (proactive fetch)</th><th>실시간 + 세션 인덱싱</th></tr></thead>
+        <tbody>
+          <tr><td>대표 사례</td><td>Agoda PriceAggregator 초기 형태<a href="#r66" class="cite">[66]</a></td><td>Azure Gateway Aggregation · EIP Scatter-Gather · API Composition</td><td>Agoda SmartScheduler<a href="#r67" class="cite">[67]</a> (+ 학술 공개<a href="#r68" class="cite">[68]</a>)</td><td>Skyscanner Bellboy (ElasticSearch)<a href="#r69" class="cite">[69]</a></td></tr>
+          <tr><td>가격·재고 최신성</td><td>캐시 TTL만큼 낡음</td><td>최고 — 항상 라이브</td><td>수집 주기만큼 낡음 — 무엇을 언제 다시 가져올지 지능화 필요</td><td>세션 내 최신 (세션 시작 시 라이브 조회)</td></tr>
+          <tr><td>공급사 호출량</td><td>miss율만큼 감소</td><td>검색량에 비례 (QPS 한도가 상한)</td><td>QPS를 예산처럼 배분</td><td>세션당 1회 묶음 조회로 감소</td></tr>
+          <tr><td>구현 복잡도</td><td>중간 — 캐시 계층·TTL·무효화</td><td>최저 — 병렬 호출 + 집계 + 타임아웃</td><td>최고 — 스케줄러 + 수집 대상 선정 + 저장소</td><td>높음 — 검색엔진 운영 + 색인 파이프라인</td></tr>
+          <tr><td>부분 실패 처리</td><td>실패 시 캐시 failover 가능<a href="#r63" class="cite">[63]</a></td><td>타임아웃 예산 내 응답만 집계, 실패 공급사 제외 (패턴 문서가 직접 권고)</td><td>수집 실패가 사용자 응답과 분리됨</td><td>색인된 데이터로 응답 지속</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>실사례가 보여주는 진화 경로</h3>
+    <p>Agoda는 <em>"공급사별 허용 QPS가 검색 트래픽을 결코 감당하지 못한다"</em>는 실측된 제약 때문에 캐시 우선 조회 구조(PriceAggregator)를 만들었고<a href="#r66" class="cite">[66]</a>, 이후 남는 QPS를 예산처럼 배분해 공급사에 선제 요청을 보내는 사전 수집(SmartScheduler)으로 진화했다<a href="#r67" class="cite">[67]</a> — 이 시스템은 학술 논문으로도 공개된 실재 시스템이다<a href="#r68" class="cite">[68]</a>. Skyscanner는 검색 세션 시작 시 오퍼를 조회해 ElasticSearch에 비정규화 색인하고, 이후 정렬·필터 요청은 색인으로 처리하는 하이브리드(Bellboy)를 택했다<a href="#r69" class="cite">[69]</a>. 공급사 연동 계층 자체에 대해서는, Agoda가 벤더 API를 소비해 자사 시스템용으로 정규화하는 connector 모듈을 두고 신규 벤더를 플러그인식으로 추가하는 구조를 공개했는데<a href="#r70" class="cite">[70]</a>, 이는 1장의 어댑터 구조와 같은 결론이다.</p>
+    <div class="note"><span class="tag">설계 함의</span>모든 실사례가 <strong>동기 fan-out에서 출발해, QPS 한도라는 실측된 문제가 생긴 뒤에</strong> 캐시 우선 → 사전 수집 또는 세션 인덱싱으로 이동했다. 동기 fan-out이 잃는 것(지연이 가장 느린 공급사에 종속, 호출량 = 검색량)이 실제로 닥쳤을 때의 진화 경로가 공개되어 있으므로, 지금은 가장 단순한 구조로 시작하고 이 로드맵을 설계 문서에 근거로 남긴다.</div>
+    <div class="note"><span class="tag">확인 못 한 것</span>Expedia·Booking.com 엔지니어링 블로그 차원의 집계 아키텍처 해설 글은 검색으로 찾지 못했다(공식 개발자 제품 문서만 확인됨) — 지어내지 않고 비워둔다. Agoda·Skyscanner의 Medium 글 본문은 직접 열람이 차단되어(403) 검색 결과와 학술 논문 교차 확인으로 검증했다.</div>
+  </section>
+
+  <!-- ============ 참고문헌 ============ -->
+  <section id="refs" class="fade">
+    <div class="sec-head">
+      <div class="sec-num" style="background:var(--g700);box-shadow:none">§</div>
+      <div><p class="sec-eyebrow">SOURCES</p><h2 class="sec">참고문헌</h2></div>
+    </div>
+    <p>모든 항목은 탐색 에이전트가 실재를 확인해 수집하고, <strong>독립 검증 에이전트가 URL 실재 · 제목 일치 · 내용 일치 · 출처 등급을 재확인해 통과 판정한 것만</strong> 기재했다. 검증에서 주장 문구가 원문과 어긋난 항목은 원문에 맞게 고쳐 실었다.</p>
+
+    <h3>1장 — 어댑터 구조와 필드 매핑</h3>
+    <a class="ref primary" id="r1" href="https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer" target="_blank" rel="noopener"><span class="n">1</span><span class="b"><b>Anti-Corruption Layer pattern</b> — Azure Architecture Center. 의미론이 다른 서브시스템 사이에 Facade/Adapter 층을 두어 번역을 수행하는 패턴 정의.<span class="src">https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r2" href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/acl.html" target="_blank" rel="noopener"><span class="n">2</span><span class="b"><b>Anti-corruption layer pattern</b> — AWS Prescriptive Guidance. "두 시스템의 의미론이 달라 데이터를 교환해야 할 때"라는 적용 조건.<span class="src">https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/acl.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r3" href="https://docs.aws.amazon.com/prescriptive-guidance/latest/hexagonal-architectures/overview.html" target="_blank" rel="noopener"><span class="n">3</span><span class="b"><b>Hexagonal architecture — Overview</b> — AWS Prescriptive Guidance. 포트(인터페이스)와 어댑터로 비즈니스 로직을 외부 API·DB 접근에서 격리.<span class="src">https://docs.aws.amazon.com/prescriptive-guidance/latest/hexagonal-architectures/overview.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref" id="r4" href="https://www.enterpriseintegrationpatterns.com/patterns/messaging/Normalizer.html" target="_blank" rel="noopener"><span class="n">4</span><span class="b"><b>Normalizer</b> — Enterprise Integration Patterns. 포맷이 다른 동의미 메시지를 타입별 Translator로 라우팅해 공통 포맷으로.<span class="src">https://www.enterpriseintegrationpatterns.com/patterns/messaging/Normalizer.html</span><span class="pr bt">패턴 카탈로그</span></span></a>
+    <a class="ref" id="r5" href="https://www.enterpriseintegrationpatterns.com/patterns/messaging/CanonicalDataModel.html" target="_blank" rel="noopener"><span class="n">5</span><span class="b"><b>Canonical Data Model</b> — Enterprise Integration Patterns. 표준 모델 도입 시 변환기 수 N×(N-1) → 2N (6개 앱: 30→12) 정량 근거.<span class="src">https://www.enterpriseintegrationpatterns.com/patterns/messaging/CanonicalDataModel.html</span><span class="pr bt">패턴 카탈로그</span></span></a>
+    <a class="ref" id="r6" href="https://www.enterpriseintegrationpatterns.com/patterns/messaging/MessageTranslator.html" target="_blank" rel="noopener"><span class="n">6</span><span class="b"><b>Message Translator</b> — Enterprise Integration Patterns. "Adapter 패턴의 메시징 등가물"이라는 패턴 간 관계.<span class="src">https://www.enterpriseintegrationpatterns.com/patterns/messaging/MessageTranslator.html</span><span class="pr bt">패턴 카탈로그</span></span></a>
+    <a class="ref" id="r7" href="https://microservices.io/patterns/refactoring/anti-corruption-layer.html" target="_blank" rel="noopener"><span class="n">7</span><span class="b"><b>Pattern: Anti-corruption layer</b> — microservices.io. 외부 도메인 모델이 새 서비스의 모델을 오염시키지 않도록 번역 층을 두는 정식화.<span class="src">https://microservices.io/patterns/refactoring/anti-corruption-layer.html</span><span class="pr bt">패턴 카탈로그</span></span></a>
+    <a class="ref" id="r8" href="https://tech.kakaobank.com/posts/2311-hexagonal-architecture-in-messaging-hub/" target="_blank" rel="noopener"><span class="n">8</span><span class="b"><b>유일한 멀티모듈 헥사고날 아키텍처: 메시지 허브 적용기</b> — 카카오뱅크 기술블로그. 세컨더리 어댑터(Redis·JPA·Kafka)를 모듈로 분리한 프로덕션 실사례.<span class="src">https://tech.kakaobank.com/posts/2311-hexagonal-architecture-in-messaging-hub/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r9" href="https://aws.amazon.com/blogs/security/transform-security-logs-into-ocsf-format-using-a-configuration-driven-etl-solution/" target="_blank" rel="noopener"><span class="n">9</span><span class="b"><b>Transform security logs into OCSF format using a configuration-driven ETL solution</b> — AWS Security Blog. 매핑 CSV를 DynamoDB에 저장해 코드 수정 없이 소스를 추가하는 매핑-테이블 방식의 실사례 (대규모 다중 소스 전제).<span class="src">https://aws.amazon.com/blogs/security/transform-security-logs-into-ocsf-format-using-a-configuration-driven-etl-solution/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r10" href="https://aws.amazon.com/blogs/architecture/use-a-reusable-etl-framework-in-your-aws-lake-house-architecture/" target="_blank" rel="noopener"><span class="n">10</span><span class="b"><b>Use a reusable ETL framework in your AWS lake house architecture</b> — AWS Architecture Blog. 메타데이터 테이블로 파이프라인을 구성하는 metadata-driven 방식 (수백 개 잡 규모 전제).<span class="src">https://aws.amazon.com/blogs/architecture/use-a-reusable-etl-framework-in-your-aws-lake-house-architecture/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref primary" id="r11" href="https://mapstruct.org/documentation/stable/reference/html/" target="_blank" rel="noopener"><span class="n">11</span><span class="b"><b>MapStruct 1.6.3 Reference Guide</b> — @Mapping 컴파일 타임 코드 생성과 unmappedTargetPolicy(ERROR/WARN, 기본 WARN)에 의한 빌드 시 매핑 누락 검출.<span class="src">https://mapstruct.org/documentation/stable/reference/html/</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref" id="r12" href="https://techblog.woowahan.com/6447/" target="_blank" rel="noopener"><span class="n">12</span><span class="b"><b>외부 시스템 장애에 대처하는 우리의 자세</b> — 우아한형제들 기술블로그. 복수 벤더를 9:1·8:2 비율로 상시 병행 사용해 연동 상태를 확인하는 운영 전략.<span class="src">https://techblog.woowahan.com/6447/</span><span class="pr bt">기업 공식</span></span></a>
+
+    <h3>2장 — WebClient</h3>
+    <a class="ref primary" id="r13" href="https://docs.spring.io/spring-framework/reference/web/webflux-webclient/client-builder.html" target="_blank" rel="noopener"><span class="n">13</span><span class="b"><b>WebClient — Configuration</b> — Spring Framework Reference. connect·response·read/write 타임아웃과 ReactorClientHttpConnector 구성.<span class="src">https://docs.spring.io/spring-framework/reference/web/webflux-webclient/client-builder.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r14" href="https://docs.spring.io/spring-framework/reference/web/webflux-webclient/client-retrieve.html" target="_blank" rel="noopener"><span class="n">14</span><span class="b"><b>WebClient — retrieve()</b> — Spring Framework Reference. 4xx/5xx 기본 WebClientResponseException과 onStatus 커스텀 에러 핸들링.<span class="src">https://docs.spring.io/spring-framework/reference/web/webflux-webclient/client-retrieve.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r15" href="https://docs.spring.io/spring-framework/reference/integration/rest-clients.html" target="_blank" rel="noopener"><span class="n">15</span><span class="b"><b>REST Clients</b> — Spring Framework Reference. RestClient가 권장 동기 클라이언트, RestTemplate은 7.0부터 deprecated, WebClient는 비동기·스트리밍용.<span class="src">https://docs.spring.io/spring-framework/reference/integration/rest-clients.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r16" href="https://docs.spring.io/spring-boot/reference/io/rest-client.html" target="_blank" rel="noopener"><span class="n">16</span><span class="b"><b>Calling REST Services</b> — Spring Boot Reference. WebClient.Builder/RestClient.Builder 자동 구성과 전역 HTTP 클라이언트 설정 (최신 Boot 문서 기준 — 3.5.x 속성명은 별도 대조 필요).<span class="src">https://docs.spring.io/spring-boot/reference/io/rest-client.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r17" href="https://projectreactor.io/docs/core/release/reference/apdx-operatorChoice.html" target="_blank" rel="noopener"><span class="n">17</span><span class="b"><b>Which operator do I need?</b> — Reactor Core Reference. zip/merge 선택 기준과 block() 계열이 non-blocking 전용 스케줄러에서 예외를 던진다는 명시.<span class="src">https://projectreactor.io/docs/core/release/reference/apdx-operatorChoice.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r18" href="https://projectreactor.io/docs/netty/release/reference/http-client.html" target="_blank" rel="noopener"><span class="n">18</span><span class="b"><b>HTTP Client</b> — Reactor Netty Reference. connection pool 기본값(활성 500 · pending 1,000 · 획득 45초)과 ConnectionProvider 커스터마이징.<span class="src">https://projectreactor.io/docs/netty/release/reference/http-client.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r19" href="https://openjdk.org/jeps/444" target="_blank" rel="noopener"><span class="n">19</span><span class="b"><b>JEP 444: Virtual Threads</b> — OpenJDK. virtual thread가 blocking I/O에서 carrier를 해제(unmount)해 블로킹 호출이 저렴함.<span class="src">https://openjdk.org/jeps/444</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r20" href="https://openjdk.org/jeps/491" target="_blank" rel="noopener"><span class="n">20</span><span class="b"><b>JEP 491: Synchronize Virtual Threads without Pinning</b> — OpenJDK. JDK 24부터 synchronized 모니터 획득 대기가 unmount되어 pinning 해소.<span class="src">https://openjdk.org/jeps/491</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref" id="r21" href="https://techblog.woowahan.com/2673/" target="_blank" rel="noopener"><span class="n">21</span><span class="b"><b>가게노출 파트의 조금은 색다른 파일럿 프로젝트, 그리고 첫 업무까지의 이야기</b> — 우아한형제들 기술블로그. "Connection·Read·Method 타임아웃 세 가지를 모두 설정해야 한다"는 실전 교훈.<span class="src">https://techblog.woowahan.com/2673/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r22" href="https://toss.tech/article/reactor-netty-memory-leak" target="_blank" rel="noopener"><span class="n">22</span><span class="b"><b>Reactor Netty Memory Leak 이슈 탐방기</b> — 토스 기술블로그. 요청 cancel 경로에서 응답 바디 buffer 미해제로 인한 direct buffer native memory leak 운영 사례.<span class="src">https://toss.tech/article/reactor-netty-memory-leak</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r23" href="https://techblog.woowahan.com/2630/" target="_blank" rel="noopener"><span class="n">23</span><span class="b"><b>우아한 feign 적용기</b> — 우아한형제들 기술블로그. Feign 선언적 클라이언트의 보일러플레이트 절감과 설정 함정.<span class="src">https://techblog.woowahan.com/2630/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r24" href="https://techblog.woowahan.com/12903/" target="_blank" rel="noopener"><span class="n">24</span><span class="b"><b>[배민스토어] 우리만의 자유로운 WebFlux Practices</b> — 우아한형제들 기술블로그. zipWhen 권장, 빈 값 처리, 파이프라인 내 로깅 등 Reactor 파이프라인 안정성 practice.<span class="src">https://techblog.woowahan.com/12903/</span><span class="pr bt">기업 공식</span></span></a>
+
+    <h3>3장 — 회복탄력성</h3>
+    <a class="ref" id="r25" href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" target="_blank" rel="noopener"><span class="n">25</span><span class="b"><b>Exponential Backoff And Jitter</b> — AWS Architecture Blog. 백오프에 지터를 더해 재시도를 분산 — Full Jitter는 총 호출량(서버 부하)을 가장 줄이며, jitter 적용 백오프가 원격 클라이언트의 표준 접근으로 권장됨.<span class="src">https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref primary" id="r26" href="https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_limit_retries.html" target="_blank" rel="noopener"><span class="n">26</span><span class="b"><b>REL05-BP03 Control and limit retry calls</b> — AWS Well-Architected Framework. 재시도는 횟수 제한 + 지수 백오프 + 지터가 공식 베스트 프랙티스.<span class="src">https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_limit_retries.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r27" href="https://resilience4j.readme.io/docs/retry" target="_blank" rel="noopener"><span class="n">27</span><span class="b"><b>Retry</b> — Resilience4j 공식 문서. maxAttempts(3)·waitDuration(500ms) 기본값, IntervalFunction(ofExponentialBackoff/ofRandomized), retryExceptions.<span class="src">https://resilience4j.readme.io/docs/retry</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r28" href="https://resilience4j.readme.io/docs/circuitbreaker" target="_blank" rel="noopener"><span class="n">28</span><span class="b"><b>CircuitBreaker</b> — Resilience4j 공식 문서. 상태 전이(CLOSED/OPEN/HALF_OPEN 외 특수 상태), CallNotPermittedException, failureRateThreshold 50% · minimumNumberOfCalls 100 등 기본값.<span class="src">https://resilience4j.readme.io/docs/circuitbreaker</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r29" href="https://resilience4j.readme.io/docs/getting-started-3" target="_blank" rel="noopener"><span class="n">29</span><span class="b"><b>Getting Started</b> (Spring Boot 3 모듈) — Resilience4j 공식 문서. aspect 기본 순서 Retry(CircuitBreaker(RateLimiter(TimeLimiter(Bulkhead)))), aspectOrder 변경, fallbackMethod 규칙, Mono/Flux 반환 호환.<span class="src">https://resilience4j.readme.io/docs/getting-started-3</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r30" href="https://resilience4j.readme.io/docs/examples-1" target="_blank" rel="noopener"><span class="n">30</span><span class="b"><b>Examples of resilience4j-reactor</b> — Resilience4j 공식 문서. transformDeferred(CircuitBreakerOperator.of(...)), RetryOperator 등 Reactor 연산자 적용 패턴.<span class="src">https://resilience4j.readme.io/docs/examples-1</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r31" href="https://github.com/resilience4j/resilience4j" target="_blank" rel="noopener"><span class="n">31</span><span class="b"><b>resilience4j/resilience4j</b> — 공식 GitHub 저장소. 서비스별 CircuitBreaker/Retry 인스턴스 분리, Decorators 함수형 체이닝, Try.recover 기반 fallback.<span class="src">https://github.com/resilience4j/resilience4j</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r32" href="https://projectreactor.io/docs/core/release/api/reactor/util/retry/Retry.html" target="_blank" rel="noopener"><span class="n">32</span><span class="b"><b>Retry</b> — Reactor Core Javadoc. Retry.backoff는 지수 백오프 + 지터가 사전 구성된 전략.<span class="src">https://projectreactor.io/docs/core/release/api/reactor/util/retry/Retry.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r33" href="https://projectreactor.io/docs/core/release/api/reactor/util/retry/RetryBackoffSpec.html" target="_blank" rel="noopener"><span class="n">33</span><span class="b"><b>RetryBackoffSpec</b> — Reactor Core Javadoc. 기본 jitter factor 0.5(계산 지연의 최대 50%), 지터가 retry-storm으로 인한 연쇄 장애를 줄인다는 명시.<span class="src">https://projectreactor.io/docs/core/release/api/reactor/util/retry/RetryBackoffSpec.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r34" href="https://github.com/spring-projects/spring-retry" target="_blank" rel="noopener"><span class="n">34</span><span class="b"><b>spring-projects/spring-retry</b> — 공식 GitHub 저장소. @Retryable/@Recover/RetryTemplate 중심 — 서킷브레이커는 부수 기능 수준으로만 문서화.<span class="src">https://github.com/spring-projects/spring-retry</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r35" href="https://docs.spring.io/spring-cloud-circuitbreaker/reference/index.html" target="_blank" rel="noopener"><span class="n">35</span><span class="b"><b>Spring Cloud Circuit Breaker Reference</b> — Resilience4J·Spring Retry 구현체 위의 추상화 API.<span class="src">https://docs.spring.io/spring-cloud-circuitbreaker/reference/index.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref" id="r36" href="https://github.com/Netflix/Hystrix" target="_blank" rel="noopener"><span class="n">36</span><span class="b"><b>Netflix/Hystrix</b> — 공식 GitHub 저장소. maintenance mode 선언과 신규 프로젝트에 Resilience4j 권장.<span class="src">https://github.com/Netflix/Hystrix</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r37" href="https://techblog.woowahan.com/15694/" target="_blank" rel="noopener"><span class="n">37</span><span class="b"><b>개발자 의식의 흐름대로 적용해보는 서킷브레이커</b> — 우아한형제들 기술블로그. CallNotPermittedException 전용 fallback + 상태 전이 이벤트 로깅·메트릭 대시보드까지의 실전 적용 범위.<span class="src">https://techblog.woowahan.com/15694/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r38" href="https://oliveyoung.tech/2023-08-31/circuitbreaker-inventory-squad/" target="_blank" rel="noopener"><span class="n">38</span><span class="b"><b>Circuitbreaker를 사용한 장애 전파 방지</b> — 올리브영 테크블로그. 예외 유형별 fallback 오버로딩으로 Redis→RDB 자동 우회(대체 데이터 소스 failover) 실운영 사례.<span class="src">https://oliveyoung.tech/2023-08-31/circuitbreaker-inventory-squad/</span><span class="pr bt">기업 공식</span></span></a>
+
+    <h3>4장 — rate limit</h3>
+    <a class="ref primary" id="r39" href="https://resilience4j.readme.io/docs/ratelimiter" target="_blank" rel="noopener"><span class="n">39</span><span class="b"><b>RateLimiter</b> — Resilience4j 공식 문서. AtomicRateLimiter 기본 구현, limitForPeriod·limitRefreshPeriod·timeoutDuration, 주기 시작 시 허가 리셋 방식, Reactor 어댑터 제공.<span class="src">https://resilience4j.readme.io/docs/ratelimiter</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r40" href="https://bucket4j.com/8.18.0/toc.html" target="_blank" rel="noopener"><span class="n">40</span><span class="b"><b>Bucket4j 8.18.0 Reference</b> — 토큰 버킷 기반, blocking/tryConsume/async 소비 API와 JCache·Redis·JDBC 분산 백엔드.<span class="src">https://bucket4j.com/8.18.0/toc.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r41" href="https://guava.dev/releases/33.0.0-jre/api/docs/com/google/common/util/concurrent/RateLimiter.html" target="_blank" rel="noopener"><span class="n">41</span><span class="b"><b>Guava RateLimiter Javadoc</b> — permits/sec 평활 모델 · warmup · blocking acquire(). 모든 스레드의 총 호출률을 제한하는 인스턴스 단위(in-process) 리미터.<span class="src">https://guava.dev/releases/33.0.0-jre/api/docs/com/google/common/util/concurrent/RateLimiter.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r42" href="https://projectreactor.io/docs/core/release/reference/coreFeatures/simple-ways-to-create-a-flux-or-mono-and-subscribe-to-it.html" target="_blank" rel="noopener"><span class="n">42</span><span class="b"><b>Reactor Core Reference §On Backpressure and Ways to Reshape Requests</b> — limitRate는 시간 기반 제한이 아니라 upstream request를 작은 배치로 나누는 backpressure 연산자 (prefetch 기본 32 · 75% 보충).<span class="src">https://projectreactor.io/docs/core/release/reference/coreFeatures/simple-ways-to-create-a-flux-or-mono-and-subscribe-to-it.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r43" href="https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Flux.html" target="_blank" rel="noopener"><span class="n">43</span><span class="b"><b>Flux Javadoc</b> — Reactor Core. delayElements는 요소별 Duration 지연 연산자.<span class="src">https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Flux.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r44" href="https://datatracker.ietf.org/doc/html/rfc6585" target="_blank" rel="noopener"><span class="n">44</span><span class="b"><b>RFC 6585 — Additional HTTP Status Codes</b> — 429의 정의와 Retry-After 헤더 포함 권고(MAY).<span class="src">https://datatracker.ietf.org/doc/html/rfc6585</span><span class="pr p1">표준 명세</span></span></a>
+    <a class="ref primary" id="r45" href="https://datatracker.ietf.org/doc/html/rfc9110#section-10.2.3" target="_blank" rel="noopener"><span class="n">45</span><span class="b"><b>RFC 9110 — HTTP Semantics §10.2.3 Retry-After</b> — Retry-After = HTTP-date / delay-seconds 두 형식.<span class="src">https://datatracker.ietf.org/doc/html/rfc9110#section-10.2.3</span><span class="pr p1">표준 명세</span></span></a>
+    <a class="ref primary" id="r46" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/429" target="_blank" rel="noopener"><span class="n">46</span><span class="b"><b>429 Too Many Requests</b> — MDN Web Docs. 429 처리와 Retry-After 병용 관행 요약.<span class="src">https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/429</span><span class="pr p1">공식 레퍼런스</span></span></a>
+    <a class="ref" id="r47" href="https://aws.amazon.com/builders-library/caching-challenges-and-strategies/" target="_blank" rel="noopener"><span class="n">47</span><span class="b"><b>Caching challenges and strategies</b> — Amazon Builders' Library. "의존 대상의 throttling 예상"을 캐시 도입 사유로, 히트율·staleness 허용·캐시 불능 시 동작을 판단 기준으로 명시.<span class="src">https://aws.amazon.com/builders-library/caching-challenges-and-strategies/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r48" href="https://stripe.com/blog/rate-limiters" target="_blank" rel="noopener"><span class="n">48</span><span class="b"><b>Scaling your API with rate limiters</b> — Stripe Engineering. Stripe가 실서비스 rate limiting에 토큰 버킷 알고리즘을 사용.<span class="src">https://stripe.com/blog/rate-limiters</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r49" href="https://blog.cloudflare.com/counting-things-a-lot-of-different-things/" target="_blank" rel="noopener"><span class="n">49</span><span class="b"><b>How we built rate limiting capable of scaling to millions of domains</b> — Cloudflare Blog. 슬라이딩 윈도 카운터(이전·현재 윈도 가중 평균)와 오차 0.003% 실측.<span class="src">https://blog.cloudflare.com/counting-things-a-lot-of-different-things/</span><span class="pr bt">기업 공식</span></span></a>
+
+    <h3>5장 — 캐싱</h3>
+    <a class="ref primary" id="r50" href="https://github.com/ben-manes/caffeine/wiki/Refresh" target="_blank" rel="noopener"><span class="n">50</span><span class="b"><b>Caffeine Wiki — Refresh</b> — refreshAfterWrite는 갱신 중 이전 값을 계속 반환하는 비동기 갱신(stale-while-revalidate 계열).<span class="src">https://github.com/ben-manes/caffeine/wiki/Refresh</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r51" href="https://github.com/ben-manes/caffeine/wiki/Faq" target="_blank" rel="noopener"><span class="n">51</span><span class="b"><b>Caffeine Wiki — FAQ</b> — AsyncCache의 in-flight future 공유가 "protecting against a cache stampede"라는 공식 서술.<span class="src">https://github.com/ben-manes/caffeine/wiki/Faq</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r52" href="https://github.com/ben-manes/caffeine/blob/master/examples/coalescing-bulkloader-reactor/README.md" target="_blank" rel="noopener"><span class="n">52</span><span class="b"><b>Caffeine 공식 예제 — Coalescing BulkLoader (Reactor)</b> — refresh 호출을 Reactor로 배치 병합해 원본 부하를 줄이는 공식 패턴.<span class="src">https://github.com/ben-manes/caffeine/blob/master/examples/coalescing-bulkloader-reactor/README.md</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r53" href="https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html" target="_blank" rel="noopener"><span class="n">53</span><span class="b"><b>Declarative Annotation-based Caching</b> — Spring Framework Reference. @Cacheable(sync=true)의 단일 스레드 계산과 "optional feature" 한계 명시.<span class="src">https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r54" href="https://docs.spring.io/spring-boot/reference/io/caching.html" target="_blank" rel="noopener"><span class="n">54</span><span class="b"><b>Caching</b> — Spring Boot Reference. provider 자동 감지 순서와 Caffeine spec · Redis TTL 설정 방식.<span class="src">https://docs.spring.io/spring-boot/reference/io/caching.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r55" href="https://httpwg.org/specs/rfc5861.html" target="_blank" rel="noopener"><span class="n">55</span><span class="b"><b>RFC 5861 — HTTP Cache-Control Extensions for Stale Content</b> — stale-while-revalidate · stale-if-error의 정의와 의미론.<span class="src">https://httpwg.org/specs/rfc5861.html</span><span class="pr p1">표준 명세</span></span></a>
+    <a class="ref primary" id="r56" href="http://www.vldb.org/pvldb/vol8/p886-vattani.pdf" target="_blank" rel="noopener"><span class="n">56</span><span class="b"><b>Optimal Probabilistic Cache Stampede Prevention</b> — Vattani·Chierichetti·Lowenstein, PVLDB Vol.8 (2015). 확률적 조기 만료(probabilistic early expiration, XFetch) 알고리즘의 원전 논문.<span class="src">http://www.vldb.org/pvldb/vol8/p886-vattani.pdf</span><span class="pr p1">학술 원전</span></span></a>
+    <a class="ref primary" id="r57" href="https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf" target="_blank" rel="noopener"><span class="n">57</span><span class="b"><b>Scaling Memcache at Facebook</b> — Nishtala et al., NSDI '13. lease 토큰으로 stale set · thundering herd를 해결, DB 피크 질의율 17K/s → 1.3K/s 실측.<span class="src">https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf</span><span class="pr p1">학술 원전</span></span></a>
+    <a class="ref" id="r58" href="https://instagram-engineering.com/thundering-herds-promises-82191c8af57d" target="_blank" rel="noopener"><span class="n">58</span><span class="b"><b>Thundering Herds &amp; Promises</b> — Instagram Engineering. 값 대신 promise를 캐싱해 동시 miss를 백엔드 1회 호출로 병합하는 패턴.<span class="src">https://instagram-engineering.com/thundering-herds-promises-82191c8af57d</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref primary" id="r59" href="https://docs.aws.amazon.com/whitepapers/latest/database-caching-strategies-using-redis/caching-patterns.html" target="_blank" rel="noopener"><span class="n">59</span><span class="b"><b>Caching patterns</b> — AWS Whitepaper: Database Caching Strategies Using Redis. cache-aside와 write-through 구분, 캐시 대상·수명 관리는 애플리케이션 책임 (historical reference 배너 있음 — 패턴 정의 인용 용도).<span class="src">https://docs.aws.amazon.com/whitepapers/latest/database-caching-strategies-using-redis/caching-patterns.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref" id="r60" href="https://oliveyoung.tech/2024-12-10/present-promotion-multi-layer-cache/" target="_blank" rel="noopener"><span class="n">60</span><span class="b"><b>고성능 캐시 아키텍처 설계 - 로컬 캐시와 Redis로 대규모 증정 행사 관리 최적화</b> — 올리브영 테크블로그. Caffeine + ElastiCache 2계층 · 버전 기반 무효화 · TPS 478% 증가, Redis 송신량 99.1% 감소 실측.<span class="src">https://oliveyoung.tech/2024-12-10/present-promotion-multi-layer-cache/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r61" href="https://tech.kakaopay.com/post/local-caching-in-distributed-systems/" target="_blank" rel="noopener"><span class="n">61</span><span class="b"><b>분산 시스템에서 로컬 캐시 활용하기</b> — 카카오페이 기술블로그. "최종적 일관성을 허용할 수 있는 조회용 데이터"라는 로컬 캐시 적용 기준과 TTL + Redis Pub/Sub 무효화.<span class="src">https://tech.kakaopay.com/post/local-caching-in-distributed-systems/</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r62" href="https://blog.cloudflare.com/workers-cache/" target="_blank" rel="noopener"><span class="n">62</span><span class="b"><b>Your Worker can now have its own cache in front of it</b> — Cloudflare Blog. 만료된 응답을 즉시 stale로 서빙하며 백그라운드에서 갱신하는 stale-while-revalidate 상용 적용.<span class="src">https://blog.cloudflare.com/workers-cache/</span><span class="pr bt">기업 공식</span></span></a>
+
+    <h3>6장 — 멀티 채널 집계</h3>
+    <a class="ref primary" id="r63" href="https://learn.microsoft.com/en-us/azure/architecture/patterns/gateway-aggregation" target="_blank" rel="noopener"><span class="n">63</span><span class="b"><b>Gateway Aggregation pattern</b> — Azure Architecture Center. 여러 백엔드 fan-out 후 집계, 타임아웃 시 부분 응답 반환 · 캐시 failover · 부분 응답 정책 명시화 권고.<span class="src">https://learn.microsoft.com/en-us/azure/architecture/patterns/gateway-aggregation</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref" id="r64" href="https://www.enterpriseintegrationpatterns.com/patterns/messaging/BroadcastAggregate.html" target="_blank" rel="noopener"><span class="n">64</span><span class="b"><b>Scatter-Gather</b> — Enterprise Integration Patterns. 여러 공급자에 요청을 브로드캐스트 후 Aggregator로 집계, 완료 조건(전부 대기/First Best/타임아웃) 선택.<span class="src">https://www.enterpriseintegrationpatterns.com/patterns/messaging/BroadcastAggregate.html</span><span class="pr bt">패턴 카탈로그</span></span></a>
+    <a class="ref" id="r65" href="https://microservices.io/patterns/data/api-composition.html" target="_blank" rel="noopener"><span class="n">65</span><span class="b"><b>Pattern: API Composition</b> — microservices.io. 데이터 소유 서비스들을 호출해 in-memory join하는 조회 패턴 정식화.<span class="src">https://microservices.io/patterns/data/api-composition.html</span><span class="pr bt">패턴 카탈로그</span></span></a>
+    <a class="ref" id="r66" href="https://medium.com/agoda-engineering/priceaggregator-an-intelligent-system-for-hotel-price-fetching-part-1-ba6ce66354c2" target="_blank" rel="noopener"><span class="n">66</span><span class="b"><b>Intelligent Hotel Price Fetching — PriceAggregator (Part 1)</b> — Agoda Engineering. 공급사별 허용 QPS가 검색 트래픽에 못 미쳐 캐시 우선 + miss 시 공급사 호출 구조를 택한 배경.<span class="src">https://medium.com/agoda-engineering/priceaggregator-an-intelligent-system-for-hotel-price-fetching-part-1-ba6ce66354c2</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r67" href="https://medium.com/agoda-engineering/priceaggregator-an-intelligent-system-for-hotel-price-fetching-part-3-52acfc705081" target="_blank" rel="noopener"><span class="n">67</span><span class="b"><b>Intelligent Hotel Price Fetching — SmartScheduler (Part 3)</b> — Agoda Engineering. 남는 QPS를 예산처럼 배분해 공급사에 선제 요청을 보내는 사전 수집으로의 진화.<span class="src">https://medium.com/agoda-engineering/priceaggregator-an-intelligent-system-for-hotel-price-fetching-part-3-52acfc705081</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref primary" id="r68" href="https://arxiv.org/abs/2008.02087" target="_blank" rel="noopener"><span class="n">68</span><span class="b"><b>PriceAggregator: An Intelligent System for Hotel Price Fetching</b> — arXiv:2008.02087. 위 시스템이 학술 논문으로도 공개된 실재 프로덕션 시스템임을 교차 확인.<span class="src">https://arxiv.org/abs/2008.02087</span><span class="pr p1">학술 원전</span></span></a>
+    <a class="ref" id="r69" href="https://medium.com/@SkyscannerEng/using-elasticsearch-as-a-data-service-for-hotel-offers-10a5072f2f52" target="_blank" rel="noopener"><span class="n">69</span><span class="b"><b>Using ElasticSearch as a data service for hotel offers</b> — Skyscanner Engineering. 검색 세션의 오퍼를 ElasticSearch에 비정규화 색인해 제공하는 하이브리드(Bellboy) 구조.<span class="src">https://medium.com/@SkyscannerEng/using-elasticsearch-as-a-data-service-for-hotel-offers-10a5072f2f52</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r70" href="https://medium.com/agoda-engineering/fast-tracking-integrations-using-code-generation-6e8dd441113b" target="_blank" rel="noopener"><span class="n">70</span><span class="b"><b>Fast-tracking Integrations using Code Generation</b> — Agoda Engineering. 벤더 API를 소비해 자사 시스템용으로 정규화하는 connector 모듈 + 플러그인식 신규 벤더 추가.<span class="src">https://medium.com/agoda-engineering/fast-tracking-integrations-using-code-generation-6e8dd441113b</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref" id="r71" href="https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter" target="_blank" rel="noopener"><span class="n">71</span><span class="b"><b>Timeouts, retries, and backoff with jitter</b> — Amazon Builders' Library (Marc Brooker). 모든 원격 호출에 connection/request 타임아웃 설정, 재시도는 부하를 증폭시키므로 capped exponential backoff + 지터로 제한. (aws.amazon.com 구 URL에서 이전됨)<span class="src">https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter</span><span class="pr bt">기업 공식</span></span></a>
+    <a class="ref primary" id="r72" href="https://dl.acm.org/doi/10.1145/2408776.2408794" target="_blank" rel="noopener"><span class="n">72</span><span class="b"><b>The Tail at Scale</b> — Dean &amp; Barroso, Communications of the ACM 56(2), 2013. fan-out에서 꼬리 지연이 전체를 지배하며, hedged request로 추가 부하 약 5%에 꼬리 지연 대폭 단축.<span class="src">https://dl.acm.org/doi/10.1145/2408776.2408794</span><span class="pr p1">학술 원전</span></span></a>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    stay-link 기술 레퍼런스 조사 — 탐색·검증 에이전트 분리 파이프라인 산출물<br>
+    모든 출처는 독립 검증(실재 · 내용 일치 · 등급 적합)을 통과한 것만 기재 · 2026-09-03 KST
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>
