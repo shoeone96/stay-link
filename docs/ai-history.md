@@ -139,3 +139,19 @@
 - **요구(사용자 결정)**: ② 예약 불가 상품은 노출해서 내려주고 품절 표시. ③은 aggregate 단계의 표기 문제임을 확인 — 표기 상세는 실패 정규화·fallback과 함께. ④ 비동기 후처리로: 미매핑 코드 수신 시 retry 없이 바로 매핑 수정(재조회 → 갱신, 없으면 response 내용에 따라 후처리 결정), 구현 시점 분리(사전작업 5·fallback 로직)도 인정.
 - **AI 답변 요약**: 품절은 availableRooms:0 + soldOut:true 명시 필드로(0 해석 통일). 부분 실패는 공급사별 결과 블록(suppliers[]: supplier+status+reason) 구조 확정, reason 값 체계는 D12(실패 정규화)로 이연. `docs/availability-api-integration-design.html` 작성 — D6~D12 결정표 / 검색 fan-out→aggregate SVG(실패를 값으로 취급) / 필드 매칭 11쌍 / 정규화 규칙 검산(A 합산 396,000·min 재고·soldOut) / 통합 응답 JSON 형태 / 이연 항목 4건. 비교 문서의 합산 예시 계산 오류(411,400 → 396,000)도 수정.
 - **결정**: 확정 — 검색 통합 설계 골격 닫힘(D6~D12). 사전작업 1 완료, 다음은 사전작업 2(supplier 모듈 + mock supplier).
+
+### 27. 자체 보유 상품 고려 여부
+- **질문**: 공급사 연동 외에 자체적으로 가지고 있는 상품도 고려해야 하지 않는지.
+- **AI 답변 요약**: 도메인적으로 맞는 지적(배경 서술도 자체 등록 + 연동 병행 판매)이나 구현은 반대 — ① 필수·선택 구현 어디에도 자체 상품이 없고 관리자 기능은 비범위 ② 자체 상품의 스키마·정책을 지어내야 하는 투기적 기능. 대신 설계가 이미 수용 가능함을 문서화 권장: 자체 상품 = 자사 DB를 읽는 내부 공급원 어댑터 1개 + supplier 값("SELF") 추가로 흡수되고 aggregate는 불변 — "신규 Supplier 추가 시 고칠 것" 서술 요구의 확장 예시로 README에 한 단락. 유일한 차이는 데이터 소유권(자체 상품은 요금·재고를 자사가 저장)이며 이 차이도 어댑터 뒤에 숨음.
+- **결정**: 결정 대기.
+
+### 28. 진행 상황 점검 (2026-09-03)
+- **요구**: 현재 진행 상황과 다음 할 일을 실제 파일 기준으로 확인.
+- **AI 답변 요약**: 설계 문서 5종·todolist 확정본은 커밋 완료(최신 316a68a), 소스는 스켈레톤 2파일뿐. 스켈레톤 `./gradlew test` 실패 확인 — data-jpa 의존성만 있고 datasource url·임베디드 DB가 없어 컨텍스트 로딩 실패(H2 미포함, mysql-connector-j만 존재해 CLAUDE.md의 "H2로 시작"과 불일치). 금지어 grep 0건. 다음: 사전작업 2 착수 전 H2 의존성 교체·datasource 설정으로 스켈레톤부터 부팅되게 정리.
+- **결정**: 보고 — 사용자 판단 대기.
+
+### 29. 로컬 실행 환경: MySQL docker-compose 구성
+- **요구(사용자 결정)**: 로컬 실행 대상 DB는 MySQL 기반 docker-compose로. Spring Boot의 docker-compose 지원 의존성을 추가해 로컬에서 바로 돌려볼 수 있게 구성.
+- **AI 답변 요약**: ① `spring-boot-docker-compose`를 `developmentOnly`로 추가(bootRun 시에만 활성, 테스트·배포 산출물에는 미포함) ② 프로젝트 루트 `compose.yaml`에 mysql:8.4 서비스 + healthcheck 정의, 호스트 포트는 동적 할당(연결 정보는 Boot가 컨테이너에서 자동 추출하므로 datasource url 설정 불필요) ③ 테스트는 Docker 없이 돌아가야 하므로 `h2`를 `testRuntimeOnly`로 추가해 임베디드 DB 자동 구성 ④ 확정 스택의 Virtual Thread 서빙을 `spring.threads.virtual.enabled=true`로 반영 ⑤ CLAUDE.md의 "H2로 시작" 문구를 실제 구성(MySQL 로컬 / H2 테스트)으로 정정. 검증: `./gradlew test` 통과, `bootRun`에서 compose 파일 감지 → 컨테이너 Created/Started/Healthy → HikariPool 연결 → 8080 기동 확인, 앱 종료 시 컨테이너도 정리됨. 중간에 readiness 옵션 값을 잘못 넣어(`only-if-unhealthy`, 실제 enum은 ALWAYS/NEVER/ONLY_IF_STARTED) 1회 기동 실패 → 기본값(항상 healthy 대기)이 의도와 같아 항목 삭제.
+- **트레이드오프 기록**: 테스트 DB를 H2로 두면 MySQL 방언 차이(DDL·함수)를 테스트가 못 잡음. 매핑 테이블 DDL·어댑터 통합 테스트 단계에서 Testcontainers(MySQL) 전환을 재검토하기로 함.
+- **결정**: 수용 — 로컬 실행 환경 구성 완료. 미결: JPA ddl 전략(entity 등장 시점에 결정), 커밋은 사용자가 직접.

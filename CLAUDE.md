@@ -7,7 +7,7 @@
 - Java 25 (LTS) + Spring Boot 3.5.x + Gradle (Kotlin DSL)
 - 동시성 모델: Spring MVC + Virtual Thread(요청 서빙) + WebClient(Supplier 병렬 fan-out은 Reactor 연산자로 제어)
 - WebFlux 전면 도입은 하지 않음 — 근거는 README·설계 문서에 기록
-- DB: 관계형 1개 (H2로 시작)
+- DB: MySQL 8.4 — 로컬 실행은 `compose.yaml` + spring-boot-docker-compose(bootRun 시 자동 기동·연결), 테스트는 H2 in-memory
 
 ## 절대 규칙
 

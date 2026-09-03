@@ -1,3 +1,6 @@
 spring:
   application:
     name: stay-link
+  threads:
+    virtual:
+      enabled: true
