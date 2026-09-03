@@ -104,3 +104,13 @@
 - **요구**: 저장 모델 설계에 앞서 두 공급사의 응답을 비교 — ① 전체 조회(목록) 결과를 왼쪽 A / 오른쪽 B JSON으로 한눈에 비교, 에러 응답도 아래에 비교 ② 상세 조회(재고·요금)도 동일 형식. 이를 입력으로 저장·조회 모델링을 진행.
 - **AI 답변 요약**: 공급사 명세 원문 반입 금지 제약이 있어, 필드명·구조·실패 체계는 명세 구조를 따르되 예시 값(숙소명·코드·금액)은 자체 mock 샘플로 바꿔 작성 — 이 샘플이 mock supplier 데이터로 이어짐. `docs/supplier-response-comparison.html` 4개 장: ① 공통 규약 + 핵심 차이 5가지(봉투/요금 표현/세금/실패 표현/식별자 이름) ② 목록 A·B 좌우 비교 + 실패 응답(A는 HTTP 상태, B는 항상 200+resultCode) ③ 재고·요금 A·B 좌우 비교(A 날짜별 net vs B 총액 gross — 비가역 변환 명시) + 실패 코드 1:1 대응표 ④ 필드 대응표 + 모델링 시사점 4개(요금만 어려운 결정 / 재고 = 날짜별 최솟값 / 실패 정규화·봉투 해체는 어댑터 책임).
 - **결정**: 결정 대기 — 다음 결정은 표준 요금 통일 기준(A: 날짜별 net+세금 별도 / B: 기간 총액 gross).
+
+### 20. 목록 응답 필드 매칭 확인
+- **요구(사용자 정리)**: 숙소 목록 응답의 매칭 — ① A는 바로 데이터, B는 data 봉투 ② hotelCode=propertyId ③ roomTypeCode=roomId ④ roomTypeName=roomName ⑤ maxOccupancy 동일 — 이 이해가 맞는지 확인.
+- **AI 답변 요약**: 5개 모두 정확. 추가 2개 — ⑥ hotelName=propertyName ⑦ roomTypes[]=rooms[] (배열명). 덧붙임: roomTypeCode/roomId는 숙소 안에서만 유일하므로 객실 타입 매핑 키는 (공급사, 숙소 코드, 객실 타입 코드) 3값 필수. 이름 필드는 매칭돼도 값 표기는 공급사별로 다를 수 있으나, 병합 안 하는 기본 원칙에서는 각자 이름 저장으로 충돌 없음.
+- **결정**: 수용 — 목록 응답 매칭 7쌍 확정.
+
+### 21. 매핑 테이블 2개 구조 + 수정 제언 3건
+- **요구(사용자)**: ① 매핑 테이블은 hotel·room 2개로 — 단 hotel은 숙박 종류 전체를 못 담으니 네이밍 변경, name 컬럼에 prefix 부여 ② room별 occupancy 저장은 "검색 요청이 숙소 단위"임을 근거로 안 넣는 쪽으로 판단 변경 — 타당한지 확인 ③ 목록에서도 가격이 상시 보이는 게 일반적인데 반영해야 하지 않는지.
+- **AI 답변 요약**: ① 테이블 2개 구조 동의, 네이밍은 `property`(OTA 표준 용어, 추천) vs `accommodation` 비교 후 property + `room_type`(B의 roomId "물리 객실 아님" 함정을 내부에 재생산하지 않기 위해) 제안. 컬럼: property(id, supplier, supplier_property_code, property_name / UNIQUE(supplier, supplier_property_code)), room_type(id, property_id FK, supplier_room_type_code, room_type_name / UNIQUE(property_id, supplier_room_type_code)). ② 바뀐 판단이 맞음 — 상세 요청은 숙소 코드 단위라 절감 효과 미미 + 공급사가 이미 인원 필터링 + 낡은 값으로 잘못 거를 위험만 추가. README에 "고민 후 제외" 근거 기록 가치. ③ 지금 반영 반대 — 검색 응답이 이미 가격 붙은 목록이고, 날짜 없는 대표 가격은 저장 모델이 아니라 요금 캐시 계층의 문제.
+- **결정**: ②·③ 수용(③은 추후 고려사항으로 todolist에 기록 — 가장 단순한 직접 fan-out 먼저, 고객 수 기준 예상 호출량 산정 후 캐싱/저장/사전수집 결정). ① 네이밍은 확정 대기.
