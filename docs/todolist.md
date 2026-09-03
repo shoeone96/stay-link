@@ -7,10 +7,10 @@
 ## 사전작업
 
 - [ ] **1. 저장 모델 + 매핑 스키마 확정**
-  - [ ] 요금 통일 기준 결정 (A: 날짜별 net + 세금 별도 / B: 기간 총액 gross)
+  - [x] 요금 통일 기준 결정 — **기간 총액 gross** (`totalAmount` + `currency`, 세금 분리·날짜별 분해는 버리는 선택으로 README 명시)
   - [ ] 통화·날짜 경계(체크인/아웃) 표현 확정
-  - [ ] 2단계 매핑 스키마 (숙소 / 숙소+객실 타입, 내부 식별자는 공급사 비종속)
-  - [ ] 저장 vs 실시간 경계 확정 (주기 수집 = 정적 메타·매핑 / 실시간 fan-out = 요금·재고)
+  - [x] 2단계 매핑 스키마 — `property`(id, supplier, supplier_property_code, property_name) / `room_type`(id, property_id, supplier_room_type_code, room_type_name), 각각 UNIQUE 제약으로 내부 식별자 안정성 보장
+  - [x] 저장 vs 실시간 경계 확정 (주기 수집 = 매핑+이름 / 실시간 fan-out = 요금·재고)
 - [ ] **2. supplier 모듈 생성 + mock supplier API 2종**
   - [ ] 두 공급사의 응답 포맷을 서로 다르게 구성 (필드명·요금 표현·구조)
 - [ ] **3. supplier 연동 클라이언트 설정**

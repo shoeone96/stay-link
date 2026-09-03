@@ -113,4 +113,9 @@
 ### 21. 매핑 테이블 2개 구조 + 수정 제언 3건
 - **요구(사용자)**: ① 매핑 테이블은 hotel·room 2개로 — 단 hotel은 숙박 종류 전체를 못 담으니 네이밍 변경, name 컬럼에 prefix 부여 ② room별 occupancy 저장은 "검색 요청이 숙소 단위"임을 근거로 안 넣는 쪽으로 판단 변경 — 타당한지 확인 ③ 목록에서도 가격이 상시 보이는 게 일반적인데 반영해야 하지 않는지.
 - **AI 답변 요약**: ① 테이블 2개 구조 동의, 네이밍은 `property`(OTA 표준 용어, 추천) vs `accommodation` 비교 후 property + `room_type`(B의 roomId "물리 객실 아님" 함정을 내부에 재생산하지 않기 위해) 제안. 컬럼: property(id, supplier, supplier_property_code, property_name / UNIQUE(supplier, supplier_property_code)), room_type(id, property_id FK, supplier_room_type_code, room_type_name / UNIQUE(property_id, supplier_room_type_code)). ② 바뀐 판단이 맞음 — 상세 요청은 숙소 코드 단위라 절감 효과 미미 + 공급사가 이미 인원 필터링 + 낡은 값으로 잘못 거를 위험만 추가. README에 "고민 후 제외" 근거 기록 가치. ③ 지금 반영 반대 — 검색 응답이 이미 가격 붙은 목록이고, 날짜 없는 대표 가격은 저장 모델이 아니라 요금 캐시 계층의 문제.
-- **결정**: ②·③ 수용(③은 추후 고려사항으로 todolist에 기록 — 가장 단순한 직접 fan-out 먼저, 고객 수 기준 예상 호출량 산정 후 캐싱/저장/사전수집 결정). ① 네이밍은 확정 대기.
+- **결정**: ②·③ 수용(③은 추후 고려사항으로 todolist에 기록 — 가장 단순한 직접 fan-out 먼저, 고객 수 기준 예상 호출량 산정 후 캐싱/저장/사전수집 결정). ① 네이밍은 22번에서 확정.
+
+### 22. 네이밍 확정 + 표준 요금 기준 확정
+- **요구(사용자 결정)**: ① 매핑 테이블 네이밍 `property`/`room_type` 확정. ② 표준 요금은 기간 총액(gross)으로 — 근거: 총액만 주는 공급사가 있어 통일 방법이 이것뿐 / 고객이 궁금한 건 총액이지 "부가세 별도" 표기가 아님 / 원금·세금 분리 공급사는 합산해서 흡수. 의견 요청.
+- **AI 답변 요약**: 동의 — 변환 방향이 A(날짜별 net)→총액 한쪽뿐이라 유일한 통일 기준이고, 검색 결과 간 비교 가능성도 총액일 때만 성립, 정수 합산이라 반올림 오차 없음. 단 "무엇을 잃는지" README 명시 필요: ⓐ A의 날짜별 단가 분해(1박 평균가는 파생 계산 가능, 날짜별 변동 노출은 불가) ⓑ 세금 분리 표시. 모델 반영: 표준 요금 = totalAmount(gross 정수)+currency 2필드, taxIncluded 플래그는 항상 true가 되므로 미포함(소음), breakfastIncluded는 요금이 아닌 상품 조건으로 별도 노출.
+- **결정**: 확정 — 매핑 테이블 property/room_type + 표준 요금 기간 총액 gross(totalAmount+currency).
