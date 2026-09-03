@@ -6,9 +6,9 @@
 
 ## 사전작업
 
-- [ ] **1. 저장 모델 + 매핑 스키마 확정**
+- [x] **1. 저장 모델 + 매핑 스키마 확정** → 확정본: `list-api-integration-design.html` + `availability-api-integration-design.html`
   - [x] 요금 통일 기준 결정 — **기간 총액 gross** (`totalAmount` + `currency`, 세금 분리·날짜별 분해는 버리는 선택으로 README 명시)
-  - [ ] 통화·날짜 경계(체크인/아웃) 표현 확정
+  - [x] 통화·날짜 경계 — 공급사 공통 규약 그대로 (currency 전달, 체크아웃일 숙박 미포함)
   - [x] 2단계 매핑 스키마 — `property`(id, supplier, supplier_property_code, property_name) / `room_type`(id, property_id, supplier_room_type_code, room_type_name), 각각 UNIQUE 제약으로 내부 식별자 안정성 보장
   - [x] 저장 vs 실시간 경계 확정 (주기 수집 = 매핑+이름 / 실시간 fan-out = 요금·재고)
 - [ ] **2. supplier 모듈 생성 + mock supplier API 2종**
