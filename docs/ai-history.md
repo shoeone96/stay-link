@@ -151,7 +151,12 @@
 - **결정**: 보고 — 사용자 판단 대기.
 
 ### 29. 로컬 실행 환경: MySQL docker-compose 구성
-- **요구(사용자 결정)**: 로컬 실행 대상 DB는 MySQL 기반 docker-compose로. Spring Boot의 docker-compose 지원 의존성을 추가해 로컬에서 바로 돌려볼 수 있게 구성.
+- **요구(사용자 결정)**: 로컬 실행 대상 DB는 MySQL 기반 docker-compose로. Spring Boot의 docker-compose 연동 의존성을 추가해 로컬에서 바로 돌려볼 수 있게 구성.
 - **AI 답변 요약**: ① `spring-boot-docker-compose`를 `developmentOnly`로 추가(bootRun 시에만 활성, 테스트·배포 산출물에는 미포함) ② 프로젝트 루트 `compose.yaml`에 mysql:8.4 서비스 + healthcheck 정의, 호스트 포트는 동적 할당(연결 정보는 Boot가 컨테이너에서 자동 추출하므로 datasource url 설정 불필요) ③ 테스트는 Docker 없이 돌아가야 하므로 `h2`를 `testRuntimeOnly`로 추가해 임베디드 DB 자동 구성 ④ 확정 스택의 Virtual Thread 서빙을 `spring.threads.virtual.enabled=true`로 반영 ⑤ CLAUDE.md의 "H2로 시작" 문구를 실제 구성(MySQL 로컬 / H2 테스트)으로 정정. 검증: `./gradlew test` 통과, `bootRun`에서 compose 파일 감지 → 컨테이너 Created/Started/Healthy → HikariPool 연결 → 8080 기동 확인, 앱 종료 시 컨테이너도 정리됨. 중간에 readiness 옵션 값을 잘못 넣어(`only-if-unhealthy`, 실제 enum은 ALWAYS/NEVER/ONLY_IF_STARTED) 1회 기동 실패 → 기본값(항상 healthy 대기)이 의도와 같아 항목 삭제.
 - **트레이드오프 기록**: 테스트 DB를 H2로 두면 MySQL 방언 차이(DDL·함수)를 테스트가 못 잡음. 매핑 테이블 DDL·어댑터 통합 테스트 단계에서 Testcontainers(MySQL) 전환을 재검토하기로 함.
 - **결정**: 수용 — 로컬 실행 환경 구성 완료. 미결: JPA ddl 전략(entity 등장 시점에 결정), 커밋은 사용자가 직접.
+
+### 30. 기능 개발 하네스 구성 (설계·구현·리뷰 스킬/에이전트)
+- **요구**: 기능 개발을 TDD·DDD 기준으로 설계하는 단계, 설계대로 구현하는 에이전트, 리뷰하는 에이전트로 나누고 기준(TDD·DDD·레이어드·객체지향·패턴·클린코드·테스트 작성)은 스킬로. 테스트는 H2·JPA 경유 데이터 준비, 도메인 순수 단위·서비스 Mockito·repository @DataJpaTest·컨트롤러 @SpringBootTest, MECE 케이스 설계 후 작성, 정리표(테스트·상세·통과여부·유의미함) 필수, 케이스를 잘게 쪼개지 않기. 설계는 사용자와 마무리한 뒤 그 산출물로 개발. 단계별 산출물은 별도 공간에 저장해 파일로 소통.
+- **AI 답변 요약**: 공식 문서 확인 결과 기준 스킬 7개 분리는 description 매칭 누락 위험이 커서 2개(`coding-standard`·`test-standard`, 규칙 ID DDD-/LAY-/OOP-/PAT-/CLN-/TDD-/TST-)로 통합하고 에이전트 `skills:` 필드로 본문을 주입. 설계는 에이전트 대신 메인 세션 대화형 스킬(`feature-design`)로, 구현·리뷰는 `dev-cycle` 스킬이 `feature-developer`·`feature-reviewer`를 순서대로 호출. 산출물은 `docs/features/<feature>/01-design·02-implementation·03-review.md`에 round별 누적, 정리표는 `docs/test-cases.md`. 도메인 엔티티 = JPA 엔티티 겸용(LAY-2). 처음 저장소 밖(`how/.claude`)에 뒀으나 스킬·에이전트 탐색이 저장소 루트에서 멈춰 로드되지 않음을 새 세션으로 확인해 `stay-link/.claude`로 이동. 스킬 `paths` 프론트매터는 일치 파일을 다루기 전까지 Skill 도구에서 숨겨져 명시 로드·주입을 막으므로 제거. 새 세션 검증: 스킬 4·에이전트 2 노출, 리뷰 에이전트가 산출물 없을 때 거부하고 규칙 ID 7종 주입 확인. 기존 29번 항목의 금지어 1건을 "연동"으로 정정.
+- **결정**: 수용 — 하네스 6파일 + CLAUDE.md 「기능 개발」 절 추가(미커밋). 다음: 첫 기능(`property-mapping` 등)을 `/feature-design`으로 설계 후 새 세션에서 `/dev-cycle`.
