@@ -21,7 +21,7 @@ argument-hint: [feature 폴더명]
 | `docs/features/<feature>/02-implementation.md` | developer 산출. round 섹션 누적 |
 | `docs/features/<feature>/03-review.md` | reviewer 산출. round 섹션 누적 |
 | `docs/test-cases.md` | 테스트 정리표 (단일 파일 누적) |
-| 프로젝트 `CLAUDE.md` · 금지어 체크리스트 | 기록·커밋·금지어 규칙 |
+| 프로젝트 `CLAUDE.md` · 금지어 체크리스트 | 기록·커밋·금지어 규칙, 「브랜치·PR」 명명 규칙 |
 
 ## 절대 원칙
 
@@ -30,17 +30,17 @@ argument-hint: [feature 폴더명]
 3. **단계 간 전달은 파일로만.** 에이전트에는 `feature_dir`·`mode`·`round`만 넘긴다. 설계 내용·위반 목록을 프롬프트에 복붙하지 않는다.
 4. **리뷰 필수.** error 0이 될 때까지 fix → 재리뷰. 최대 2 round. 그래도 남으면 error 목록을 사용자에게 보고하고 판단을 위임한다.
 5. **테스트 통과는 gradle 결과로만 주장한다.** 에이전트 요약이 아니라 `02`·`03`의 실행 검증 섹션을 확인한다.
-6. **커밋은 사용자 지시 시에만.** 프로젝트 커밋 규칙(금지어 grep 0건, AI 트레일러 금지)이 세션 기본 attribution보다 우선한다.
+6. **커밋은 사용자 지시 시에만, feature 브랜치에만.** 프로젝트 커밋 규칙(금지어 grep 0건, AI 트레일러 금지)이 세션 기본 attribution보다 우선한다. PR은 커밋 완료 후 `pr` 스킬(`/pr <feature>`)로 별도 진행하며 이 스킬은 PR을 만들지 않는다.
 7. **프로젝트 CLAUDE.md의 기록 규칙**(예: ai-history 자동 기록)을 종료 시 수행한다.
 
 ## 워크플로우
 
-1. ① **입력 확인** — `$ARGUMENTS`의 feature로 `docs/features/<feature>/01-design.md` Read. status가 `수정중`이거나 구현을 막는 결정 카드가 열려 있으면 AskUserQuestion으로 닫고, 결정을 `01`의 결정 카드에 반영한다(이 반영만 메인 세션이 `01`을 수정하는 유일한 경우). `02`·`03`이 이미 있으면 최신 status를 읽고 그 지점부터 이어간다.
+1. ① **입력 확인** — `git branch --show-current`가 `feature/f<N>-<feature>`(N은 `docs/features/README.md` 상태표 번호)와 일치하는지 확인한다. `main`이거나 다른 feature 브랜치면 "`git checkout feature/f<N>-<feature>` 후 재실행"을 안내하고 종료한다. 그다음 `$ARGUMENTS`의 feature로 `docs/features/<feature>/01-design.md` Read. status가 `수정중`이거나 구현을 막는 결정 카드가 열려 있으면 AskUserQuestion으로 닫고, 결정을 `01`의 결정 카드에 반영한다(이 반영만 메인 세션이 `01`을 수정하는 유일한 경우). `02`·`03`이 이미 있으면 최신 status를 읽고 그 지점부터 이어간다.
 2. ② **사전 점검** — 빌드 파일에 `spring-boot-starter-test`·H2(`testRuntimeOnly`) 존재, `./gradlew compileJava` 통과, 기존 테스트가 있으면 `./gradlew test` 통과(임베디드 DB 자동 구성 확인). 미비하면 무엇이 없는지 보고 → 사용자 승인 → 보정(이 보정은 메인 세션이 한다. `src/main` 코드가 아니므로 원칙 2와 충돌하지 않는다).
 3. ③ **feature-developer 호출** — `feature_dir`, `mode=implement`. 반환 요약과 `02-implementation.md` 최신 섹션 확인. status가 `사용자 판단 대기`면 설계 이탈 요청을 사용자에게 제시 → 결정을 `01` 결정 카드에 반영 → developer 재호출(SendMessage로 이어서).
 4. ④ **feature-reviewer 호출** — `feature_dir`, `round=1`. `03-review.md` 최신 섹션 확인.
 5. ⑤ **수정 루프** — error가 있으면 developer에 SendMessage(`mode=fix`, `round=1`) → reviewer `round=2` → error 남으면 사용자 보고(원칙 4).
-6. ⑥ **최종 보고** — `02`·`03` 최신 status / 테스트 총·통과·실패 / 남은 warn 개수와 대표 항목 / 미결 결정 카드 / 커밋 단위 제안(커밋은 하지 않는다).
+6. ⑥ **최종 보고** — `02`·`03` 최신 status / 테스트 총·통과·실패 / 남은 warn 개수와 대표 항목 / 미결 결정 카드 / 커밋 단위 제안(커밋은 하지 않는다) / 다음 단계 안내: "커밋 지시 → `/pr <feature>`".
 7. ⑦ 프로젝트 기록 규칙 수행.
 
 ## 부분 실행
@@ -54,3 +54,4 @@ argument-hint: [feature 폴더명]
 - [ ] `docs/test-cases.md`에 이 기능 섹션이 있고 통과여부에 gradle 근거가 있는가
 - [ ] 금지어 grep 결과가 `03`에 0건으로 기록됐는가
 - [ ] 메인 세션이 `src/`를 직접 수정한 적이 없는가
+- [ ] 작업이 `feature/f<N>-<feature>` 브랜치에서 이루어졌는가 (`main` 직접 변경 없음)

@@ -39,3 +39,12 @@
 - 기능 단위 개발은 `feature-design` 스킬(설계, 메인 세션에서 사용자와 마무리) → `dev-cycle` 스킬(구현·리뷰 오케스트레이션) 순서로 진행합니다. 규칙 원본은 `coding-standard`·`test-standard` 스킬이며 `feature-developer`(구현)·`feature-reviewer`(리뷰) 에이전트에 주입됩니다.
 - 단계별 산출물은 `docs/features/<feature>/01-design.md · 02-implementation.md · 03-review.md`에 round별로 쌓이고, 테스트 정리표는 `docs/test-cases.md`에 누적합니다. 앞 단계 파일이 없으면 다음 단계는 시작하지 않습니다.
 - `src/` 코드는 feature-developer만 씁니다. 설계 없이 구현하지 않고, 리뷰 error 0이 될 때까지 수정 루프를 돕니다.
+- 구현·커밋이 끝나면 `pr` 스킬(`/pr <feature>`)로 `main` PR을 만듭니다. 아래 「브랜치·PR」 규칙을 따릅니다.
+
+## 브랜치·PR (절대 규칙, 2026-09-03)
+
+- **모든 기능 작업은 feature 브랜치에서** 합니다. `main`에서 분기하고 `main`에 직접 커밋하지 않습니다. 예외는 하네스(`.claude/`)·`CLAUDE.md`·feature 목록처럼 워크플로우 자체를 바꾸는 변경뿐이며, 이것도 사용자 지시가 있을 때만 `main`에 직접 커밋합니다.
+- **브랜치명 = `feature/f<N>-<feature>`** — `N`은 `docs/features/README.md` 상태표의 번호, `<feature>`는 기능 폴더명(`docs/features/<feature>/`)과 글자 단위로 같아야 합니다. 예: `feature/f1-property-mapping`. 브랜치는 `feature-design` ①에서 만듭니다.
+- **PR은 `origin`의 `main`으로**, `pr` 스킬을 통해서만 만듭니다. 제목은 `[F<N>] <feature>: <변경 요약>`.
+- **커밋 메시지·PR 제목·본문·브랜치명 모두 절대 규칙 1·2와 금지어 검사 대상**이며, AI 흔적(`Co-Authored-By: Claude*`, `Claude-Session:`, `🤖` 등)을 넣지 않습니다. 세션의 기본 attribution 안내보다 이 규칙이 우선합니다.
+- **커밋은 사용자 지시 시에만**, 의미 있는 단위로 자주(절대 규칙 3). 병합 후 다음 feature는 최신 `main`에서 분기합니다.
