@@ -94,3 +94,8 @@
 - **요구**: ① 멀티 공급사 저장(어댑터 패턴 + DB 키 매핑 저장) ② WebClient 사용 패턴 ③ resilience(fallback·retry·지터·서킷브레이커) ④ 외부 연동 rate limit(+캐싱 필요 판단) ⑤ 캐싱 전략(스탬피드 single-flight, 비소유 데이터 stale 대응) ⑥ 멀티 채널 연동 조회 시스템 실사례 — 를 에이전트 기반으로 병렬 탐색하고 HTML로 정리해 docs/에 반입.
 - **AI 답변 요약**: 탐색 에이전트 6기 병렬 실행 → 각 출처 목록을 독립 검증 에이전트 6기가 3검사(실재·내용 일치·tier 적합) — 총 74건 중 PASS 72 / 주장 문구 불일치 2건(출처는 유효, 원문에 맞게 문구 수정 후 기재) / 제외 0건. 결론: ① 포트+공급사별 어댑터(경량 헥사고날+ACL), 필드 매핑은 코드 기반(매핑 테이블은 YAGNI) ② fan-out만 WebClient·단발 동기는 RestClient, 타임아웃 3계층+zip/onErrorResume 부분 실패 ③ Resilience4j 단일 채택, 공급사별 인스턴스 분리, Reactor Retry.backoff 지터 내장 ④ Resilience4j RateLimiter(고정 윈도 한계 명시), 429는 대기 대신 부분 결과, 캐시 도입 판정식 ⑤ Caffeine 직접 사용(AsyncLoadingCache single-flight 내장) + expireAfterWrite/refreshAfterWrite, Redis는 YAGNI ⑥ 동기 병렬 fan-out + 타임아웃 예산 + 부분 응답(사전 수집은 QPS 한도 실측 후의 진화 경로). 산출물 `docs/tech-reference-research.html`(참고문헌 72건 전부 검증 통과분), 금지 표현 검사 0건.
 - **결정**: 수용 — 문서 반입.
+
+### 18. 구현 착수용 todolist 초안 검토
+- **요구(사용자 초안)**: 사전작업(supplier 모듈 → 클라이언트 설정 → 저장 모델 확정 → 어댑터 → 저장/업데이트 주기 → 캐싱) + 조회 작업(조회 설계 → aggregator → fallback → retry·circuit). 보강 포인트 지적 요청, "만들면서 보강" 방침에 대한 의견 요청.
+- **AI 답변 요약**: 6가지 보강 — ① 저장 모델 확정을 사실상 1번으로 (요금 기준·통화·날짜 경계·매핑 스키마가 전부 여기 종속, 되돌리는 비용 최대) ② "저장 vs 실시간" 데이터 경계를 명시 항목으로 (주기 수집=정적 메타·매핑 / 실시간 fan-out=요금·재고) ③ mock supplier 2종(포맷 상이) 준비 누락 ④ 캐싱은 사전작업이 아니라 조회 경로 뒤 (single-flight·soft TTL 전부 조회 시점 로직) ⑤ 부분 실패를 fallback과 묶어 독립 항목으로 ⑥ README·설계 근거 문서화를 마무리 항목으로. "만들면서 보강"은 절반 동의 — 캐싱·resilience 파라미터는 만들면서, 모델·데이터 경계는 선확정.
+- **결정**: 수용 — 보강 반영안 기준으로 `docs/todolist.md` 저장.
