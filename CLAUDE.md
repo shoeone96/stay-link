@@ -33,3 +33,9 @@
 
 - 구현 기술의 설계 결정 근거 조사(레퍼런스 탐색·비교·추천, 기존 출처 재검증)는 `tech-research` 스킬을 통해 진행합니다 — `tech-reference-scout`(탐색)와 `reference-verifier`(검증) 에이전트가 분리되어 있고, 검증은 생략할 수 없습니다.
 - 출처는 검증을 통과한 것만 문서에 기재합니다. 출처 tier·검사 조건의 단일 원본은 스킬 파일입니다.
+
+## 기능 개발 (설계 → 구현 → 리뷰)
+
+- 기능 단위 개발은 `feature-design` 스킬(설계, 메인 세션에서 사용자와 마무리) → `dev-cycle` 스킬(구현·리뷰 오케스트레이션) 순서로 진행합니다. 규칙 원본은 `coding-standard`·`test-standard` 스킬이며 `feature-developer`(구현)·`feature-reviewer`(리뷰) 에이전트에 주입됩니다.
+- 단계별 산출물은 `docs/features/<feature>/01-design.md · 02-implementation.md · 03-review.md`에 round별로 쌓이고, 테스트 정리표는 `docs/test-cases.md`에 누적합니다. 앞 단계 파일이 없으면 다음 단계는 시작하지 않습니다.
+- `src/` 코드는 feature-developer만 씁니다. 설계 없이 구현하지 않고, 리뷰 error 0이 될 때까지 수정 루프를 돕니다.
