@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>숙소 목록 통합 설계 — 확정</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  @media(max-width:720px){ol.toc-index .hint{display:none}}
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer{padding-left:24px;padding-right:24px}
+    header.cover{padding-top:48px}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>기본 설계 · 확정 1/2</span>
+      <h1 class="title">숙소 목록 통합 설계<br><span class="hl">매핑 저장 — 확정</span></h1>
+      <p class="lede">첫 번째 API(공급사 <b>숙소 목록 전체 조회</b>)를 표준 매핑으로 저장하는 설계의 확정본. 필드 매칭 7쌍, <b>property / room_type</b> 2테이블 스키마, 그리고 저장하지 않기로 한 것들의 근거를 담는다. 두 번째 API(재고·요금)의 통합 시나리오는 다음 문서.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">SCOPE</span><span class="v">목록 API → 매핑 저장</span></div>
+        <div class="chip"><span class="k">STATUS</span><span class="v">확정 (2026-09-03)</span></div>
+        <div class="chip"><span class="k">INPUT</span><span class="v">supplier-response-comparison</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">확정 사항 요약<span class="hint">결정 목록</span></a></li>
+      <li><a href="#s2">데이터 흐름<span class="hint">목록 → 매핑</span></a></li>
+      <li><a href="#s3">필드 매칭 7쌍<span class="hint">A ↔ B ↔ 표준</span></a></li>
+      <li><a href="#s4">저장 스키마<span class="hint">property · room_type</span></a></li>
+      <li><a href="#s5">저장하지 않는 것<span class="hint">근거</span></a></li>
+      <li><a href="#s6">남은 결정과 다음 단계<span class="hint">→ 재고·요금</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- ===================== 1. 확정 사항 요약 ===================== -->
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">DECISIONS</p><h2 class="sec">확정 사항 요약</h2></div>
+    </div>
+
+    <p class="lead">목록 API 통합 범위에서 확정된 결정은 다섯 가지다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>결정</th><th>내용</th></tr></thead>
+        <tbody>
+          <tr><td>D1</td><td>저장 범위</td><td>목록 응답에서 저장하는 것은 <strong>매핑(식별자)과 이름뿐</strong>. 요금·재고 원본은 저장하지 않는다</td></tr>
+          <tr><td>D2</td><td>테이블 구조</td><td><code>property</code> / <code>room_type</code> <strong>2테이블</strong> — 숙소 / 숙소+객실 타입의 2단계 매핑</td></tr>
+          <tr><td>D3</td><td>네이밍</td><td><code>hotel</code>이 아닌 <code>property</code> — 호텔 외 숙박 종류 포함. <code>room</code>이 아닌 <code>room_type</code> — 물리 객실로 오독 방지. name 컬럼은 <code>property_name</code>·<code>room_type_name</code>으로 prefix 부여</td></tr>
+          <tr><td>D4</td><td>식별자 원칙</td><td>내부 식별자는 공급사 비종속. <strong>같은 공급사 상품은 언제나 같은 내부 식별자</strong> — UNIQUE 제약으로 보장</td></tr>
+          <tr><td>D5</td><td>병합 안 함</td><td>두 공급사가 같은 실제 숙소를 취급해도 <strong>각각 별도 property 행</strong>. 공통 키가 없으므로 추정 병합은 하지 않는다 (선택 구현으로 남김)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 2. 데이터 흐름 ===================== -->
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">DATA FLOW</p><h2 class="sec">데이터 흐름</h2></div>
+    </div>
+
+    <p class="lead">공급사별 목록 응답 → 어댑터가 번역 → 표준 목록 모델 → 매핑 upsert.</p>
+    <p>목록 API는 자주 바뀌지 않는 정적 콘텐츠이므로 검색 경로와 분리된 <strong>사전/주기 트랙</strong>에서 돈다. 어댑터가 필드명 번역과 B의 <span class="term">data</span> 봉투 해체를 끝낸 뒤에는, 저장 로직이 공급사별 표현을 전혀 모른다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 720 290" role="img" aria-label="Supplier A와 B의 목록 응답이 각각의 어댑터를 거쳐 표준 목록 모델로 변환되고, property와 room_type 테이블에 upsert되는 흐름">
+          <defs>
+            <marker id="m1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <!-- Supplier A 응답 -->
+          <g>
+            <rect x="24" y="42" width="180" height="72" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+            <foreignObject x="24" y="42" width="180" height="72">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey">
+                <div class="t">Supplier A 목록</div>
+                <div class="s">hotelCode · roomTypes[]</div>
+              </div>
+            </foreignObject>
+          </g>
+          <!-- Supplier B 응답 -->
+          <g>
+            <rect x="24" y="176" width="180" height="72" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+            <foreignObject x="24" y="176" width="180" height="72">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey">
+                <div class="t">Supplier B 목록</div>
+                <div class="s">data 봉투 · propertyId</div>
+              </div>
+            </foreignObject>
+          </g>
+
+          <!-- 어댑터 -->
+          <g>
+            <rect x="278" y="100" width="176" height="90" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="278" y="100" width="176" height="90">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue">
+                <div class="t">공급사별 어댑터</div>
+                <div class="s">필드명 번역 · 봉투 해체</div>
+              </div>
+            </foreignObject>
+          </g>
+
+          <!-- property 테이블 -->
+          <g>
+            <rect x="522" y="42" width="176" height="72" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="522" y="42" width="176" height="72">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green">
+                <div class="t">property</div>
+                <div class="s">supplier + code UNIQUE</div>
+              </div>
+            </foreignObject>
+          </g>
+          <!-- room_type 테이블 -->
+          <g>
+            <rect x="522" y="176" width="176" height="72" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="522" y="176" width="176" height="72">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green">
+                <div class="t">room_type</div>
+                <div class="s">property_id + code UNIQUE</div>
+              </div>
+            </foreignObject>
+          </g>
+
+          <!-- 화살표: A/B → 어댑터 -->
+          <line x1="206" y1="78" x2="272" y2="122" stroke="#8B95A1" stroke-width="2" marker-end="url(#m1)"/>
+          <line x1="206" y1="212" x2="272" y2="168" stroke="#8B95A1" stroke-width="2" marker-end="url(#m1)"/>
+          <!-- 화살표: 어댑터 → 테이블 -->
+          <line x1="456" y1="122" x2="516" y2="80" stroke="#15C47E" stroke-width="2" marker-end="url(#m1)"/>
+          <line x1="456" y1="168" x2="516" y2="210" stroke="#15C47E" stroke-width="2" marker-end="url(#m1)"/>
+          <text class="svg-l" x="489" y="86" text-anchor="middle" fill="#0A8F5B">upsert</text>
+          <!-- FK 점선 -->
+          <line x1="610" y1="118" x2="610" y2="172" stroke="#8B95A1" stroke-width="1.6" stroke-dasharray="5 4"/>
+          <text class="svg-l" x="632" y="149" text-anchor="start" fill="#6B7684">FK</text>
+          <!-- 표준 모델 라벨 -->
+          <text class="svg-l" x="366" y="82" text-anchor="middle" fill="#1B64DA">표준 목록 모델로 변환</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 1.</b> 목록 통합 흐름 — 어댑터 오른쪽부터는 공급사별 표현이 존재하지 않는다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">upsert 규칙</span>응답의 각 항목에 대해 <strong>(supplier, 공급사 코드)로 조회 → 있으면 기존 내부 id 유지(이름만 갱신), 없으면 새 id 발급</strong>. 이 규칙과 UNIQUE 제약의 조합이 "같은 상품은 항상 같은 내부 식별자" 불변식을 지킨다. 목록에서 사라진 상품의 삭제 정책은 목록 갱신 주기와 함께 사전작업 5에서 결정한다.</div>
+  </section>
+
+  <!-- ===================== 3. 필드 매칭 7쌍 ===================== -->
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">FIELD MAPPING</p><h2 class="sec">필드 매칭 7쌍</h2></div>
+    </div>
+
+    <p class="lead">목록 응답의 정보 내용물은 두 공급사가 완전히 같다. 차이는 봉투 유무와 필드명뿐이다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Supplier A</th><th>Supplier B</th><th>표준 (저장 위치)</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>본문이 바로 데이터</td><td><code>data</code> 봉투 안</td><td>어댑터가 봉투 해체 — 표준엔 봉투 없음</td></tr>
+          <tr><td>2</td><td><code>hotelCode</code></td><td><code>propertyId</code></td><td><code>property.supplier_property_code</code></td></tr>
+          <tr><td>3</td><td><code>hotelName</code></td><td><code>propertyName</code></td><td><code>property.property_name</code></td></tr>
+          <tr><td>4</td><td><code>roomTypes[]</code></td><td><code>rooms[]</code></td><td><code>room_type</code> 행들 (property FK로 소속)</td></tr>
+          <tr><td>5</td><td><code>roomTypeCode</code></td><td><code>roomId</code></td><td><code>room_type.supplier_room_type_code</code></td></tr>
+          <tr><td>6</td><td><code>roomTypeName</code></td><td><code>roomName</code></td><td><code>room_type.room_type_name</code></td></tr>
+          <tr><td>7</td><td colspan="2"><code>maxOccupancy</code> (이름 동일)</td><td><strong>저장 안 함</strong> — 5장 참조</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note"><span class="tag">참고</span>이름 필드(3·6번)는 <strong>매칭은 되지만 값까지 같다는 보장이 없다</strong> — 같은 실제 객실도 A "Ocean Double" / B "Ocean Double Room"처럼 표기가 다를 수 있다. 병합하지 않는 기본 원칙(D5)에서는 각 공급사 행이 각자의 이름을 가지므로 충돌이 없다.</div>
+  </section>
+
+  <!-- ===================== 4. 저장 스키마 ===================== -->
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">SCHEMA</p><h2 class="sec">저장 스키마</h2></div>
+    </div>
+
+    <p class="lead">테이블 2개, 컬럼 4개씩. UNIQUE 제약이 곧 도메인 불변식이다.</p>
+
+    <div class="code">
+      <div class="code-bar">
+        <span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFB836"></span><span class="dot" style="background:#15C47E"></span>
+        <span class="fn">schema.sql (H2)</span>
+      </div>
+<pre><span class="kw">CREATE TABLE</span> <span class="ty">property</span> (
+    id                       <span class="ty">BIGINT</span>       <span class="kw">GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY</span>,
+    supplier                 <span class="ty">VARCHAR</span>(16)  <span class="kw">NOT NULL</span>,   <span class="cm">-- 'A' | 'B'</span>
+    supplier_property_code   <span class="ty">VARCHAR</span>(64)  <span class="kw">NOT NULL</span>,   <span class="cm">-- hotelCode / propertyId</span>
+    property_name            <span class="ty">VARCHAR</span>(255) <span class="kw">NOT NULL</span>,
+    <span class="kw">CONSTRAINT</span> uq_property_supplier_code
+        <span class="kw">UNIQUE</span> (supplier, supplier_property_code)      <span class="cm">-- D4: 같은 상품 = 같은 내부 id</span>
+);
+
+<span class="kw">CREATE TABLE</span> <span class="ty">room_type</span> (
+    id                        <span class="ty">BIGINT</span>       <span class="kw">GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY</span>,
+    property_id               <span class="ty">BIGINT</span>       <span class="kw">NOT NULL REFERENCES</span> <span class="ty">property</span>(id),
+    supplier_room_type_code   <span class="ty">VARCHAR</span>(64)  <span class="kw">NOT NULL</span>,   <span class="cm">-- roomTypeCode / roomId</span>
+    room_type_name            <span class="ty">VARCHAR</span>(255) <span class="kw">NOT NULL</span>,
+    <span class="kw">CONSTRAINT</span> uq_room_type_property_code
+        <span class="kw">UNIQUE</span> (property_id, supplier_room_type_code)  <span class="cm">-- 객실 코드는 숙소 안에서만 유일</span>
+);</pre>
+    </div>
+
+    <h3>제약이 담는 도메인 규칙</h3>
+    <p><strong>① 객실 타입 식별은 3값이 필요하다.</strong> <span class="term">roomTypeCode</span>/<span class="term">roomId</span>는 해당 숙소 안에서만 유일하다 — 다른 숙소에 같은 코드가 존재할 수 있다. <span class="term">property_id</span>가 이미 (supplier, 숙소 코드)를 대표하므로, <span class="term">UNIQUE(property_id, supplier_room_type_code)</span> 2컬럼으로 (공급사, 숙소 코드, 객실 타입 코드) 3값 제약이 충족된다. supplier 컬럼을 room_type에 중복으로 두지 않는 이유다.</p>
+    <p><strong>② 내부 id는 공급사 코드와 독립이다.</strong> IDENTITY로 발급된 내부 id는 공급사 코드 체계와 아무 관계가 없으므로, 나중에 병합 계층을 얹거나 공급사가 코드 체계를 바꿔도 내부 식별자는 흔들리지 않는다.</p>
+  </section>
+
+  <!-- ===================== 5. 저장하지 않는 것 ===================== -->
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">NOT STORED</p><h2 class="sec">저장하지 않는 것</h2></div>
+    </div>
+
+    <p class="lead">뺀 것에도 근거가 있다 — 고민 후 제외한 세 가지.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>왜 안 넣나</th><th>대신</th></tr></thead>
+        <tbody>
+          <tr><td><code>maxOccupancy</code></td><td>상세 조회 요청이 <strong>숙소 코드 단위</strong>라 객실별 값으로 걸러낼 수 있는 건 "모든 객실이 인원 미달인 숙소"뿐 — 절감 효과 미미. 공급사가 이미 요청 인원 수용 가능한 객실만 반환하므로 정확성 기여 0, 목록 갱신 주기만큼 낡은 값으로 잘못 거를 위험만 추가</td><td>상세 응답의 값을 그대로 사용</td></tr>
+          <tr><td>요금·재고</td><td>호출마다 변하는 동적 데이터. 원본이 외부에 있으므로 쌓아둘 필요 없음 (D1)</td><td>검색 시 실시간 조회</td></tr>
+          <tr><td>병합 관계</td><td>같은 실제 숙소임을 알려주는 공통 키가 없어 추정 병합은 오류 위험. 기본 동작은 공급사별 별도 노출 (D5)</td><td>필요 시 이 테이블 위에 병합 계층 추가</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 6. 남은 결정과 다음 단계 ===================== -->
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">NEXT</p><h2 class="sec">남은 결정과 다음 단계</h2></div>
+    </div>
+
+    <p class="lead">목록 통합 범위에서 남은 결정은 운영 정책 두 가지, 그리고 다음은 재고·요금 API 통합 시나리오다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>상태</th><th>내용</th></tr></thead>
+        <tbody>
+          <tr><td>목록 호출 시점·주기</td><td><span class="stchip open">미정</span></td><td>기동 시 1회 + 주기 갱신이 유력. 근거와 함께 사전작업 5에서 확정</td></tr>
+          <tr><td>사라진 상품 처리</td><td><span class="stchip open">미정</span></td><td>목록에서 빠진 상품의 매핑 행 처리(유지/비활성) — 갱신 주기와 함께 결정</td></tr>
+          <tr><td>재고·요금 통합 시나리오</td><td><span class="stchip mid">다음</span></td><td>검색 1건 → 매핑에서 코드 추출 → 공급사별 묶음 호출 → 표준 모델 정규화. <strong>요금은 기간 총액 gross로 통일</strong>(확정된 원칙)을 여기서 적용</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">이 문서의 위치</span>확정 1/2 — 목록 API(정적 트랙). 다음 문서가 재고·요금 API(실시간 트랙)의 통합 시나리오를 다루면 표준 숙박 상품 모델 전체가 닫힌다.</div>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    숙소 목록 통합 설계 확정본 — property / room_type 매핑 저장<br>
+    입력: supplier-response-comparison.html · 결정 이력: ai-history.md
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>
