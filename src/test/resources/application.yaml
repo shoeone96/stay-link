@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: stay-link
+  threads:
+    virtual:
+      enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  sql:
+    init:
+      mode: never
