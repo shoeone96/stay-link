@@ -31,7 +31,7 @@
 
 | # | feature 폴더명 | todolist 항목 | 상태 | 설계 | 구현 |
 |---|---|---|---|---|---|
-| F1 | `property-mapping` | 사전작업 1(스키마) 구현화 | 구현 대기 | 2026-09-03 | - |
+| F1 | `property-mapping` | 사전작업 1(스키마) 구현화 | PR | 2026-09-03 | 2026-09-03 |
 | F2 | `mock-supplier-server` | 사전작업 2 | 대기 | - | - |
 | F3 | `supplier-client` | 사전작업 3 | 대기 | - | - |
 | F4 | `supplier-catalog-adapter` | 사전작업 4 (목록) | 대기 | - | - |
@@ -51,7 +51,7 @@
 
 - **목적**: 공급사 코드 ↔ 내부 식별자 매핑의 저장 모델. 이후 모든 기능이 이 위에서 돈다.
 - **포함**
-  - `property`(id, supplier, supplier_property_code, property_name) / `room_type`(id, property_id, supplier_room_type_code, room_type_name) 엔티티와 UNIQUE 제약 (D2·D3·D4)
+  - `property`(id, supplier, supplier_property_code, property_name) / `room`(id, property_id, supplier_room_code, room_name) 엔티티와 UNIQUE 제약 (D2·D3·D4)
   - upsert 규칙 — (supplier, 코드)로 조회 → 있으면 내부 id 유지·이름만 갱신, 없으면 신규 발급 (D4 불변식)
   - 정방향 조회(공급사 코드 → 내부 id)와 역방향 조회(내부 id → 공급사 코드), 공급사별 코드 목록 조회
   - `Supplier` 식별 값(A / B)의 도메인 표현
@@ -60,7 +60,7 @@
 - **닫아야 할 결정**
   - JPA DDL 전략 (`ddl-auto` vs `schema.sql`) — 이연 항목
   - 테스트 DB: H2 유지 vs Testcontainers(MySQL) 전환 — 29번 트레이드오프
-  - `room_type`에서 `Supplier`를 어떻게 얻는가 (property 경유 vs 비정규화 컬럼) — 설계 문서는 중복 컬럼을 두지 않는 쪽
+  - `room`에서 `Supplier`를 어떻게 얻는가 — **property 경유로 확정** (D-F1-9, 비정규화 컬럼안은 검토 후 기각). 엔티티 이름은 `RoomType`→`Room` (D-F1-10)
 - **완료 기준**: 같은 (supplier, 코드)를 두 번 upsert 해도 내부 id가 같고 이름만 바뀐다. UNIQUE 위반 케이스가 테스트로 잡힌다.
 
 ## F2. `mock-supplier-server` — 모의 공급사 서버
@@ -149,7 +149,7 @@
 - **목적**: 첫 end-to-end. `GET /api/v1/stays/search` 요청 1건 → 매핑 조회 → 공급사별 코드 묶음(≤50) → 병렬 fan-out → 정규화 → aggregate → 응답.
 - **포함**
   - 자사 API 스펙 확정 (조회 작업 1): 요청 파라미터(checkIn·checkOut·adults·children), 검증 규칙(날짜 순서·과거 날짜·인원 범위), 응답 = `results[]` + `suppliers[]` (D10 구조)
-  - 매핑 역조회로 내부 `propertyId`·`roomTypeId` 부여, 미매핑 코드는 동기 경로에서 항목 제외 + 로그 (D11 동기 트랙)
+  - 매핑 역조회로 내부 `propertyId`·`roomId` 부여, 미매핑 코드는 동기 경로에서 항목 제외 + 로그 (D11 동기 트랙)
   - 공급사별 병렬 호출 — Reactor 연산자로 fan-out, 결과를 하나로 합침
   - 이 단계에서는 정상 경로 위주. 실패 처리는 F8에서 완성하되, 한쪽 실패가 전체를 죽이지 않는 골격은 여기서 잡는다
 - **제외**: 실패 유형 표기 완성(F8), retry/circuit(F9), 캐시(F10)

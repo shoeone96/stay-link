@@ -36,7 +36,7 @@ argument-hint: [feature 폴더명]
    git log --format=%B origin/main..HEAD | grep -ciE "co-authored-by|claude-session|generated with|claude\.(ai|com)|🤖"
    ```
    조건: 브랜치 일치 / working tree clean / 커밋 1개 이상 / 테스트 실패 0 / 금지어 0건 / 커밋 메시지 AI 흔적 0건. 하나라도 어긋나면 어떤 항목인지 보고하고 중단(원칙 3·4·5).
-3. ③ **제목** — `[F<N>] <feature>: <변경 요약>` 70자 이내. 예: `[F1] property-mapping: 매핑 저장 모델 (Property·RoomType, schema.sql+validate)`.
+3. ③ **제목** — `[F<N>] <feature>: <변경 요약>` 70자 이내. 예: `[F1] property-mapping: 매핑 저장 모델 (Property·Room, schema.sql+validate)`.
 4. ④ **본문** — 아래 템플릿. 작성 직후 원칙 1·2의 grep으로 자가 검증.
 5. ⑤ **push** — tracking이 없으면 `git push -u origin <branch>`, 있으면 `git push`. non-fast-forward면 보고하고 중단.
 6. ⑥ **생성** —

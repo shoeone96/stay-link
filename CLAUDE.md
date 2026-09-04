@@ -39,6 +39,7 @@
 - 기능 단위 개발은 `feature-design` 스킬(설계, 메인 세션에서 사용자와 마무리) → `dev-cycle` 스킬(구현·리뷰 오케스트레이션) 순서로 진행합니다. 규칙 원본은 `coding-standard`·`test-standard` 스킬이며 `feature-developer`(구현)·`feature-reviewer`(리뷰) 에이전트에 주입됩니다.
 - 단계별 산출물은 `docs/features/<feature>/01-design.md · 02-implementation.md · 03-review.md`에 round별로 쌓이고, 테스트 정리표는 `docs/test-cases.md`에 누적합니다. 앞 단계 파일이 없으면 다음 단계는 시작하지 않습니다.
 - `src/` 코드는 feature-developer만 씁니다. 설계 없이 구현하지 않고, 리뷰 error 0이 될 때까지 수정 루프를 돕니다.
+- **테이블 SSOT: `docs/db-schema.html`** (2026-09-04) — 테이블·컬럼·제약의 단일 원본 문서입니다. `schema.sql`·엔티티가 바뀌는 모든 feature는 같은 커밋 단위에서 이 문서(ER 다이어그램·컬럼 설명·변경 이력)를 함께 갱신합니다. 갱신은 메인 세션이 `toss-design` 스킬의 `er-table` 패턴으로 합니다 — 스펙 `docs/db-schema/*.json` 수정 → `python3 docs/db-schema/build.py` 로 재생성.
 - 구현·커밋이 끝나면 `pr` 스킬(`/pr <feature>`)로 `main` PR을 만듭니다. 아래 「브랜치·PR」 규칙을 따릅니다.
 
 ## 브랜치·PR (절대 규칙, 2026-09-03)
