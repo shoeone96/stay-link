@@ -1,0 +1,12 @@
+server:
+  port: 9091
+spring:
+  application:
+    name: mock-supplier-a
+  # 지연·무응답 모드가 요청 스레드를 붙잡는다. 플랫폼 스레드 풀이면 부하 중에 모의 서버 자신이 먼저
+  # 마르고, 공급사가 느린 게 아니라 관찰 도구가 죽는 현상을 보게 된다.
+  threads:
+    virtual:
+      enabled: true
+mock:
+  api-key: test-key
