@@ -34,7 +34,7 @@ description: |
 - `LAY-3` **application**: 유스케이스 단위 클래스(`<동사><대상>UseCase` 또는 `<대상>Service`), 트랜잭션 경계(`@Transactional`은 여기만), 도메인 조립·포트 호출만. 비즈니스 규칙 금지.
 - `LAY-4` **presentation**: 요청 검증(`@Valid`)·DTO 변환·상태코드 매핑만. 도메인 객체를 요청/응답에 직접 노출하지 않는다.
 - `LAY-5` **infrastructure**: JPA 구현체, 외부 API 클라이언트(WebClient) 어댑터, 설정. 포트 인터페이스는 그것을 사용하는 안쪽 레이어(domain 또는 application)가 소유한다.
-- `LAY-6` **패키지**: `<root>.<context>.{domain,application,infrastructure,presentation}`. bounded context 우선, 레이어 우선 배치 금지.
+- `LAY-6` **패키지**: `<root>.<context>.{domain,application,infrastructure,presentation}`. bounded context 우선, 레이어 우선 배치 금지. **예외 — 횡단 요소(cross-cutting concern)**(응답 봉투·예외 변환·오류 코드처럼 특정 context에 속하지 않고 모든 context가 쓰는 것)는 `<root>.common.<이름>`에 둔다(2026-09-04, F0). context 안에 두면 context가 늘 때마다 같은 것이 중복되기 때문이다. `common` 하위도 Spring 의존 여부로 나눈다 — 순수 자바는 `common.error`처럼, 웹 계층 타입을 쓰는 것은 `common.web`처럼. 도메인 코드가 `common`을 참조할 때는 그 대상이 Spring 타입을 전이 노출하지 않아야 한다(LAY-2).
 - `LAY-7` **레이어 간 DTO**: application은 `Command`/`Result`, presentation은 `Request`/`Response`. 서로 재사용하지 않는다.
 - `LAY-8` **예외**: 도메인 예외는 domain에 정의(`RuntimeException` 상속, 식별자 등 컨텍스트 포함), infra 예외는 infrastructure에서 도메인/애플리케이션 예외로 변환, HTTP 매핑은 presentation의 `@RestControllerAdvice`.
 
