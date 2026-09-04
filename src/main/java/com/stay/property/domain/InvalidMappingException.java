@@ -1,9 +1,12 @@
 package com.stay.property.domain;
 
-public class InvalidMappingException extends RuntimeException {
+import com.stay.common.error.BadRequestException;
+import com.stay.common.error.CommonErrorCode;
+
+public class InvalidMappingException extends BadRequestException {
 
     private InvalidMappingException(String message) {
-        super(message);
+        super(CommonErrorCode.INVALID_INPUT, message);
     }
 
     public static InvalidMappingException blankField(String fieldName) {
