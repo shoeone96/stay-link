@@ -1,0 +1,132 @@
+# 공급사 A 모의 서버 검증 대본 (포트 9091)
+#
+# 이 모듈에는 테스트 코드가 없다. 요금·재고 파생(Nights·ARates)의 회귀를 잡는 자리는 이 대본,
+# 그중에서도 맨 앞의 S-01 하나뿐이다. 파생 로직을 건드린 뒤에는 S-01부터 실행한다.
+# 한계도 알고 쓴다 — 사람이 실행해야 하고, 실행을 잊으면 아무것도 막지 못한다.
+#
+# 기동: ./gradlew :mock-supplier-a:bootRun
+
+@host = http://localhost:9091
+@apiKey = test-key
+
+### S-01 검산 — 요금·재고 파생이 맞는지 보는 유일한 자리 (맨 앞 고정)
+# 2026-09-10 체크인 / 09-13 체크아웃 = 3박 (09-10 목 · 09-11 금 · 09-12 토)
+#
+# OCN-DBL 기대값
+#   09-10  nightlyRate 110000  taxAmount 11000  remainingRooms 3
+#   09-11  nightlyRate 143000  taxAmount 14300  remainingRooms 1   (금 = 주말 할증 ×1.3, 재고 1로 축소)
+#   09-12  nightlyRate 143000  taxAmount 14300  remainingRooms 1   (토)
+#   고객 결제 합계 Σ(nightlyRate + taxAmount) = 121000 + 157300 + 157300 = 435,600
+#
+# STD-TWN 기대값
+#   90000 / 117000 / 117000, 세금 9000 / 11700 / 11700, 재고 5 / 1 / 1
+#
+# date가 "2026-09-10" 문자열로 나오는지도 여기서 눈으로 본다 (타임스탬프 배열이면 회귀다).
+GET {{host}}/a/v1/availability?hotelCodes=A-3201&checkIn=2026-09-10&checkOut=2026-09-13&adults=2&children=0
+X-Api-Key: {{apiKey}}
+
+### S-02 숙소 목록 — 조건 파라미터 없음, 요금·재고·조식 정보 없음
+# 기대: A-3201(roomTypes 2개) · A-3305(1개). roomTypes 항목에는 code·name·maxOccupancy만 있다.
+GET {{host}}/a/v1/hotels
+X-Api-Key: {{apiKey}}
+
+### S-11 요청 반영 — 날짜를 바꾸면 숙박일 수가 따라 바뀐다
+# 기대: dailyRates 1건(09-10)만. 체크아웃일은 숙박일이 아니다.
+GET {{host}}/a/v1/availability?hotelCodes=A-3201&checkIn=2026-09-10&checkOut=2026-09-11&adults=2&children=0
+X-Api-Key: {{apiKey}}
+
+### S-12 요청 반영 — 시드에 없는 코드는 조용히 빠진다 (오류가 아니다)
+# 기대: A-9999는 응답에 없고 A-3201 항목만 나온다.
+GET {{host}}/a/v1/availability?hotelCodes=A-9999,A-3201&checkIn=2026-09-10&checkOut=2026-09-11&adults=2&children=0
+X-Api-Key: {{apiKey}}
+
+### S-13 요청 반영 — 인원을 수용하지 못하는 객실 타입은 제외된다
+# adults 2 + children 1 = 3 → maxOccupancy 2인 OCN-DBL·STD-TWN이 빠지고 STD-DBL(3)만 남는다.
+GET {{host}}/a/v1/availability?hotelCodes=A-3201,A-3305&checkIn=2026-09-10&checkOut=2026-09-11&adults=2&children=1
+X-Api-Key: {{apiKey}}
+
+### S-14 품절일 — 품절이 주말 할증보다 앞선다
+# A-3305 STD-DBL은 매월 2일이 품절이다. 10-02는 금요일이라 할증은 붙지만(169000) 재고는 0이다.
+# 기대: 10-01 재고 2 · 130000, 10-02 재고 0 · 169000, 10-03 재고 1 · 169000
+GET {{host}}/a/v1/availability?hotelCodes=A-3305&checkIn=2026-10-01&checkOut=2026-10-04&adults=2&children=0
+X-Api-Key: {{apiKey}}
+
+### S-21 요청 오류 — 키 불일치
+# 기대: 401 {"error":"UNAUTHORIZED","message":"invalid api key"}
+GET {{host}}/a/v1/hotels
+X-Api-Key: wrong-key
+
+### S-22 요청 오류 — 날짜 역전
+# 기대: 400 {"error":"INVALID_DATE_RANGE","message":"checkOut must be after checkIn"}
+GET {{host}}/a/v1/availability?hotelCodes=A-3201&checkIn=2026-09-13&checkOut=2026-09-10&adults=2&children=0
+X-Api-Key: {{apiKey}}
+
+### S-23 요청 오류 — 날짜 형식
+# 기대: 400 {"error":"INVALID_PARAMETER","message":"invalid parameter"}
+GET {{host}}/a/v1/availability?hotelCodes=A-3201&checkIn=2026-13-99&checkOut=2026-09-13&adults=2&children=0
+X-Api-Key: {{apiKey}}
+
+### S-24 요청 오류 — 숫자 파라미터에 숫자가 아닌 값
+# 기대: 400 INVALID_PARAMETER. 프레임워크 기본 오류 본문이 나오면 회귀다.
+GET {{host}}/a/v1/availability?hotelCodes=A-3201&checkIn=2026-09-10&checkOut=2026-09-13&adults=abc
+X-Api-Key: {{apiKey}}
+
+### S-25 요청 오류 — 숙소 코드 51개 (상한 50)
+# 기대: 400 {"error":"TOO_MANY_HOTEL_CODES","message":"hotelCodes exceeds 50"}
+GET {{host}}/a/v1/availability?hotelCodes=A-0001,A-0002,A-0003,A-0004,A-0005,A-0006,A-0007,A-0008,A-0009,A-0010,A-0011,A-0012,A-0013,A-0014,A-0015,A-0016,A-0017,A-0018,A-0019,A-0020,A-0021,A-0022,A-0023,A-0024,A-0025,A-0026,A-0027,A-0028,A-0029,A-0030,A-0031,A-0032,A-0033,A-0034,A-0035,A-0036,A-0037,A-0038,A-0039,A-0040,A-0041,A-0042,A-0043,A-0044,A-0045,A-0046,A-0047,A-0048,A-0049,A-0050,A-0051&checkIn=2026-09-10&checkOut=2026-09-13&adults=2&children=0
+X-Api-Key: {{apiKey}}
+
+### S-31 고장 — 꼬리 지연 (열 번에 한 번 5초)
+# 평균은 멀쩡한데 p95만 튀는 상태. 아래 조회를 열 번 눌러 한 번쯤 늦는지 본다.
+POST {{host}}/control/mode?value=delay&rate=0.1&delayMillis=5000
+
+### S-31-1 꼬리 지연 확인용 조회 (여러 번 누른다)
+GET {{host}}/a/v1/hotels
+X-Api-Key: {{apiKey}}
+
+### S-32 고장 — 30% 오류를 3분간, 이후 자동 정상 복귀
+# 서킷이 열리고 닫히는 것을 관찰할 때 쓴다.
+POST {{host}}/control/mode?value=error&rate=0.3&errorCode=503&durationSeconds=180
+
+### S-33 고장 — 스무 번에 한 번 응답 없음
+# 타임아웃이 간헐적으로만 나는 상태. 붙잡힌 요청은 600초 상한에서 풀린다.
+POST {{host}}/control/mode?value=no-response&rate=0.05
+
+### S-34 고장 — 재고·요금만 항상 3초 지연, 목록은 정상
+# 걸고 나서 S-02(목록)와 S-11(재고·요금)을 나란히 눌러 한쪽만 느린지 본다.
+POST {{host}}/control/mode?value=delay&rate=1.0&delayMillis=3000&endpoint=availability
+
+### S-35 고장 — 즉시 정상 복귀
+POST {{host}}/control/mode?value=normal
+
+### S-36 상태 확인 — 자동 복귀를 눈으로 본다
+# S-32를 건 뒤 이걸 누르면 expiresAt이 보이고, 그 시각이 지난 뒤 다시 누르면 mode가 NORMAL이다.
+GET {{host}}/control/state
+
+### S-41 카탈로그 — 객실 타입 추가 (미매핑 코드를 만드는 유일한 경로)
+POST {{host}}/control/rooms?hotelCode=A-3201&roomTypeCode=NEW-STE&roomTypeName=New Suite&maxOccupancy=4&netRate=200000&baseInventory=4
+
+### S-42 카탈로그 — 추가한 객실이 응답에 나타난다
+# 기대: NEW-STE 항목이 생기고 09-10 단가가 200000이다.
+GET {{host}}/a/v1/availability?hotelCodes=A-3201&checkIn=2026-09-10&checkOut=2026-09-11&adults=2&children=0
+X-Api-Key: {{apiKey}}
+
+### S-43 카탈로그 — 객실 타입 삭제 (뒤에 S-42를 다시 눌러 사라졌는지 본다)
+DELETE {{host}}/control/rooms?hotelCode=A-3201&roomTypeCode=NEW-STE
+
+### S-44 카탈로그 — 숙소 추가 (뒤에 S-02를 눌러 목록에 나타나는지 본다)
+POST {{host}}/control/properties?hotelCode=A-7777&hotelName=Jeju Sunrise
+
+### S-45 카탈로그 — 숙소 삭제
+DELETE {{host}}/control/properties?hotelCode=A-7777
+
+### S-46 카탈로그 — 없는 숙소에 객실을 넣으려 하면 거절한다
+# 기대: 400 INVALID_PARAMETER. 조용히 넘기면 카탈로그가 바뀌지 않은 이유를 찾을 수 없다.
+POST {{host}}/control/rooms?hotelCode=A-0000&roomTypeCode=X-1&roomTypeName=Nowhere&maxOccupancy=2&netRate=10000&baseInventory=1
+
+### S-51 연결 거부 — 수용 기준 3을 증명한다
+# 절차: A 프로세스만 Ctrl+C로 내린다 → 이 요청은 연결 거부(ECONNREFUSED)로 실패하고,
+#       같은 시각 mock-supplier-b/http/scenarios.http의 S-51은 정상 응답한다.
+# 이것은 connect timeout이 아니다 — 라우팅되지 않는 주소가 필요한 그 경우는 F3에서 따로 다룬다.
+GET {{host}}/a/v1/hotels
+X-Api-Key: {{apiKey}}
