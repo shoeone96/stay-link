@@ -233,3 +233,40 @@ Red는 개명·시그니처 복귀가 한 원인이라 사이클을 분리하지
 - 이슈(유지): `Property.create`의 `supplier` null 미검증 — 설계 소관.
 - 참고: 설계 §2 "요금·재고는 `roomTypeId`를 키로 갖는 별도 Aggregate" 문구는 D-F1-10 이후 `roomId`가 자연스러움 — feature-design 소관.
 - 커밋 제안(fix-1~4 합산, D-F1-9 왕복은 히스토리에 남기지 않음): `refactor: property-mapping 호출자 없는 메서드·getter·테스트 제거 (D-F1-8)` / `refactor: RoomType→Room 개명, T-04 assert 보강 (D-F1-10)` / `docs: property-mapping fix-1~4 기록·리뷰·테스트 정리표 갱신`
+
+## fix-5 (2026-09-04 16:24)
+
+status: 완료
+
+대상: `03-review.md` round-4 error 0건·warn 0건(신규). 이번 fix는 사용자 결정 D-F1-11(`equals/hashCode` 제거)에 따른 `01-design.md` §2 행동 항목과 정정된 `coding-standard` DDD-3("`equals/hashCode`는 기본 구현을 두지 않는다 — 호출자가 생길 때 비즈니스 키로") 반영이다.
+
+### 사이클 로그
+| T-NN | 테스트 (클래스#메서드) | Red | Green | 비고 |
+|---|---|---|---|---|
+| T-01~T-04 | (변경 없음) | - | 16/16 | `Property`·`Room`에서 `equals`·`hashCode` 삭제 후 `./gradlew test --rerun`으로 회귀 없음 확인. 테스트 코드 변경 없음 — 어떤 테스트도 엔티티 동등성을 비교하지 않으며(T-04는 `getId()` 값만 비교), `@DataJpaTest`의 persist·flush는 `Object` 기본 동일성으로 충분 |
+
+### 전체 테스트 결과
+- 총 17 · 통과 17 · 실패 0 · 건너뜀 0 (근거: `./gradlew test --rerun`, build/test-results/test/*.xml, 2026-09-04 16:24)
+  - StayLinkApplicationTests 1 · PropertyTest 6 · RoomTest 7 · PropertyJpaRepositoryTest 1 · RoomJpaRepositoryTest 2
+- 잔존 확인: `Property`·`Room`의 public 메서드는 `create`·`getId`뿐. `@Override` 0건.
+- bootRun validate: 엔티티 매핑·`schema.sql`·`application.yaml` 변경 없음이라 생략(지시대로). fix-4 결과가 그대로 유효.
+
+### 변경 파일
+- src/main/java/com/stay/property/domain/Property.java (수정 — `equals`·`hashCode` 삭제)
+- src/main/java/com/stay/property/domain/Room.java (수정 — `equals`·`hashCode` 삭제)
+- docs/test-cases.md: 변경 없음 (테스트·결과 동일)
+
+### 설계 이탈 요청
+- 없음
+
+### (fix) 처리한 위반
+| 위반 ID(규칙 ID·파일) | 처리 | 미처리 사유 |
+|---|---|---|
+| D-F1-11 반영 (DDD-3 정정 · Property.java·Room.java `equals/hashCode`) | 처리 | - |
+| round-1 #2 warn (CLN-6 · LAY-8 · 예외 메시지 컨텍스트) | 미처리 | 설계 §2 문구 갱신 선행 필요 |
+| round-1 #3 warn (D-F1-2 · D-F1-7 · schema.sql 비멱등) | 미처리 | 결정 카드 수정(설계 소관) |
+
+### 남은 이슈·커밋 단위 제안
+- 이슈(신규, F6·F7 참고): 이후 feature가 `Property`·`Room`을 `Set`·`Map` 키에 담거나 detached 상태로 비교하려면 그 feature 설계에서 비즈니스 키(`(supplier, supplierPropertyCode)` / `(propertyId, supplierRoomCode)`) 기반 `equals/hashCode`를 추가해야 한다(DDD-3 정정 문구).
+- 이슈(유지): `schema.sql` 변경 시 `docker compose down` 절차 README 부재, `Property.create`의 `supplier` null 미검증 — 설계 소관.
+- 커밋 제안(fix-1~5 합산): `refactor: property-mapping 호출자 없는 메서드·getter·equals/hashCode·테스트 제거 (D-F1-8·11)` / `refactor: RoomType→Room 개명, T-04 assert 보강 (D-F1-10)` / `docs: property-mapping fix-1~5 기록·리뷰·테스트 정리표 갱신`

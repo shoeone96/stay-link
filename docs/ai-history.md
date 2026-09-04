@@ -229,3 +229,8 @@
 - **요구(사용자)**: `docs/db-schema/`(스펙 JSON·빌드 스크립트)가 무엇인지 확인 못 했다 → 둘 다 제거하고 HTML만 남겨 직접 수정하는 방식으로. 문서가 너무 많은 것도 별로.
 - **AI 답변 요약**: 빌드 스크립트가 저장소 밖 로컬 스킬 경로에 의존해 저장소에 두기 부적절했음을 인정. `docs/db-schema/` 삭제, 재료는 스킬 `examples/`로 이동. 프로젝트·전역 CLAUDE.md와 스킬 components.md의 규칙을 "저장소에는 HTML 한 파일, 이후 변경은 HTML 직접 수정, 스펙·스크립트 커밋 금지"로 정정. HTML 푸터의 생성 경로 문구 제거.
 - **결정**: 제거·커밋. 문서 수 정리는 별도 논의(현황 목록 제시).
+
+### 45. equals/hashCode 제거 (D-F1-11) — 규칙 DDD-3 정정 (2026-09-04)
+- **요구(사용자)**: "equals/hashCode는 왜 만들어놨나" → "JPA 관례에 무조건 만들라는 관례가 있나" → 제거 지시.
+- **AI 답변 요약**: 호출자가 있어서가 아니라 coding-standard DDD-3("식별자 동등성, equals/hashCode는 id")이 시켜서 넣은 것이며 테스트 포함 사용처 0건임을 인정. JPA 명세는 구현을 요구하지 않고, Hibernate ORM 6.6 User Guide `mapping-model-pojo-equalshashcode`(URL 확인)는 컬렉션·detached·다중 세션 비교 시에만 필요하며 그때도 생성 id가 아닌 비즈니스 키를 권장한다고 확인. 현재 코드(id 비교 + 상수 hashCode)는 id 기반의 부작용 우회 기법이라 근거가 약함. DDD-3을 "기본 구현을 두지 않는다 — 호출자가 생길 때 비즈니스 키로, 생성 id 기반 금지"로 정정, 01에 D-F1-11 추가. developer fix-5: 두 엔티티에서 삭제, 17/17. reviewer round-5: error 0·warn 0 통과(Hibernate 1차 캐시·dirty checking은 equals를 쓰지 않아 영속화 영향 없음). 시니어 코멘트: F6·F7 설계 시 DDD-3 정정 문구 참조 필요.
+- **결정**: 제거·커밋. 남은 warn 2건(예외 컨텍스트·schema.sql 비멱등)은 설계 소관 그대로.

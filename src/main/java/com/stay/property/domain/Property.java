@@ -56,20 +56,4 @@ public class Property {
     public Long getId() {
         return id;
     }
-
-    @Override
-    public boolean equals(Object other) {
-        if (this == other) {
-            return true;
-        }
-        if (!(other instanceof Property that)) {
-            return false;
-        }
-        return id != null && id.equals(that.id);
-    }
-
-    @Override
-    public int hashCode() {
-        return getClass().hashCode();
-    }
 }

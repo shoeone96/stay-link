@@ -187,3 +187,49 @@ status: 통과
 
 ### 통계
 - error 0 · warn 0 (신규) · round-1 warn 3건 중 해소 1·부분 해소 1·미해소 1 · round-2 warn 1건 해소
+
+## round-5 (2026-09-04 16:27)
+
+status: 통과
+
+대상: 01 결정 카드 D-F1-11(`equals/hashCode` 제거)과 `coding-standard` DDD-3 정정("기본 구현을 두지 않는다 — 컬렉션·영속성 컨텍스트 밖 비교 호출자가 생길 때 비즈니스 키로, 생성 id 기반 금지") 반영분 — 02 fix-5 섹션, `git diff HEAD`(미커밋: `Property.java`·`Room.java`·01·02·coding-standard 5개 파일), HEAD(771732e)까지의 커밋분. 규칙 원본은 정정된 문구를 다시 읽고 그 기준으로 판정했다.
+
+### 위반 목록
+| # | severity | 규칙 ID | 파일:라인 | 위반 내용 | 근거 (01·02의 어느 항목) | 수정 제안 |
+|---|---|---|---|---|---|---|
+| - | - | - | - | 신규 위반 없음 | - | - |
+
+### 설계 일치 판정
+- T-NN 커버: 4/4 (변경 없음). 테스트 코드·정리표 변경 0건 — 02 fix-5 "docs/test-cases.md: 변경 없음"과 일치.
+- D-F1-11 반영: `Property.java`·`Room.java`에서 `equals`·`hashCode` 삭제, `src/` 전체 `equals|hashCode|@Override` grep 0건 ✓. 두 엔티티의 public 메서드는 `create`·`getId`뿐 ✓. 01 §2 행동 "`equals/hashCode`는 두지 않는다 — 컬렉션·교차 컨텍스트 비교 호출자가 없음"과 1:1 ✓.
+- 정정된 DDD-3 대조: "기본 구현을 두지 않는다" 준수 ✓. 종전 코드의 `hashCode() = getClass().hashCode()`는 id 기반 해시 변동을 피한 형태였으나, 정정 규칙은 호출자가 없으면 아예 두지 않는 쪽이므로 삭제가 규칙과 일치한다. 삭제 근거(호출자 없음)는 테스트에서도 확인된다 — `src/test`에 엔티티 객체를 `isEqualTo`·`contains`·`Set`·`Map`으로 비교·수용하는 코드 0건(grep). T-04는 `getId()` 값만 비교한다.
+- 영속화 영향: Hibernate 1차 캐시·dirty checking은 `equals/hashCode`를 쓰지 않으므로(식별자·인스턴스 동일성) 삭제가 persist·flush·UNIQUE 위반 검출에 영향을 주지 않는다. T-02·T-03·T-04 통과가 근거.
+- 01 변경 범위: `updated` 행·§2 행동 1줄·D-F1-11 행 3곳뿐(HEAD 대비 diff). §5 테스트 리스트·§3 DDL·설정 변경 없음 ✓.
+- 이탈: 없음. 02 fix-5 "설계 이탈 요청: 없음"과 일치.
+- 후속 feature 영향(02 fix-5 남은 이슈와 동일 판단): F6·F7이 엔티티를 `Set`·`Map` 키나 detached 비교에 쓰면 그 feature 설계에서 비즈니스 키(`(supplier, supplierPropertyCode)` / `(propertyId, supplierRoomCode)`) 기반으로 추가한다 — 정정된 DDD-3이 명시한 경로.
+- 설계 소관 열린 항목(유지, 위반 아님): `Property.create`의 `supplier` null 미검증 · round-4 참고 항목(01 §2 `roomTypeId` 문구, "객실 타입/객실 유형" 혼용).
+
+### 테스트 정리표 판정
+- 유의미함 재판정이 다른 항목: 없음. 높음 3·중간 1·낮음 0 (round-4와 동일). 정리표 헤더 "fix-4 갱신"은 fix-5에서 테스트·결과가 바뀌지 않았으므로 그대로 정확하다.
+
+### 실행 검증
+- ./gradlew test --rerun: 총 17 · 통과 17 · 실패 0 · 건너뜀 0 (02 fix-5 집계와 일치). 근거 `build/test-results/test/*.xml`: PropertyTest 6 · RoomTest 7 · PropertyJpaRepositoryTest 1 · RoomJpaRepositoryTest 2 · StayLinkApplicationTests 1.
+- 금지어 grep: 0건 (체크리스트 명령 원문 + `*.yaml`·`*.sql` 확장자 추가, 미커밋 변경분 포함).
+- LAY-2 import grep: `com.stay.property.domain` 아래 import는 `jakarta.persistence.*`뿐. Spring·Spring Data·EntityManager 0건.
+- 로컬 MySQL validate: 엔티티 매핑(필드·컬럼·제약)·`schema.sql`·`application.yaml` 변경 없음 — `equals/hashCode` 삭제는 매핑과 무관. round-4 실행 결과가 그대로 유효하다.
+
+### (round 5) 이전 위반 해소
+| 이전 # | 해소 여부 | 근거 |
+|---|---|---|
+| round-1 #2 warn (CLN-6 · LAY-8 · 예외 메시지에 식별 컨텍스트 없음) | 부분 해소 (유지) | `Property.java:45-46`·`Room.java:42-46`·`InvalidMappingException.java:9-11` 동일. 02 fix-5 "설계 §2 문구 갱신 선행 필요"로 미처리 명시 |
+| round-1 #3 warn (D-F1-2 · D-F1-7 · schema.sql init-always의 스키마 변경 비멱등) | 미해소 (유지) | `application.yaml`·`schema.sql` 관리 방식 변경 없음. round-4에서 재현 사례(02 fix-3 validate 실패)와 D-F1-2 재검토 조건 충족을 기록했고 결정 카드는 아직 수정되지 않음 |
+| round-1 #1 · round-2 #1 | 해소 (유지) | round-4 판정 그대로. 이번 라운드 변경이 해당 코드를 건드리지 않음 |
+
+### 시니어 관점 코멘트
+- 새벽 장애 시 로그만으로 원인 파악: **아니오** (round-1 #2 유지).
+- 6개월 뒤 신규 입사자 30분: 예. 엔티티가 매핑·정적 팩토리·`getId`만 남아 D-F1-8·11의 "호출자 없으면 두지 않는다" 기준이 코드에서 일관되게 읽힌다. 다만 `equals/hashCode`가 없는 이유는 코드에 없고 01·DDD-3에만 있으므로, 후속 feature 개발자가 관성으로 id 기반 구현을 추가하지 않도록 F6·F7 설계 시 DDD-3 정정 문구를 참조하게 할 것.
+- 10배 트래픽에서 먼저 깨지는 것: F1 범위에서는 없음.
+- 롤백 가능한가: **아니오** (round-1 #3 유지).
+
+### 통계
+- error 0 · warn 0 (신규) · 잔존 warn 2건(round-1 #2 부분 해소·#3 미해소, 모두 설계 소관)

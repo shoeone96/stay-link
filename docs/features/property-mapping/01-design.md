@@ -1,7 +1,7 @@
 # property-mapping 설계
 
 status: 확정
-updated: 2026-09-04 (D-F1-8 미사용 메서드 제거 · D-F1-9 UNIQUE 검토 후 원안 유지 · D-F1-10 RoomType→Room · T-04 assert 명시)
+updated: 2026-09-04 (D-F1-8 미사용 메서드 제거 · D-F1-9 UNIQUE 원안 유지 · D-F1-10 RoomType→Room · D-F1-11 equals/hashCode 제거 · T-04 assert 명시)
 
 ## 1. 요구사항 재해석·범위
 
@@ -33,7 +33,7 @@ updated: 2026-09-04 (D-F1-8 미사용 메서드 제거 · D-F1-9 UNIQUE 검토 �
 - `Property.create(supplier, supplierPropertyCode, propertyName)`
 - `Room.create(propertyId, supplierRoomCode, roomName)`
 - 이름 변경·조회 등 호출자 없는 행동은 두지 않는다. 읽기 접근자도 호출자 있는 `getId`만 둔다 (D-F1-8)
-- setter 없음, `equals/hashCode`는 id (DDD-3)
+- setter 없음. `equals/hashCode`는 두지 않는다 — 컬렉션·교차 컨텍스트 비교 호출자가 없음 (DDD-3·D-F1-11)
 
 **도메인 예외**: `InvalidMappingException extends RuntimeException` — 비어 있는 필드명을 메시지에 포함 (LAY-8·CLN-6). DB 제약 위반은 Spring이 변환하는 `DataIntegrityViolationException`을 그대로 둔다(잡는 소비자는 F6에서 생긴다).
 
@@ -105,6 +105,7 @@ com.stay.property
 | D-F1-8 | 호출자 없는 메서드 | F1에서 미리 정의 / 호출자 feature에서 추가 | **호출자 feature에서 추가** (사용자 결정 2026-09-04, 구현 후 정리) — `rename` 2개·단건 조회 2개·목록 조회 2개와 T-05·T-06 제거. 읽기 접근자도 동일 기준 — 호출자 있는 `getId`만 남기고 나머지 getter 6개 제거(사용자 결정 2026-09-04). F1은 엔티티·UNIQUE·`save`만 남긴다. UNIQUE·FK는 불변식이므로 유지 | 닫힘 |
 | D-F1-9 | `room`의 UNIQUE 키에 `supplier` 포함 | `(property_id, code)` / `(supplier, property_id, code)` | **`(property_id, code)` 유지 — 검토 후 기각** (사용자 결정 2026-09-04). 처음에는 "공급사 코드 체계가 서로 모르므로 제약에 공급사를 글자 그대로 넣자"로 supplier 추가안을 반영했으나, `property_id`가 `(supplier, supplier_property_code)`로 유일한 부모 행을 가리키므로 공급사 구분이 이미 키에 포함되어 있음을 ER 다이어그램(`docs/db-schema.html`)으로 확인하고 되돌림. supplier를 자식에 복제하면 유일성 범위는 같고 부모·자식 불일치 상태만 새로 허용된다. T-04 assert 강화(두 id non-null·서로 다름)는 이 검토 중 반영해 유지 | 닫힘 |
 | D-F1-10 | 객실 유형 엔티티 이름 | `RoomType` / `Room` | **`Room`** (사용자 결정 2026-09-04) — `RoomType`은 Java에서 enum처럼 읽혀 "진짜 타입 값"에만 쓰고 싶다는 판단. AI 의견: 목록 설계 문서는 "물리 객실 오독 방지"로 `room`을 택했고 업계 용어도 room type이라 유지를 권했으나 사용자가 가독성을 우선. 의미는 그대로 "공급사의 판매 단위(객실 유형)"이며 물리 객실이 아님을 도메인 모델 표와 목록 설계 문서에 명시. 테이블 `room`, 컬럼 `supplier_room_code`·`room_name`, 제약 `uq_room_property_code`·`fk_room_property`, 클래스 `Room`·`RoomRepository`·`RoomJpaRepository`·`RoomTest`·`RoomJpaRepositoryTest` | 닫힘 |
+| D-F1-11 | `equals/hashCode` | id 기반 구현 유지 / 제거 | **제거** (사용자 결정 2026-09-04) — JPA 명세는 구현을 요구하지 않고, Hibernate User Guide는 컬렉션·detached·다중 세션 비교 시에만 필요하며 그때도 생성 id가 아닌 비즈니스 키를 권장. F1에는 그 호출자가 없어 D-F1-8과 같은 기준으로 제거. 규칙 원본 DDD-3을 "필요 시 비즈니스 키로"로 정정 | 닫힘 |
 
 ## 7. 참고 문서
 
