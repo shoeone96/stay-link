@@ -234,3 +234,13 @@
 - **요구(사용자)**: "equals/hashCode는 왜 만들어놨나" → "JPA 관례에 무조건 만들라는 관례가 있나" → 제거 지시.
 - **AI 답변 요약**: 호출자가 있어서가 아니라 coding-standard DDD-3("식별자 동등성, equals/hashCode는 id")이 시켜서 넣은 것이며 테스트 포함 사용처 0건임을 인정. JPA 명세는 구현을 요구하지 않고, Hibernate ORM 6.6 User Guide `mapping-model-pojo-equalshashcode`(URL 확인)는 컬렉션·detached·다중 세션 비교 시에만 필요하며 그때도 생성 id가 아닌 비즈니스 키를 권장한다고 확인. 현재 코드(id 비교 + 상수 hashCode)는 id 기반의 부작용 우회 기법이라 근거가 약함. DDD-3을 "기본 구현을 두지 않는다 — 호출자가 생길 때 비즈니스 키로, 생성 id 기반 금지"로 정정, 01에 D-F1-11 추가. developer fix-5: 두 엔티티에서 삭제, 17/17. reviewer round-5: error 0·warn 0 통과(Hibernate 1차 캐시·dirty checking은 equals를 쓰지 않아 영속화 영향 없음). 시니어 코멘트: F6·F7 설계 시 DDD-3 정정 문구 참조 필요.
 - **결정**: 제거·커밋. 남은 warn 2건(예외 컨텍스트·schema.sql 비멱등)은 설계 소관 그대로.
+
+### 46. PR #1 병합 · main 동기화 (2026-09-04)
+- **요구**: 사용자가 PR #1을 병합, pull 요청.
+- **AI 답변 요약**: `main` checkout 후 fast-forward pull(병합 커밋 dd900e4, PR 커밋 10개). feature 목록 상태표 F1을 `완료(병합)`으로 갱신(미커밋 — main 직접 커밋은 사용자 지시 필요). 다음 feature는 최신 `main`에서 분기.
+- **결정**: 동기화 완료. 열린 결정: 문서 정리 범위(HELP.md·todolist·JOURNAL·02/03 요약화), 패키지 `property`→`catalog`, 예외 메시지 컨텍스트, D-F1-2 마이그레이션 재검토.
+
+### 47. PR 부속 문서 갱신 시점 변경 · main 문서 커밋 (2026-09-04)
+- **요구**: 46에서 남긴 미커밋 변경(상태표 `완료(병합)`·ai-history 46)의 diff 확인 → "다음부터는 병합 전에 같이 기록해서 push, 지금은 main에서 커밋·push, 스킬에 기록".
+- **AI 답변 요약**: `pr` 스킬 ⑧이 "다음 커밋에 포함되도록 알린다"로 되어 있어 병합 후 `main`에 미커밋 문서가 남는 구조였음. ⑧을 feature 브랜치에서 상태표(`PR`)·ai-history를 커밋·push 하는 단계로 바꾸고(원칙 5 정정), 병합 후 `완료(병합)` 전환은 `feature-design` ①에서 다음 feature 브랜치의 첫 커밋에 포함하도록 추가. 규칙 원본 `CLAUDE.md` 「브랜치·PR」에 한 줄 추가. 이번 변경은 워크플로우(하네스·CLAUDE.md·feature 목록) 변경이므로 예외 규칙에 따라 사용자 지시로 `main`에 직접 커밋.
+- **결정**: 커밋·push. 46의 열린 결정은 그대로.

@@ -31,7 +31,7 @@
 
 | # | feature 폴더명 | todolist 항목 | 상태 | 설계 | 구현 |
 |---|---|---|---|---|---|
-| F1 | `property-mapping` | 사전작업 1(스키마) 구현화 | PR | 2026-09-03 | 2026-09-03 |
+| F1 | `property-mapping` | 사전작업 1(스키마) 구현화 | 완료(병합) | 2026-09-03 | 2026-09-04 |
 | F2 | `mock-supplier-server` | 사전작업 2 | 대기 | - | - |
 | F3 | `supplier-client` | 사전작업 3 | 대기 | - | - |
 | F4 | `supplier-catalog-adapter` | 사전작업 4 (목록) | 대기 | - | - |

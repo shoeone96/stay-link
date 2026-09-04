@@ -17,7 +17,7 @@ argument-hint: [feature 폴더명]
 2. **금지어 0건** — 프로젝트 `CLAUDE.md` 절대 규칙 1·2와 금지어 체크리스트를 PR 제목·본문·브랜치명·커밋 메시지에 동일하게 적용한다. 저장소 grep 명령과 같은 패턴으로 본문을 검사한다. AI 흔적 검사 패턴은 `co-authored-by|claude-session|generated with|claude\.(ai|com)|🤖` — 파일명 `CLAUDE.md`·`.claude/` 언급은 흔적이 아니다.
 3. **head는 `feature/f<N>-<feature>`, base는 `main`, 대상은 `origin`** — head가 `main`이거나 패턴이 맞지 않거나 보낼 커밋이 0개면 중단하고 보고한다.
 4. **파괴적 git 명령 금지** — `push --force*`, `rebase`, `reset --hard`, `filter-branch`는 사용자 명시 동의 없이 실행하지 않는다. 기존 커밋 메시지에 AI 흔적이 있으면 재작성하지 않고 보고한다.
-5. **커밋하지 않는다** — 미커밋 변경이 있으면 커밋할지 사용자에게 묻고 대기한다.
+5. **커밋은 ⑧의 문서 커밋 하나뿐** — 시작 시점에 미커밋 변경이 있으면 커밋할지 사용자에게 묻고 대기한다. 이 스킬이 스스로 만드는 커밋은 ⑧(상태표·ai-history 갱신)뿐이며, 반드시 feature 브랜치에 한다(2026-09-04 사용자 확정: 병합 후 `main`에 미커밋 문서 변경을 남기지 않기 위함).
 6. **`gh` CLI 사용** — `gh pr create` / `gh pr view` / `gh pr edit`.
 7. **프로젝트 CLAUDE.md의 기록 규칙**(ai-history 자동 기록)을 종료 시 수행한다.
 
@@ -47,7 +47,8 @@ argument-hint: [feature 폴더명]
    )"
    ```
 7. ⑦ **사후 검증** — `gh pr view <PR#> --json title,body` 결과에 원칙 1·2 grep. 매치되면 `gh pr edit`로 즉시 수정 후 재검증.
-8. ⑧ **종료** — PR URL 반환. `docs/features/README.md` 상태표의 해당 행 상태를 `PR` 로 갱신하고 ai-history에 기록한다(이 두 파일의 갱신은 다음 커밋에 포함되도록 사용자에게 알린다). 병합 후 다음 feature는 최신 `main`에서 분기한다는 점을 안내한다.
+8. ⑧ **기록 커밋·push** — `docs/features/README.md` 상태표의 해당 행 상태를 `PR` 로 갱신하고 ai-history에 PR 생성(URL 포함)을 기록한 뒤, **feature 브랜치에서** 두 파일만 커밋하고 push 한다(PR에 자동 반영). 커밋 메시지는 `docs: [F<N>] <feature> PR 기록 (상태표·ai-history)` 형태로 하고, 커밋 전 원칙 1·2의 grep을 메시지·두 파일에 적용한다. 병합 후 `main`에 직접 커밋할 문서 변경을 남기지 않는 것이 목적이다.
+9. ⑨ **종료** — PR URL 반환. 병합은 사용자가 GitHub에서 하며, 병합 후 상태표를 `완료(병합)`(구현 열에 병합일)으로 바꾸는 일은 다음 feature 브랜치의 첫 커밋(`feature-design` ①)에서 한다고 안내한다. 다음 feature는 최신 `main`에서 분기한다.
 
 ## PR 본문 템플릿
 
@@ -79,6 +80,6 @@ argument-hint: [feature 폴더명]
 
 ## 하지 않는 것
 
-- 커밋·rebase·force push (원칙 4·5)
+- ⑧ 문서 커밋 외의 커밋, rebase·force push (원칙 4·5)
 - 구현·리뷰·설계 문서 수정 (dev-cycle·feature-design 소관)
-- 병합 (사용자가 GitHub에서 수행)
+- 병합 (사용자가 GitHub에서 수행), 병합 후 `main` 직접 커밋 (상태표 `완료(병합)` 전환은 다음 feature 브랜치에서)

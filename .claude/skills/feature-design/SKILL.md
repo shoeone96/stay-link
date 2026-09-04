@@ -25,7 +25,7 @@ argument-hint: [기능명 또는 요구사항 한 줄]
 
 ## 워크플로우
 
-1. ① **요구사항 접수** — `$ARGUMENTS` 또는 대화에서 기능명·수용 기준·관련 설계 문서(`docs/*.html` 등)·프로젝트 CLAUDE.md 제약을 확인한다. 기능 폴더명을 kebab-case로 사용자와 확정한다(예: `property-mapping`). 폴더명이 확정되면 `docs/features/README.md` 상태표에서 번호 `N`을 찾아 브랜치를 만든다: `git checkout main && git pull` → `git checkout -b feature/f<N>-<feature>` → `git push -u origin feature/f<N>-<feature>`. 브랜치가 이미 있으면 checkout 만 한다. `docs/features/<feature>/01-design.md`가 이미 있으면 Read 하고 이어서 수정한다. 모호한 점은 AskUserQuestion 1회로 묶어 묻는다.
+1. ① **요구사항 접수** — `$ARGUMENTS` 또는 대화에서 기능명·수용 기준·관련 설계 문서(`docs/*.html` 등)·프로젝트 CLAUDE.md 제약을 확인한다. 기능 폴더명을 kebab-case로 사용자와 확정한다(예: `property-mapping`). 폴더명이 확정되면 `docs/features/README.md` 상태표에서 번호 `N`을 찾아 브랜치를 만든다: `git checkout main && git pull` → `git checkout -b feature/f<N>-<feature>` → `git push -u origin feature/f<N>-<feature>`. 브랜치가 이미 있으면 checkout 만 한다. 브랜치를 만든 직후 상태표에서 상태가 `PR`인 직전 feature가 `main`에 병합되어 있으면(`git log --oneline -1 main`의 병합 커밋 확인) 그 행을 `완료(병합)`(구현 열에 병합일)으로 갱신해 두고, 이 브랜치의 첫 커밋에 포함한다(2026-09-04 확정: 병합 후 `main` 직접 커밋 금지). `docs/features/<feature>/01-design.md`가 이미 있으면 Read 하고 이어서 수정한다. 모호한 점은 AskUserQuestion 1회로 묶어 묻는다.
 2. ② **범위 확정** — 포함/제외 목록. DDD 전술 패턴 적용 여부를 `coding-standard` 「적용하지 않을 때」로 판단해 명시한다 (Transaction Script면 그렇게 쓴다).
 3. ③ **도메인 모델** — Aggregate/Entity/VO와 불변식을 DDD-n 근거와 함께 제안하고 합의한다. 도메인 관행 질문이 나오면 `domain-analysis`로 안내한다.
 4. ④ **레이어 배치** — 패키지·클래스 목록과 의존 방향을 텍스트 다이어그램으로 (LAY-n). 포트 인터페이스의 소유 레이어를 명시한다.
