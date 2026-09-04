@@ -47,11 +47,6 @@ public class Property {
         return new Property(supplier, supplierPropertyCode, propertyName);
     }
 
-    public void rename(String propertyName) {
-        requireText(propertyName, "propertyName");
-        this.propertyName = propertyName;
-    }
-
     private static void requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw InvalidMappingException.blankField(fieldName);
@@ -60,18 +55,6 @@ public class Property {
 
     public Long getId() {
         return id;
-    }
-
-    public Supplier getSupplier() {
-        return supplier;
-    }
-
-    public String getSupplierPropertyCode() {
-        return supplierPropertyCode;
-    }
-
-    public String getPropertyName() {
-        return propertyName;
     }
 
     @Override

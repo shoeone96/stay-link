@@ -7,12 +7,12 @@ CREATE TABLE IF NOT EXISTS property (
     CONSTRAINT uq_property_supplier_code UNIQUE (supplier, supplier_property_code)
 );
 
-CREATE TABLE IF NOT EXISTS room_type (
-    id                      BIGINT       NOT NULL AUTO_INCREMENT,
-    property_id             BIGINT       NOT NULL,
-    supplier_room_type_code VARCHAR(64)  NOT NULL,
-    room_type_name          VARCHAR(255) NOT NULL,
+CREATE TABLE IF NOT EXISTS room (
+    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    property_id        BIGINT       NOT NULL,
+    supplier_room_code VARCHAR(64)  NOT NULL,
+    room_name          VARCHAR(255) NOT NULL,
     PRIMARY KEY (id),
-    CONSTRAINT fk_room_type_property FOREIGN KEY (property_id) REFERENCES property (id),
-    CONSTRAINT uq_room_type_property_code UNIQUE (property_id, supplier_room_type_code)
+    CONSTRAINT fk_room_property FOREIGN KEY (property_id) REFERENCES property (id),
+    CONSTRAINT uq_room_property_code UNIQUE (property_id, supplier_room_code)
 );
