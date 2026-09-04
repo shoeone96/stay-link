@@ -40,3 +40,36 @@ out/
 
 # git worktrees (EnterWorktree)
 .claude/worktrees/
+
+### 저장소에 들어가면 안 되는 것 (게시 전 검사와 이중 방어) ###
+# 외부에서 받은 안내·명세 원문. 본인 말로 재서술한 md/html만 커밋한다.
+# 다이어그램은 inline SVG를 쓰므로 이미지 파일이 필요하지 않다.
+# 정말 필요한 예외는 사용자 확인 후 `git add -f`.
+*.pdf
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.pptx
+*.ppt
+*.hwp
+*.hwpx
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# 저장소 밖에 두어야 하는 로컬 전용 파일
+*저장소-금지사항-체크리스트*
+*.local.md
+*.local.json
+.claude/settings.local.json
+
+# 자격 증명
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks

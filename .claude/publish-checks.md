@@ -58,15 +58,27 @@ grep -rnE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}" \
 **둘 다 0건이어야 한다.** 모의 서버의 자리표시자 키(`test-key` 등)는 12자 미만이라 걸리지 않는다.
 걸린다면 값을 짧은 자리표시자로 바꾼다. 이메일 주소는 어떤 형태로도 저장소에 두지 않는다.
 
-## 4. 외부에서 받은 문서 원문
+## 4. 외부에서 받은 문서 원문 · 자격 증명 파일
+
+1차 방어는 `.gitignore` 다 — 원문 확장자(`*.pdf` `*.docx` `*.zip` 이미지 등)와
+`.env`·`*.pem` 류, 저장소 밖에 두어야 하는 로컬 전용 파일을 아예 스테이징되지 않게 막는다.
+**`git add -f` 로 그 방어를 넘지 않는다.** 정말 필요한 예외는 사용자에게 확인받는다.
+
+2차로 두 가지를 본다.
 
 ```bash
+# ① 이번에 새로 스테이징된 것
 git diff --cached --name-only --diff-filter=A \
-  | grep -iE "\.(pdf|docx?|xlsx?|pptx?|hwp|zip|png|jpe?g|gif)$"
+  | grep -iE "\.(pdf|docx?|xlsx?|pptx?|hwp|hwpx|zip|png|jpe?g|gif|env|pem|key|p12|jks)$"
+
+# ② 이미 추적 중인 것 (과거에 들어갔거나 -f 로 우회한 것)
+git ls-files | grep -iE "\.(pdf|docx?|xlsx?|pptx?|hwp|hwpx|zip|png|jpe?g|gif|env|pem|key|p12|jks)$"
 ```
 
-**0건이어야 한다.** 외부에서 받은 안내·명세는 **본인 말로 재서술한** `.md`/`.html`만 커밋한다.
-원문 파일은 전문이든 일부든 저장소에 넣지 않는다. 문서용 이미지가 정말 필요하면 사용자에게 확인하고 예외로 처리한다.
+**둘 다 0건이어야 한다.** 외부에서 받은 안내·명세는 전문이든 일부든 저장소에 넣지 않고,
+**본인 말로 재서술한** `.md`/`.html`만 커밋한다. 다이어그램은 inline SVG로 그리므로 이미지 파일이 필요하지 않다.
+
+`gradle/wrapper/gradle-wrapper.jar` 는 빌드에 필요한 표준 파일이라 예외이며 `.gitignore`가 명시적으로 허용한다.
 
 ## 5. 폐기된 산출물을 가리키는 참조
 
