@@ -6,16 +6,14 @@ package com.stay.common.error;
  */
 public enum CommonErrorCode implements ErrorCode {
 
-    INVALID_INPUT("Request is not valid", ErrorType.INVALID_INPUT),
-    NOT_FOUND("Requested resource is not found", ErrorType.NOT_FOUND),
-    CONFLICT("Request conflicts with the current state", ErrorType.CONFLICT);
+    INVALID_INPUT("Request is not valid"),
+    NOT_FOUND("Requested resource is not found"),
+    INTERNAL_ERROR("Internal server error");
 
-    private final String defaultMessage;
-    private final ErrorType type;
+    private final String message;
 
-    CommonErrorCode(String defaultMessage, ErrorType type) {
-        this.defaultMessage = defaultMessage;
-        this.type = type;
+    CommonErrorCode(String message) {
+        this.message = message;
     }
 
     @Override
@@ -24,12 +22,7 @@ public enum CommonErrorCode implements ErrorCode {
     }
 
     @Override
-    public String defaultMessage() {
-        return defaultMessage;
-    }
-
-    @Override
-    public ErrorType type() {
-        return type;
+    public String message() {
+        return message;
     }
 }
