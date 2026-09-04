@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mock-supplier-server 설계</title>
+<!-- 폰트: Pretendard(본문) + JetBrains Mono(코드/라벨). 이 두 개만 사용한다. -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     색/폰트/그림자는 반드시 이 변수로만 참조한다 (임의 hex 금지).
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  /* scroll progress bar */
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  /* page sheet (흰 카드) */
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  .sheet.wide{max-width:1300px}
+
+  /* cover */
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  /* toc — 심플 인덱스 */
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  /* sections */
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  /* blockquote (인용) */
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  /* note / callout */
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  /* figure + SVG 다이어그램 컨테이너 */
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  /* wide figure */
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  /* code block */
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  /* toggle */
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  /* 2-column 비교 카드 */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  /* table */
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  /* fn-card */
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  /* 참고문헌 리스트 */
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  /* checklist */
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  /* docnav */
+  .docnav{display:flex;flex-wrap:wrap;gap:8px;padding:20px 56px;background:var(--white);
+    border-bottom:1px solid var(--g100)}
+  .docnav a{font-family:var(--mono);font-size:12.5px;font-weight:700;text-decoration:none;
+    padding:9px 14px;border-radius:100px;background:var(--g50);border:1px solid var(--g200);
+    color:var(--g600);transition:.18s}
+  .docnav a:hover{border-color:var(--blue);color:var(--blue-deep);transform:translateY(-1px)}
+  .docnav a.cur{background:var(--blue-bg);border-color:#cfe4ff;color:var(--blue-deep)}
+  .docnav a .n{color:var(--g400);margin-right:6px}
+  .docnav a.cur .n{color:var(--blue)}
+
+  /* docfab */
+  .docfab{position:fixed;right:22px;bottom:22px;z-index:60;font-family:var(--sans)}
+  .docfab>button{width:48px;height:48px;border-radius:16px;border:1px solid var(--g200);
+    background:var(--white);box-shadow:var(--shadow);cursor:pointer;display:grid;place-items:center;
+    color:var(--g600);transition:.18s;padding:0}
+  .docfab>button:hover{color:var(--blue-deep);border-color:var(--blue)}
+  .docfab>button svg{width:20px;height:20px}
+  .docfab .panel{position:absolute;right:0;bottom:58px;width:min(320px,84vw);max-height:min(430px,68vh);
+    overflow:auto;background:var(--white);border:1px solid var(--g200);border-radius:18px;
+    box-shadow:var(--shadow);padding:10px;display:none}
+  .docfab.open .panel{display:block}
+  .docfab .panel .hd{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--g500);
+    letter-spacing:.06em;padding:8px 10px 4px}
+  .docfab .panel a{display:block;padding:8px 10px;border-radius:10px;font-size:13.5px;font-weight:600;
+    color:var(--g800);text-decoration:none;line-height:1.4}
+  .docfab .panel a:hover{background:var(--blue-bg2);color:var(--blue-deep)}
+  .docfab .panel a.sub{padding-left:24px;font-size:12.5px;font-weight:500;color:var(--g600)}
+  .docfab .panel .hub{margin-top:6px;border-top:1px solid var(--g100);padding-top:8px}
+  .docfab .panel a.hubl{color:var(--blue-deep);font-weight:700}
+  @media(max-width:720px){.docfab{right:14px;bottom:14px}}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer,.docnav{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <!-- ===================== COVER ===================== -->
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>F2 · 확정 설계의 시각화</span>
+      <h1 class="title">mock-supplier-server<br><span class="hl">확정 설계</span></h1>
+      <p class="lede">공급사 A·B의 API를 흉내 내는 <b>독립 실행 모듈 2개</b>. 결정 카드 <b>8개가 모두 닫혔고</b>, 이 문서는 그 결정이 <b>무엇을 만드는지 그림으로</b> 보여 줍니다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">FEATURE</span><span class="v">F2 · mock-supplier-server</span></div>
+        <div class="chip"><span class="k">STATE</span><span class="v">전 카드 확정</span></div>
+        <div class="chip"><span class="k">DECISIONS</span><span class="v">D-F2-1 ~ D-F2-8</span></div>
+        <div class="chip"><span class="k">SSOT</span><span class="v">01-design.md</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== TOC ===================== -->
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">무엇을, 왜 만드는가<span class="hint">전제·폐기 사유</span></a></li>
+      <li><a href="#s2">D-F2-1 모듈 분리<span class="hint">그림 1</span></a></li>
+      <li>
+        <a href="#s3">D-F2-2 시드·카탈로그 모델<span class="hint">그림 2·3</span></a>
+        <ul class="ts">
+          <li><a href="#s3-1">그 시드가 응답으로 나갈 때 — 필드 대응</a></li>
+        </ul>
+      </li>
+      <li><a href="#s4">D-F2-3 고장 제어 API<span class="hint">그림 4·5</span></a></li>
+      <li><a href="#s5">D-F2-4 요청 검증 구조<span class="hint">그림 6</span></a></li>
+      <li><a href="#s6">D-F2-5 응답 조립 위치<span class="hint">그림 7</span></a></li>
+      <li><a href="#s7">D-F2-6 포트와 기동 방법<span class="hint">그림 없음</span></a></li>
+      <li><a href="#s8">D-F2-7 테스트를 둘 것인가<span class="hint">그림 없음</span></a></li>
+      <li><a href="#s9">D-F2-8 지연이 서버를 죽이지 않게<span class="hint">그림 8</span></a></li>
+      <li><a href="#s10">결정 요약<span class="hint">전문은 md</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- ===================== 1 ===================== -->
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">CONTEXT</p><h2 class="sec">무엇을, 왜 만드는가</h2></div>
+    </div>
+
+    <p class="lead">연동 코드가 붙어 돌 상대가 지금 없습니다.</p>
+    <p>공급사 A·B의 실제 서버는 우리에게 없습니다. 그래서 F3~F9에서 만들 클라이언트·어댑터·집계 코드가 <strong>정말로 붙어 도는지</strong> 확인할 대상이 없고, 타임아웃·부분 실패·재시도·서킷이 <strong>진짜로 동작하는지</strong>도 말로만 남습니다. F2는 그 둘을 확인할 재료를 만드는 일입니다.</p>
+    <p>구현할 계약 자체는 <span class="term">docs/supplier-api-contract.md</span>에 있고, 확정된 설계 전문은 <span class="term">01-design.md</span>에 있습니다. 이 문서는 <em>그 결정들이 무엇을 만드는지</em>를 그림으로 보입니다.</p>
+
+    <div class="note warn">
+      <span class="tag">첫 시도를 폐기한 이유 — 아래 모든 결정의 기준</span>
+      한 모듈 안에서 A·B가 <strong>시드 객실 타입 클래스 하나를 공유</strong>했습니다. 그런데 그 클래스의 주석이 스스로 <strong>“<span class="term">baseRate</span>의 의미는 공급사마다 다르다 — A는 net, B는 gross”</strong>라고 적고 있었습니다. 같은 필드에 다른 뜻을 담아 놓고, 구현이 그 결함을 주석으로 문서화한 셈입니다. 여덟 개의 결정은 모두 <strong>그 일이 다시 일어날 수 있는가</strong>를 기준으로 갈렸습니다.
+    </div>
+  </section>
+
+  <!-- ===================== 2 ===================== -->
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">DECISION · D-F2-1</p><h2 class="sec">모듈 분리<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">완전 분리 — 프로젝트 2개, 서로 의존하지 않고 공유 모듈도 두지 않습니다.</p>
+    <p>중복될 코드(<span class="term">Nights</span> 날짜·주말 계산, <span class="term">FaultRegistry</span> 고장 제어)는 <strong>20~30줄</strong>입니다. 그것을 감수하는 대가로 <strong>공통 모델을 놓을 자리 자체가 사라집니다</strong>.</p>
+
+    <!-- FIG 1 -->
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 01 · 구성">
+        <svg viewBox="0 0 1120 366" role="img" aria-label="확정된 모듈 구성. 서로 의존하지 않는 Gradle 프로젝트 두 개가 각자 프로세스로 뜨고, 오른쪽 패널은 A 프로세스만 종료했을 때 A는 연결 거부되고 B는 정상 응답하는 결과를 보여준다.">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <line x1="722" y1="0" x2="722" y2="352" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="5 4"/>
+
+          <text class="svg-t" x="8" y="18" fill="#1B64DA">프로젝트 2개 · 공유 모듈 없음</text>
+
+          <rect x="8" y="36" width="336" height="208" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <text class="svg-t" x="24" y="60" fill="#1B64DA">:mock-supplier-a</text>
+          <text class="svg-s" x="24" y="76" fill="#3182F6">포트 9091 · com.stay.mock.a</text>
+          <line x1="24" y1="86" x2="328" y2="86" stroke="#3182F6" stroke-opacity=".35" stroke-width="1"/>
+          <text class="svg-s" x="24" y="104" fill="#4E5968">AController · 조회 2개</text>
+          <text class="svg-s" x="24" y="121" fill="#4E5968">AControlController · 제어 6개</text>
+          <text class="svg-s" x="24" y="138" fill="#4E5968">ACatalog · 런타임 상태</text>
+          <text class="svg-s" x="24" y="155" fill="#4E5968">AProperty · ARoom · 시드</text>
+          <text class="svg-s" x="24" y="172" fill="#4E5968">ARates · A 응답 record들</text>
+          <text class="svg-s" x="24" y="189" fill="#6B7684">Nights · SearchQuery</text>
+          <text class="svg-s" x="24" y="206" fill="#6B7684">FaultRegistry · ErrorKind</text>
+
+          <rect x="364" y="36" width="336" height="208" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <text class="svg-t" x="380" y="60" fill="#1B64DA">:mock-supplier-b</text>
+          <text class="svg-s" x="380" y="76" fill="#3182F6">포트 9092 · com.stay.mock.b</text>
+          <line x1="380" y1="86" x2="684" y2="86" stroke="#3182F6" stroke-opacity=".35" stroke-width="1"/>
+          <text class="svg-s" x="380" y="104" fill="#4E5968">BController · 조회 2개</text>
+          <text class="svg-s" x="380" y="121" fill="#4E5968">BControlController · 제어 6개</text>
+          <text class="svg-s" x="380" y="138" fill="#4E5968">BCatalog · 런타임 상태</text>
+          <text class="svg-s" x="380" y="155" fill="#4E5968">BProperty · BRoom · 시드</text>
+          <text class="svg-s" x="380" y="172" fill="#4E5968">BRates · BEnvelope · BResultCode</text>
+          <text class="svg-s" x="380" y="189" fill="#6B7684">Nights · SearchQuery</text>
+          <text class="svg-s" x="380" y="206" fill="#6B7684">FaultRegistry · ErrorKind</text>
+
+          <text class="svg-s" x="354" y="268" text-anchor="middle" fill="#8B95A1">서로 의존하지 않음 · 공유 프로젝트 없음</text>
+
+          <foreignObject x="8" y="286" width="692" height="60">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">아래 두 줄(회색)은 두 모듈에 <b>같은 이름의 별도 파일</b>로 존재한다 — 20~30줄의 <b>의도한 중복</b>이고, 그 대가로 공통 모델을 놓을 자리가 사라진다.</div></div>
+          </foreignObject>
+
+          <text class="svg-t" x="744" y="18" fill="#4E5968">그래서 가능해지는 것</text>
+
+          <rect x="846" y="36" width="164" height="48" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <text class="svg-t" x="928" y="58" text-anchor="middle" fill="#333D4B">자사 앱</text>
+          <text class="svg-s" x="928" y="74" text-anchor="middle" fill="#6B7684">F3 클라이언트</text>
+
+          <line x1="900" y1="84" x2="832" y2="116" stroke="#F04452" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="956" y1="84" x2="1026" y2="116" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
+
+          <rect x="744" y="120" width="176" height="80" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <foreignObject x="744" y="120" width="176" height="80">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">A · 종료됨</div><div class="s">ECONNREFUSED 즉시</div></div>
+          </foreignObject>
+
+          <rect x="936" y="120" width="176" height="80" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="936" y="120" width="176" height="80">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">B · 살아 있음</div><div class="s">정상 응답</div></div>
+          </foreignObject>
+
+          <foreignObject x="744" y="216" width="368" height="110">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">A 쪽 터미널만 <b>Ctrl+C</b> 하면 A는 연결 거부, B는 정상. <b>F8 부분 실패</b>의 가장 현실적인 케이스를 그대로 만들 수 있다. 이 결과를 가르는 것은 모듈을 몇 개로 나눴는지가 아니라 <b>프로세스가 둘인지</b>다.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 왼쪽은 공유 자리가 없는 프로젝트 2개, 오른쪽은 그래서 얻는 것. <b>결과를 가르는 것은 모듈 수가 아니라 프로세스가 둘인지</b>다.</figcaption>
+    </figure>
+
+    <details class="tg">
+      <summary><span class="tw">탈락</span>고르지 않은 안과 그 사유<span class="cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+      <div class="tg-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>탈락 안</th><th>무엇이었나</th><th>탈락 사유</th></tr></thead>
+            <tbody>
+              <tr><td>안 2<br>공유 모듈</td><td><span class="term">:mock-supplier-common</span>에 <span class="term">Nights</span>·<span class="term">FaultRegistry</span>를 두고 A·B가 의존</td><td>공유 모듈이 생기는 순간 <strong>“여기 넣으면 편한데”라는 압력이 계속 생기고, 이번 결함이 정확히 그렇게 시작됐다.</strong> 공유 대상 20~30줄로 <span class="term">PAT-2</span> Rule of Three 미충족.</td></tr>
+              <tr><td>안 3<br>1모듈 2포트</td><td><span class="term">a/</span>·<span class="term">b/</span> 패키지로만 나누고 앱 하나가 커넥터 둘을 연다</td><td><strong>프로세스가 하나라 A만 내릴 수 없다 — 2모듈을 택한 이유 자체가 사라진다.</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===================== 3 ===================== -->
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">DECISION · D-F2-2</p><h2 class="sec">시드·카탈로그 모델<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">공급사 전용 필드 — 요금 규약의 차이를 필드 이름으로 미리 갈라 둡니다.</p>
+    <p>A는 날짜별 <strong>net</strong> 단가에 세금이 따로 붙고, B는 기간 전체 <strong>gross</strong> 총액 하나를 줍니다. 조식도 A는 항상 미포함, B는 포함이라 <em>공급사마다 있어야 할 필드 자체가 다릅니다</em>. 이름이 곧 규약이므로 주석으로 뜻을 지킬 필요가 없습니다.</p>
+
+    <!-- FIG 2 -->
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 02 · 시드 모델">
+        <svg viewBox="0 0 1120 410" role="img" aria-label="확정된 시드 모델. A 모듈은 AProperty와 ARoom, B 모듈은 BProperty와 BRoom을 각자 가지며, 식별자 이름부터 hotelCode 대 propertyId, roomTypeCode 대 roomId로 다르고 요금 필드도 netRate 대 grossRate로 다르다.">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <text class="svg-t" x="8" y="18" fill="#1B64DA">:mock-supplier-a 의 시드</text>
+          <text class="svg-t" x="672" y="18" fill="#1B64DA">:mock-supplier-b 의 시드</text>
+
+          <rect x="8" y="36" width="440" height="102" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <text class="svg-t" x="24" y="60" fill="#333D4B">AProperty &#171;record&#187;</text>
+          <line x1="24" y1="70" x2="432" y2="70" stroke="#B0B8C1" stroke-width="1"/>
+          <text class="svg-s" x="24" y="88" fill="#1B64DA">+ hotelCode : String</text>
+          <text class="svg-s" x="24" y="105" fill="#4E5968">+ hotelName : String</text>
+          <text class="svg-s" x="24" y="122" fill="#1B64DA">+ roomTypes : List&lt;ARoom&gt;</text>
+
+          <line x1="40" y1="138" x2="40" y2="166" stroke="#8B95A1" stroke-width="1.6" marker-end="url(#a2)"/>
+          <text class="svg-l" x="52" y="160" fill="#6B7684">1 : N</text>
+
+          <rect x="8" y="170" width="440" height="153" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <text class="svg-t" x="24" y="194" fill="#1B64DA">ARoom &#171;record&#187;</text>
+          <line x1="24" y1="204" x2="432" y2="204" stroke="#3182F6" stroke-opacity=".35" stroke-width="1"/>
+          <text class="svg-s" x="24" y="222" fill="#1B64DA">+ roomTypeCode : String</text>
+          <text class="svg-s" x="24" y="239" fill="#4E5968">+ roomTypeName : String</text>
+          <text class="svg-s" x="24" y="256" fill="#4E5968">+ maxOccupancy : int</text>
+          <text class="svg-s" x="24" y="273" fill="#1B64DA">+ netRate : int</text>
+          <text class="svg-s" x="24" y="290" fill="#4E5968">+ baseInventory : int</text>
+          <text class="svg-s" x="24" y="307" fill="#1B64DA">+ soldOutDay : Integer</text>
+
+          <rect x="672" y="36" width="440" height="102" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <text class="svg-t" x="688" y="60" fill="#333D4B">BProperty &#171;record&#187;</text>
+          <line x1="688" y1="70" x2="1096" y2="70" stroke="#B0B8C1" stroke-width="1"/>
+          <text class="svg-s" x="688" y="88" fill="#1B64DA">+ propertyId : String</text>
+          <text class="svg-s" x="688" y="105" fill="#4E5968">+ propertyName : String</text>
+          <text class="svg-s" x="688" y="122" fill="#1B64DA">+ rooms : List&lt;BRoom&gt;</text>
+
+          <line x1="704" y1="138" x2="704" y2="166" stroke="#8B95A1" stroke-width="1.6" marker-end="url(#a2)"/>
+          <text class="svg-l" x="716" y="160" fill="#6B7684">1 : N</text>
+
+          <rect x="672" y="170" width="440" height="153" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <text class="svg-t" x="688" y="194" fill="#1B64DA">BRoom &#171;record&#187;</text>
+          <line x1="688" y1="204" x2="1096" y2="204" stroke="#3182F6" stroke-opacity=".35" stroke-width="1"/>
+          <text class="svg-s" x="688" y="222" fill="#1B64DA">+ roomId : String</text>
+          <text class="svg-s" x="688" y="239" fill="#4E5968">+ roomName : String</text>
+          <text class="svg-s" x="688" y="256" fill="#4E5968">+ maxOccupancy : int</text>
+          <text class="svg-s" x="688" y="273" fill="#1B64DA">+ grossRate : int</text>
+          <text class="svg-s" x="688" y="290" fill="#4E5968">+ baseInventory : int</text>
+          <text class="svg-s" x="688" y="307" fill="#1B64DA">+ breakfastIncluded : boolean</text>
+
+          <foreignObject x="458" y="88" width="204" height="76">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo"><div class="t">같은 자리 · 다른 이름</div><div class="s">이름이 곧 규약이다</div></div>
+          </foreignObject>
+
+          <line x1="452" y1="269" x2="668" y2="269" stroke="#F04452" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <rect x="486" y="258" width="148" height="22" rx="11" fill="#FFFFFF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-l" x="560" y="273" text-anchor="middle" fill="#C9303C">net &#8596; gross</text>
+
+          <line x1="452" y1="303" x2="668" y2="303" stroke="#F04452" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <rect x="470" y="292" width="180" height="22" rx="11" fill="#FFFFFF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-l" x="560" y="307" text-anchor="middle" fill="#C9303C">품절일 &#8596; 조식 포함</text>
+
+          <foreignObject x="8" y="343" width="1104" height="56">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">시드 필드명을 <b>계약의 JSON 키와 같게</b> 뒀다 — 응답 조립이 이름을 바꾸지 않는 복사가 된다. A에는 <b>breakfastIncluded 가 없고</b>(응답에는 상수 false로 나간다) B에는 <b>soldOutDay 가 없다</b>.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 같은 높이의 두 줄이 <b>서로 다른 이름</b>을 달고 있다. 하나로 합쳤을 때 그 자리가 폐기된 <span class="term">baseRate</span>였다.</figcaption>
+    </figure>
+
+    <h3 id="s3-1">그 시드가 응답으로 나갈 때</h3>
+    <p>시드 필드명을 계약의 JSON 키와 같게 뒀으므로 조립은 <strong>이름을 바꾸지 않는 복사</strong>입니다. 그래서 두 공급사 응답의 차이가 곧 <em>시드의 차이</em>입니다. 다만 세 필드는 시드에 없고 상수로 채웁니다 — A의 <span class="term">breakfastIncluded</span>(항상 <span class="term">false</span>), 양쪽 <span class="term">currency</span>(<span class="term">"KRW"</span>), B의 <span class="term">taxIncluded</span>(항상 <span class="term">true</span>).</p>
+
+    <!-- FIG 3 -->
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 03 · 응답 구조">
+        <svg viewBox="0 0 1120 456" role="img" aria-label="A와 B의 재고 요금 응답 필드 대응. 같은 것을 hotelCode 대 propertyId, roomTypeCode 대 roomId로 다르게 부르고, A의 날짜별 nightlyRate와 taxAmount는 합산해 B의 totalPrice를 만들 수 있지만 그 역은 불가능해 화살표가 한 방향뿐이다.">
+          <defs>
+            <marker id="a7" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <text class="svg-t" x="8" y="18" fill="#1B64DA">A · GET /a/v1/availability</text>
+          <text class="svg-t" x="672" y="18" fill="#1B64DA">B · GET /b/api/search</text>
+
+          <rect x="8" y="36" width="440" height="262" rx="16" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.3"/>
+          <text class="svg-t" x="24" y="60" fill="#333D4B">items[] 항목 1개</text>
+          <line x1="24" y1="70" x2="432" y2="70" stroke="#B0B8C1" stroke-width="1"/>
+          <text class="svg-s" x="24" y="88" fill="#1B64DA">hotelCode</text>
+          <text class="svg-s" x="24" y="105" fill="#4E5968">hotelName</text>
+          <text class="svg-s" x="24" y="122" fill="#1B64DA">roomTypeCode</text>
+          <text class="svg-s" x="24" y="139" fill="#4E5968">roomTypeName</text>
+          <text class="svg-s" x="24" y="156" fill="#4E5968">maxOccupancy</text>
+          <text class="svg-s" x="24" y="173" fill="#6B7684">breakfastIncluded = false</text>
+          <text class="svg-s" x="24" y="190" fill="#6B7684">currency = "KRW"</text>
+          <text class="svg-s" x="24" y="207" fill="#C9303C">dailyRates[].nightlyRate</text>
+          <text class="svg-s" x="24" y="224" fill="#C9303C">dailyRates[].taxAmount</text>
+          <text class="svg-s" x="24" y="241" fill="#B0B8C1">(세금 별도 — taxIncluded 없음)</text>
+          <text class="svg-s" x="24" y="258" fill="#4E5968">dailyRates[].remainingRooms</text>
+          <text class="svg-s" x="24" y="275" fill="#4E5968">dailyRates[].date</text>
+
+          <rect x="672" y="36" width="440" height="262" rx="16" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.3"/>
+          <text class="svg-t" x="688" y="60" fill="#333D4B">data.items[] 항목 1개</text>
+          <line x1="688" y1="70" x2="1096" y2="70" stroke="#B0B8C1" stroke-width="1"/>
+          <text class="svg-s" x="688" y="88" fill="#1B64DA">propertyId</text>
+          <text class="svg-s" x="688" y="105" fill="#4E5968">propertyName</text>
+          <text class="svg-s" x="688" y="122" fill="#1B64DA">roomId</text>
+          <text class="svg-s" x="688" y="139" fill="#4E5968">roomName</text>
+          <text class="svg-s" x="688" y="156" fill="#4E5968">maxOccupancy</text>
+          <text class="svg-s" x="688" y="173" fill="#6B7684">breakfastIncluded = 시드 값</text>
+          <text class="svg-s" x="688" y="190" fill="#6B7684">currency = "KRW"</text>
+          <text class="svg-s" x="688" y="207" fill="#C9303C">totalPrice</text>
+          <text class="svg-s" x="688" y="224" fill="#B0B8C1">(날짜별 요금 없음)</text>
+          <text class="svg-s" x="688" y="241" fill="#6B7684">taxIncluded = true</text>
+          <text class="svg-s" x="688" y="258" fill="#4E5968">inventory[].remainingRooms</text>
+          <text class="svg-s" x="688" y="275" fill="#4E5968">inventory[].date</text>
+
+          <line x1="452" y1="105" x2="668" y2="105" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <line x1="452" y1="139" x2="668" y2="139" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <line x1="452" y1="156" x2="668" y2="156" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <line x1="452" y1="173" x2="668" y2="173" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <line x1="452" y1="190" x2="668" y2="190" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <line x1="452" y1="258" x2="668" y2="258" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="4 4"/>
+
+          <line x1="452" y1="88" x2="668" y2="88" stroke="#3182F6" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <rect x="486" y="77" width="148" height="22" rx="11" fill="#FFFFFF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-l" x="560" y="92" text-anchor="middle" fill="#1B64DA">숙소 식별자</text>
+
+          <line x1="452" y1="122" x2="668" y2="122" stroke="#3182F6" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <rect x="478" y="111" width="164" height="22" rx="11" fill="#FFFFFF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-l" x="560" y="126" text-anchor="middle" fill="#1B64DA">객실 타입 식별자</text>
+
+          <line x1="452" y1="207" x2="664" y2="207" stroke="#F04452" stroke-width="2" marker-end="url(#a7)"/>
+          <rect x="470" y="196" width="180" height="22" rx="11" fill="#FFFFFF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-l" x="560" y="211" text-anchor="middle" fill="#C9303C">&#931;(net+tax) &#8594; gross</text>
+
+          <rect x="496" y="220" width="128" height="30" rx="8" fill="none" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <text class="svg-s" x="560" y="239" text-anchor="middle" fill="#8B95A1">대응 없음</text>
+
+          <line x1="452" y1="275" x2="668" y2="275" stroke="#3182F6" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <rect x="494" y="264" width="132" height="22" rx="11" fill="#FFFFFF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-l" x="560" y="279" text-anchor="middle" fill="#1B64DA">같은 숙박일</text>
+
+          <foreignObject x="8" y="312" width="440" height="68">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>시드 그대로</b> hotelCode · hotelName · roomTypeCode · roomTypeName · maxOccupancy / <b>ARates 파생</b> nightlyRate · taxAmount · remainingRooms / <b>상수</b> breakfastIncluded · currency</div></div>
+          </foreignObject>
+
+          <foreignObject x="672" y="312" width="440" height="68">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>시드 그대로</b> propertyId · propertyName · roomId · roomName · maxOccupancy · breakfastIncluded / <b>BRates 파생</b> totalPrice · remainingRooms / <b>상수</b> currency · taxIncluded</div></div>
+          </foreignObject>
+
+          <foreignObject x="8" y="392" width="1104" height="52">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">A는 날짜별 net 단가와 세금을 따로 주므로 합산해 B의 gross 총액을 만들 수 있다. 그러나 <b>B의 totalPrice에서 날짜별 단가를 되돌릴 수는 없다</b> — 그래서 이 화살표만 한 방향이다.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 파란 점선으로 이어진 줄들은 <b>같은 것을 다른 이름으로</b> 부르고 있다. 그리고 <b>빨간 화살표 하나만 한 방향</b>이다 — 되돌릴 수 없는 변환이 거기 하나뿐이다.</figcaption>
+    </figure>
+
+    <details class="tg">
+      <summary><span class="tw">탈락</span>고르지 않은 안과 그 사유<span class="cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+      <div class="tg-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>탈락 안</th><th>무엇이었나</th><th>탈락 사유</th></tr></thead>
+            <tbody>
+              <tr><td>안 2<br>공통 record</td><td>공통 <span class="term">Room(…, baseRate, …)</span>을 두고 각 모듈이 응답으로 바꿀 때 뜻을 부여</td><td><strong>폐기한 설계가 바로 이 구조다.</strong> 뜻이 공급사마다 달라 주석으로 지켜야 했고, 조식은 상수로 흉내 냈다. 공유 모듈을 없앴으므로 놓을 자리도 없다.</td></tr>
+              <tr><td>안 3<br>JSON 리소스</td><td>각 모듈 <span class="term">resources/seed.json</span>을 기동 시 읽는다</td><td><strong>숙소 3개에 파서를 붙일 근거가 없고, 값이 틀려도 컴파일이 잡지 못한다.</strong> 런타임 변경은 카탈로그 제어 API가 이미 담당한다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===================== 4 ===================== -->
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">DECISION · D-F2-3</p><h2 class="sec">고장 제어 API<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">쿼리 파라미터 하나로 네 축을 조합합니다 — <span class="term">mode</span> · <span class="term">rate</span> · <span class="term">durationSeconds</span> · <span class="term">endpoint</span>.</p>
+    <p><strong><span class="term">rate</span>는 <span class="term">error</span> 전용이 아닙니다.</strong> <span class="term">delay</span>·<span class="term">no-response</span>에도 똑같이 걸리는 직교 축이라, “열 번에 한 번만 5초 느린” 상태를 손잡이 조합만으로 만들 수 있습니다. 판정은 <strong>호출 1건당 정확히 1회</strong>이고 순서가 고정입니다 — 만료 확인 → <span class="term">scope</span> 확인 → <span class="term">rate</span> 난수 → 적중 시 <span class="term">mode</span> 수행.</p>
+
+    <!-- FIG 3 -->
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 04 · 제어와 판정">
+        <svg viewBox="0 0 1120 478" role="img" aria-label="고장 제어 호출과 판정 시퀀스. 제어 API가 FaultRegistry에 지연 모드와 확률을 저장하고, 이후 조회 호출마다 만료와 범위와 난수를 한 번 판정해 적중한 10퍼센트만 5초 뒤에 정상 응답한다.">
+          <defs>
+            <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="36" y="32" width="220" height="54" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="36" y="32" width="220" height="54">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">조작자 · 호출자</div><div class="s">curl · .http · k6</div></div>
+          </foreignObject>
+
+          <rect x="312" y="32" width="220" height="54" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="312" y="32" width="220" height="54">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">AControlController</div><div class="s">제어 6개</div></div>
+          </foreignObject>
+
+          <rect x="588" y="32" width="220" height="54" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="588" y="32" width="220" height="54">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">FaultRegistry</div><div class="s">mode · rate · 만료 · scope</div></div>
+          </foreignObject>
+
+          <rect x="864" y="32" width="220" height="54" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="864" y="32" width="220" height="54">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">AController</div><div class="s">조회 2개</div></div>
+          </foreignObject>
+
+          <line x1="146" y1="86" x2="146" y2="412" stroke="#B0B8C1" stroke-width="1" stroke-dasharray="5 4"/>
+          <line x1="422" y1="86" x2="422" y2="412" stroke="#B0B8C1" stroke-width="1" stroke-dasharray="5 4"/>
+          <line x1="698" y1="86" x2="698" y2="412" stroke="#B0B8C1" stroke-width="1" stroke-dasharray="5 4"/>
+          <line x1="974" y1="86" x2="974" y2="412" stroke="#B0B8C1" stroke-width="1" stroke-dasharray="5 4"/>
+
+          <text class="svg-s" x="284" y="108" text-anchor="middle" fill="#1B64DA">POST /control/mode?value=delay&amp;rate=0.1&amp;delayMillis=5000</text>
+          <line x1="146" y1="120" x2="422" y2="120" stroke="#3182F6" stroke-width="2" marker-end="url(#a3)"/>
+
+          <text class="svg-s" x="560" y="140" text-anchor="middle" fill="#4E5968">set(DELAY · rate 0.1 · 5000ms · scope=all)</text>
+          <line x1="422" y1="152" x2="698" y2="152" stroke="#4E5968" stroke-width="1.6" marker-end="url(#a3)"/>
+
+          <text class="svg-s" x="284" y="172" text-anchor="middle" fill="#6B7684">200 + 적용된 상태</text>
+          <line x1="422" y1="184" x2="146" y2="184" stroke="#8B95A1" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+
+          <text class="svg-s" x="560" y="214" text-anchor="middle" fill="#4E5968">GET /a/v1/availability?hotelCodes=A-3201&amp;checkIn=2026-09-10&amp;...</text>
+          <line x1="146" y1="226" x2="974" y2="226" stroke="#4E5968" stroke-width="1.6" marker-end="url(#a3)"/>
+
+          <text class="svg-s" x="836" y="248" text-anchor="middle" fill="#4E5968">decide(AVAILABILITY) — 호출 1건당 1회</text>
+          <line x1="974" y1="260" x2="698" y2="260" stroke="#4E5968" stroke-width="1.6" marker-end="url(#a3)"/>
+
+          <text class="svg-s" x="836" y="282" text-anchor="middle" fill="#C9303C">① 만료? ② scope? ③ 난수 &lt; 0.1 ? &#8594; 적중</text>
+          <line x1="698" y1="294" x2="974" y2="294" stroke="#C9303C" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+
+          <rect x="852" y="310" width="248" height="46" rx="12" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <foreignObject x="852" y="310" width="248" height="46">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="s">Thread.sleep(5000) — 늦게 오는 성공</div></div>
+          </foreignObject>
+
+          <text class="svg-s" x="560" y="374" text-anchor="middle" fill="#C9303C">적중 10% — 200 + 정상 본문 (5초 뒤)</text>
+          <line x1="974" y1="386" x2="146" y2="386" stroke="#C9303C" stroke-width="2" marker-end="url(#a3)"/>
+
+          <text class="svg-s" x="560" y="400" text-anchor="middle" fill="#0A8F5B">미적중 90% — 200 + 정상 본문 (즉시)</text>
+          <line x1="974" y1="410" x2="146" y2="410" stroke="#15C47E" stroke-width="2" marker-end="url(#a3)"/>
+
+          <foreignObject x="8" y="428" width="1104" height="44">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">두 화살표 모두 <b>상태 코드가 200</b>이다. <span style="font-family:var(--mono)">delay</span> 는 실패가 아니라 늦게 오는 성공이라, 이것을 실패로 처리하는 코드가 있으면 F3에서 드러난다.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 판정이 <b>호출 1건당 한 번</b> 일어나고, 적중과 미적중이 <b>같은 200</b>으로 갈린다는 것. 다른 것은 도착 시각뿐이다.</figcaption>
+    </figure>
+
+    <!-- FIG 4 -->
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 05 · 꼬리 지연">
+        <svg viewBox="0 0 1120 312" role="img" aria-label="확률 지연의 응답 시간 분포. 요청 20건 중 18건은 10밀리초 안쪽에 몰려 있고 2건만 5초에 있어, 평균은 0.5초로 멀쩡해 보이지만 p95가 5초로 튄다.">
+          <text class="svg-t" x="8" y="18" fill="#1B64DA">?value=delay&amp;rate=0.1&amp;delayMillis=5000 — 요청 20건의 응답 시간</text>
+
+          <line x1="181" y1="88" x2="181" y2="210" stroke="#3182F6" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <text class="svg-l" x="191" y="98" fill="#1B64DA">평균 0.5s</text>
+
+          <line x1="1064" y1="88" x2="1064" y2="210" stroke="#F04452" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <text class="svg-l" x="1056" y="98" text-anchor="end" fill="#C9303C">p95 = 5.0s</text>
+
+          <circle cx="86" cy="104" r="5" fill="#15C47E"/><circle cx="98" cy="104" r="5" fill="#15C47E"/>
+          <circle cx="86" cy="116" r="5" fill="#15C47E"/><circle cx="98" cy="116" r="5" fill="#15C47E"/>
+          <circle cx="86" cy="128" r="5" fill="#15C47E"/><circle cx="98" cy="128" r="5" fill="#15C47E"/>
+          <circle cx="86" cy="140" r="5" fill="#15C47E"/><circle cx="98" cy="140" r="5" fill="#15C47E"/>
+          <circle cx="86" cy="152" r="5" fill="#15C47E"/><circle cx="98" cy="152" r="5" fill="#15C47E"/>
+          <circle cx="86" cy="164" r="5" fill="#15C47E"/><circle cx="98" cy="164" r="5" fill="#15C47E"/>
+          <circle cx="86" cy="176" r="5" fill="#15C47E"/><circle cx="98" cy="176" r="5" fill="#15C47E"/>
+          <circle cx="86" cy="188" r="5" fill="#15C47E"/><circle cx="98" cy="188" r="5" fill="#15C47E"/>
+          <circle cx="86" cy="200" r="5" fill="#15C47E"/><circle cx="98" cy="200" r="5" fill="#15C47E"/>
+          <text class="svg-s" x="118" y="156" fill="#0A8F5B">18건 · 10ms 안쪽</text>
+
+          <circle cx="1064" cy="134" r="5" fill="#F04452"/>
+          <circle cx="1064" cy="158" r="5" fill="#F04452"/>
+          <text class="svg-s" x="1050" y="150" text-anchor="end" fill="#C9303C">2건 · 5초</text>
+
+          <line x1="80" y1="222" x2="1074" y2="222" stroke="#B0B8C1" stroke-width="1.4"/>
+          <line x1="80" y1="222" x2="80" y2="229" stroke="#B0B8C1" stroke-width="1.4"/>
+          <line x1="278" y1="222" x2="278" y2="229" stroke="#B0B8C1" stroke-width="1.4"/>
+          <line x1="476" y1="222" x2="476" y2="229" stroke="#B0B8C1" stroke-width="1.4"/>
+          <line x1="674" y1="222" x2="674" y2="229" stroke="#B0B8C1" stroke-width="1.4"/>
+          <line x1="872" y1="222" x2="872" y2="229" stroke="#B0B8C1" stroke-width="1.4"/>
+          <line x1="1064" y1="222" x2="1064" y2="229" stroke="#B0B8C1" stroke-width="1.4"/>
+          <text class="svg-s" x="80" y="244" text-anchor="middle" fill="#8B95A1">0</text>
+          <text class="svg-s" x="278" y="244" text-anchor="middle" fill="#8B95A1">1s</text>
+          <text class="svg-s" x="476" y="244" text-anchor="middle" fill="#8B95A1">2s</text>
+          <text class="svg-s" x="674" y="244" text-anchor="middle" fill="#8B95A1">3s</text>
+          <text class="svg-s" x="872" y="244" text-anchor="middle" fill="#8B95A1">4s</text>
+          <text class="svg-s" x="1064" y="244" text-anchor="middle" fill="#8B95A1">5s</text>
+
+          <foreignObject x="8" y="256" width="1104" height="50">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>평균만 보면 아무 일도 없다</b> — 0.5초다. 꼬리는 p95에서만 보인다. 타임아웃·재시도·서킷이 반응하는 지점이 바로 여기이므로, 재현해야 할 것은 “느린 서버”가 아니라 <b>이 분포</b>다.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 점 20개 중 <b>오른쪽 끝 두 개</b>가 전부다. 평균선(파랑)은 왼쪽 무리 바로 옆에 있는데 p95선(빨강)은 5초에 있다.</figcaption>
+    </figure>
+
+    <div class="note key">
+      <span class="tag">CLN-2 면제 — 회피가 아니라 면제</span>
+      제어 핸들러는 인자가 6개라 <span class="term">CLN-2</span>(인자 3개 이하)를 넘습니다. 이것을 record로 묶어 <em>피하지 않고</em> 면제합니다 — <strong>핸들러 시그니처는 손으로 호출하는 함수가 아니라 HTTP 계약의 선언</strong>이고, <span class="term">@RequestParam(defaultValue=)</span>가 기본값 표를 그 자리에 보이게 하기 때문입니다. <strong>손으로 호출하는 메서드는 전부 인자 3개 이하입니다.</strong> 근거 전문은 <span class="term">01-design.md</span> 4.3에 있습니다.
+    </div>
+
+    <details class="tg">
+      <summary><span class="tw">탈락</span>고르지 않은 안과 그 사유<span class="cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+      <div class="tg-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>탈락 안</th><th>무엇이었나</th><th>탈락 사유</th></tr></thead>
+            <tbody>
+              <tr><td>안 2<br>JSON 본문</td><td><span class="term">POST /control/mode</span> + record 본문 + Bean Validation</td><td><strong>손으로 두들기는 비용이 커지고 대본·k6가 직렬화를 떠안는다.</strong> 이 서버는 손으로 두들기는 도구다.</td></tr>
+              <tr><td>안 3<br>프리셋 경로</td><td><span class="term">/control/down</span> · <span class="term">/control/slow</span> 같은 고정 경로</td><td><strong>축을 조합할 수 없어 “30% 오류를 3분간”을 만들 수 없다.</strong> 프리셋은 이미 한 번 폐기한 방향이다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===================== 5 ===================== -->
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">DECISION · D-F2-4</p><h2 class="sec">요청 검증 구조<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">정적 메서드 하나에서 검증하고, 실패는 예외로 던져 <strong>모듈별 핸들러가 자기 형식으로</strong> 바꿉니다.</p>
+    <p>제약은 <strong>실패가 나가는 모양이 A와 B에서 다르다</strong>는 점입니다. A는 HTTP 상태 코드로, B는 <strong>HTTP 200 + 본문 <span class="term">resultCode</span></strong>로 나가야 합니다. 그래서 날짜도 <span class="term">LocalDate</span>로 바인딩하지 않고 <em>문자열로 받아 직접 파싱</em>합니다 — 프레임워크가 형식 오류에 400을 만들어 버리면 <strong>B의 “실패해도 200” 계약이 깨지기</strong> 때문입니다.</p>
+
+    <!-- FIG 5 -->
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 06 · 검증 흐름">
+        <svg viewBox="0 0 1120 352" role="img" aria-label="요청 검증 흐름. SearchQuery.parse가 키와 코드 개수와 날짜와 인원을 검사해 통과하면 SearchQuery를, 실패하면 InvalidRequestException을 내고, 그 예외를 A 모듈 핸들러는 HTTP 상태로 B 모듈 핸들러는 HTTP 200과 resultCode로 바꾼다.">
+          <defs>
+            <marker id="a5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="8" y="76" width="196" height="76" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="8" y="76" width="196" height="76">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">조회 요청</div><div class="s">apiKey · codes · 날짜 · 인원</div></div>
+          </foreignObject>
+
+          <line x1="204" y1="114" x2="240" y2="114" stroke="#4E5968" stroke-width="1.6" marker-end="url(#a5)"/>
+
+          <rect x="244" y="52" width="300" height="124" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <text class="svg-t" x="260" y="76" fill="#1B64DA">SearchQuery.parse(...)</text>
+          <line x1="260" y1="86" x2="528" y2="86" stroke="#3182F6" stroke-opacity=".35" stroke-width="1"/>
+          <text class="svg-s" x="260" y="104" fill="#4E5968">키 일치? · 코드 개수 &#8804; 50</text>
+          <text class="svg-s" x="260" y="121" fill="#4E5968">날짜 형식 · checkOut &gt; checkIn</text>
+          <text class="svg-s" x="260" y="138" fill="#4E5968">인원 &#8805; 1</text>
+          <text class="svg-s" x="260" y="155" fill="#1B64DA">날짜를 직접 파싱한다</text>
+
+          <line x1="544" y1="90" x2="592" y2="90" stroke="#15C47E" stroke-width="1.8" marker-end="url(#a5)"/>
+          <line x1="544" y1="150" x2="592" y2="152" stroke="#F04452" stroke-width="1.8" marker-end="url(#a5)"/>
+
+          <rect x="596" y="56" width="220" height="64" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="596" y="56" width="220" height="64">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">SearchQuery</div><div class="s">통과 &#8594; 카탈로그 조회로</div></div>
+          </foreignObject>
+
+          <rect x="596" y="122" width="220" height="76" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <foreignObject x="596" y="122" width="220" height="76">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">InvalidRequestException</div><div class="s">+ kind : ErrorKind</div></div>
+          </foreignObject>
+
+          <line x1="816" y1="146" x2="852" y2="124" stroke="#4E5968" stroke-width="1.6" marker-end="url(#a5)"/>
+          <line x1="816" y1="176" x2="852" y2="216" stroke="#4E5968" stroke-width="1.6" marker-end="url(#a5)"/>
+
+          <rect x="856" y="86" width="256" height="76" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="856" y="86" width="256" height="76">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">A 모듈 핸들러</div><div class="s">HTTP 400 / 401 / 503 + error 본문</div></div>
+          </foreignObject>
+
+          <rect x="856" y="190" width="256" height="76" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="856" y="190" width="256" height="76">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">B 모듈 핸들러</div><div class="s">HTTP 200 + resultCode · data null</div></div>
+          </foreignObject>
+
+          <foreignObject x="8" y="288" width="1104" height="56">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">같은 예외가 모듈마다 <b>다른 모양</b>으로 나간다. 모듈이 나뉘어 있어 예외 핸들러가 이미 각자이므로, 이 갈래는 <b>추가 설계 없이</b> 생긴다.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 오른쪽 끝이 <b>두 갈래</b>로 끝난다는 것. A·B 실패 형식이 갈라져야 할 자리가 정확히 거기이고, D-F2-1 덕에 그 갈래가 공짜로 생긴다.</figcaption>
+    </figure>
+
+    <details class="tg">
+      <summary><span class="tw">탈락</span>고르지 않은 안과 그 사유<span class="cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+      <div class="tg-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>탈락 안</th><th>무엇이었나</th><th>탈락 사유</th></tr></thead>
+            <tbody>
+              <tr><td>안 2<br>sealed 결과</td><td><span class="term">SearchRequest</span> → <span class="term">RequestGuard</span> → <span class="term">SearchValidation(Accepted|Rejected)</span> → <span class="term">SearchQuery</span></td><td><strong>검증 하나에 클래스 4개</strong> — 폐기 사유 중 하나가 정확히 이것이다.</td></tr>
+              <tr><td>안 3<br>컨트롤러 인라인</td><td>컨트롤러 메서드 안에서 <span class="term">if</span>로 검사하고 바로 응답</td><td>엔드포인트 2개 × 모듈 2개 = <strong>네 곳에 같은 검사가 복사되고, 한 곳만 고치면 어긋난다.</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===================== 6 ===================== -->
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">DECISION · D-F2-5</p><h2 class="sec">응답 조립 위치<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">응답 모양을 아는 코드는 <strong>응답 클래스 옆</strong>에 둡니다. 컨트롤러는 3~5줄입니다.</p>
+
+    <!-- FIG 6 -->
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 07 · 조립">
+        <svg viewBox="0 0 1120 302" role="img" aria-label="응답 조립 구조. 컨트롤러는 세 줄로 파싱과 조회와 조립 호출만 하고, 응답 record의 정적 팩토리가 순수 함수인 ARates와 Nights를 써서 내부 record를 조립한다.">
+          <defs>
+            <marker id="a6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="8" y="56" width="280" height="124" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <text class="svg-t" x="24" y="80" fill="#333D4B">AController</text>
+          <line x1="24" y1="90" x2="272" y2="90" stroke="#B0B8C1" stroke-width="1"/>
+          <text class="svg-s" x="24" y="112" fill="#4E5968">var q = SearchQuery.parse(...)</text>
+          <text class="svg-s" x="24" y="129" fill="#4E5968">var p = catalog.findAll(...)</text>
+          <text class="svg-s" x="24" y="146" fill="#4E5968">return AAvailabilityResponse</text>
+          <text class="svg-s" x="24" y="163" fill="#4E5968">        .of(p, q, nights)</text>
+
+          <line x1="288" y1="118" x2="324" y2="118" stroke="#3182F6" stroke-width="1.8" marker-end="url(#a6)"/>
+
+          <rect x="328" y="48" width="352" height="140" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <text class="svg-t" x="344" y="72" fill="#1B64DA">AAvailabilityResponse &#171;record&#187;</text>
+          <line x1="344" y1="82" x2="664" y2="82" stroke="#3182F6" stroke-opacity=".35" stroke-width="1"/>
+          <text class="svg-s" x="344" y="104" fill="#4E5968">+ static of(properties, query,</text>
+          <text class="svg-s" x="344" y="121" fill="#4E5968">        nights) : 이 record</text>
+          <text class="svg-s" x="344" y="145" fill="#1B64DA">내부 record 2종을 여기서 조립</text>
+          <text class="svg-s" x="344" y="167" fill="#6B7684">컨트롤러는 이 팩토리만 부른다</text>
+
+          <line x1="504" y1="216" x2="504" y2="192" stroke="#8B95A1" stroke-width="1.6" marker-end="url(#a6)"/>
+
+          <rect x="328" y="216" width="352" height="68" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="328" y="216" width="352" height="68">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">ARates · Nights</div><div class="s">순수 함수 — 아무것도 의존하지 않는다</div></div>
+          </foreignObject>
+
+          <line x1="680" y1="118" x2="716" y2="118" stroke="#3182F6" stroke-width="1.8" marker-end="url(#a6)"/>
+
+          <rect x="720" y="48" width="392" height="140" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <text class="svg-t" x="736" y="72" fill="#333D4B">내부 record</text>
+          <line x1="736" y1="82" x2="1096" y2="82" stroke="#B0B8C1" stroke-width="1"/>
+          <text class="svg-s" x="736" y="104" fill="#4E5968">Item(hotelCode, roomTypeCode,</text>
+          <text class="svg-s" x="736" y="121" fill="#4E5968">     maxOccupancy, currency, ...)</text>
+          <text class="svg-s" x="736" y="145" fill="#4E5968">DailyRate(date, remainingRooms,</text>
+          <text class="svg-s" x="736" y="162" fill="#4E5968">     nightlyRate, taxAmount)</text>
+
+          <foreignObject x="720" y="212" width="392" height="76">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">계약이 정한 JSON 모양 그대로다. B 모듈은 이 자리가 <b>BEnvelope</b> 로 한 겹 더 감싸인다.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 화살표가 <b>컨트롤러에서 한 번만</b> 나간다. 계산은 아래쪽 순수 함수가, 모양은 오른쪽 record가 맡아 컨트롤러에 남는 것이 없다.</figcaption>
+    </figure>
+
+    <details class="tg">
+      <summary><span class="tw">탈락</span>고르지 않은 안과 그 사유<span class="cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+      <div class="tg-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>탈락 안</th><th>무엇이었나</th><th>탈락 사유</th></tr></thead>
+            <tbody>
+              <tr><td>안 2<br>컨트롤러 private</td><td>컨트롤러 안 private 메서드들이 조립</td><td><strong>폐기한 방식이다.</strong> 컨트롤러 120줄 · private 6개 · 스트림 3단 중첩.</td></tr>
+              <tr><td>안 3<br>별도 assembler</td><td><span class="term">AResponseAssembler</span> 클래스를 따로 둔다</td><td>호출자가 컨트롤러 하나뿐인 클래스가 모듈마다 는다 (<span class="term">OOP-6</span>).</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===================== 7 ===================== -->
+  <section id="s7" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">7</div>
+      <div><p class="sec-eyebrow">DECISION · D-F2-6</p><h2 class="sec">포트와 기동 방법<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">수동 2터미널 · <span class="term">A 9091</span> · <span class="term">B 9092</span>. 그림을 그리지 않습니다 — 세 안의 구조는 같고 운영 방식만 달랐습니다.</p>
+    <p>판단 기준 하나가 나머지를 앞섰습니다. <strong>A만 내릴 수 있어야 한다</strong>는 것 — 모듈을 둘로 나눈 이유이자 이 기능의 핵심 검증 수단입니다. <span class="term">./gradlew :mock-supplier-a:bootRun</span> 을 띄운 터미널에서 <span class="term">Ctrl+C</span> 하는 것보다 간단한 방법이 없습니다.</p>
+
+    <div class="note key">
+      <span class="tag">포트</span>
+      자사 앱 <span class="term">8080</span>과 분리합니다. 앱과 포트가 같으면 <strong>앱이 자기 자신을 호출해 스레드가 묶입니다</strong>. 두 서버를 한 번에 띄우는 편의 수단은 <em>필요해지면</em> 그때 더합니다.
+    </div>
+
+    <details class="tg">
+      <summary><span class="tw">탈락</span>고르지 않은 안과 그 사유<span class="cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+      <div class="tg-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>탈락 안</th><th>무엇이었나</th><th>탈락 사유</th></tr></thead>
+            <tbody>
+              <tr><td>안 2<br>compose 2개</td><td>서비스 두 개로 한 번에 기동</td><td>이미지 빌드가 필요해 <strong>코드를 고칠 때마다 반복 주기가 느려진다.</strong> 루트 앱이 이미 compose로 DB를 띄우고 있어 섞인다.</td></tr>
+              <tr><td>안 3<br>Gradle 복합 태스크</td><td>명령 하나로 둘 다 백그라운드 기동</td><td><span class="term">bootRun</span>이 블로킹이라 PID 관리를 직접 짜야 하고, <strong>A만 내리려면 PID를 찾아야 해 핵심 조작이 오히려 번거로워진다.</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===================== 8 ===================== -->
+  <section id="s8" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">8</div>
+      <div><p class="sec-eyebrow">DECISION · D-F2-7</p><h2 class="sec">테스트를 둘 것인가<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">두 모듈에 <span class="term">src/test</span>를 두지 않습니다 — <strong>사용자 결정</strong>입니다.</p>
+    <p>지난 설계도 0건이었지만 그때 든 근거는 <em>“검증 도구라 단순하다”</em>였고, <strong>그 근거는 결과 1216줄로 이미 무너졌습니다.</strong> 그러니 그 논리를 다시 쓰지 않습니다. 이번 0건은 도구가 단순해서가 아니라 <strong>그렇게 정했기 때문</strong>이고, 그렇다면 남는 위험을 감추지 않고 적어 두는 것이 설계의 몫입니다.</p>
+
+    <blockquote>
+      <p>안전망이 없다는 것을 알고 없앤다. 그러면 무엇으로 대신 막을지가 설계의 일부가 된다.</p>
+      <cite>D-F2-7 — 0건 유지, 검증은 .http + k6</cite>
+    </blockquote>
+
+    <div class="note warn">
+      <span class="tag">감수하는 위험</span>
+      날짜·요금·재고 파생(<span class="term">Nights</span> · <span class="term">ARates</span>/<span class="term">BRates</span>, <strong>모듈당 약 60줄</strong>)에 회귀 안전망이 없습니다. 이 값이 조용히 틀리면 <strong>F5 어댑터의 합산 로직이 잘못된 기준 위에서 검증됩니다</strong> — F5의 완료 기준이 모의 서버의 응답값을 기대값으로 삼기 때문에, 모의 서버가 틀리면 어댑터가 “맞게” 통과합니다. 게다가 주말 할증·품절일·체크아웃일 제외처럼 <strong>경계에서만 틀리는 종류</strong>라 눈으로 훑어서는 잘 보이지 않습니다.
+    </div>
+
+    <div class="note key">
+      <span class="tag">그래서 무엇으로 대신 막는가</span>
+      <span class="term">http/scenarios.http</span>의 <strong>맨 앞에 S-01 검산 시나리오를 고정</strong>합니다. A는 <span class="term">OCN-DBL</span>의 Σ(<span class="term">nightlyRate</span>+<span class="term">taxAmount</span>) = <strong>435,600</strong>, B는 <span class="term">R-201</span>의 <span class="term">totalPrice</span> = <strong>453,600</strong>을 응답에서 눈으로 확인합니다. 기대값은 대본 주석에 숫자로 적어 둡니다. 그리고 <strong>파생 로직을 건드린 뒤에는 S-01을 먼저 실행하는 것을 절차로</strong> 둡니다. 한계도 분명합니다 — <strong>사람이 실행해야 하고, 잊으면 아무것도 막지 못합니다.</strong> 자동으로 도는 안전망과 같지 않습니다.
+    </div>
+
+    <details class="tg">
+      <summary><span class="tw">탈락</span>고르지 않은 안과 그 사유<span class="cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+      <div class="tg-body">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>탈락 안</th><th>무엇이었나</th><th>탈락 사유</th></tr></thead>
+            <tbody>
+              <tr><td>안 2<br>파생만 테스트</td><td>요금·날짜 파생 순수 함수에 단위 테스트 11개</td><td><strong>사용자 결정.</strong> 기술적 이득이 없어서가 아니라, 모의 서버 모듈에 테스트를 두지 않기로 정했기 때문이다. 그 대신 감수하는 위험을 위에 적었다.</td></tr>
+              <tr><td>안 3<br>계약 슬라이스</td><td><span class="term">@WebMvcTest</span>로 엔드포인트 4개의 응답 필드까지 고정</td><td>도구에 슬라이스 컨텍스트를 붙이는 비용이 <strong>눈으로 보는 비용을 넘는다.</strong> 응답 필드는 대본이 매 회 확인한다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===================== 9 ===================== -->
+  <section id="s9" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">9</div>
+      <div><p class="sec-eyebrow">DECISION · D-F2-8</p><h2 class="sec">지연이 서버 자신을 죽이지 않게<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">두 모듈 <span class="term">application.yaml</span>에 <span class="term">spring.threads.virtual.enabled: true</span>.</p>
+    <p><span class="term">delay</span>는 <span class="term">Thread.sleep</span>으로 만듭니다. 그 요청은 <strong>모의 서버의 요청 스레드를 붙잡습니다.</strong> k6로 초당 수백 건을 쏘면서 10%를 5초 지연시키면 <strong>모의 서버 자신의 톰캣 스레드 풀(기본 200)이 먼저 마릅니다</strong> — 공급사가 느린 게 아니라 <em>모의 서버가 죽는 것</em>이라, 관찰하려던 것과 다른 현상을 보게 됩니다.</p>
+
+    <!-- FIG 7 -->
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 08 · 스레드">
+        <svg viewBox="0 0 1120 302" role="img" aria-label="플랫폼 스레드와 가상 스레드 비교. 왼쪽은 톰캣 요청 스레드 200개가 5초 sleep으로 모두 점유되어 서버가 먼저 죽는 모습, 오른쪽은 sleep 중인 요청이 캐리어 스레드를 놓아 지연이 서버를 막지 않는 모습.">
+          <text class="svg-t" x="8" y="18" fill="#C9303C">그대로 두면 — 플랫폼 스레드</text>
+          <text class="svg-t" x="580" y="18" fill="#0A8F5B">spring.threads.virtual.enabled: true</text>
+
+          <rect x="8" y="36" width="540" height="112" rx="16" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <text class="svg-t" x="24" y="60" fill="#C9303C">톰캣 요청 스레드 풀 (기본 200)</text>
+          <rect x="30" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="55" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="80" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="105" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="130" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="155" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="180" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="205" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="230" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="255" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="280" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="305" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="330" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="355" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="380" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="405" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="430" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="455" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="480" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="505" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <text class="svg-s" x="24" y="122" fill="#C9303C">5초 sleep이 스레드를 붙잡는다 — 200개가 먼저 마른다</text>
+          <text class="svg-s" x="24" y="139" fill="#C9303C">신규 요청은 큐에서 기다리다 함께 느려진다</text>
+
+          <rect x="8" y="164" width="540" height="72" rx="16" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <foreignObject x="8" y="164" width="540" height="72">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">관찰 대상이 바뀐다</div><div class="s">공급사가 느린 게 아니라 모의 서버가 죽는다</div></div>
+          </foreignObject>
+
+          <rect x="580" y="36" width="532" height="112" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <text class="svg-t" x="596" y="60" fill="#0A8F5B">가상 스레드 (개수 제한 없음)</text>
+          <rect x="602" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="627" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <rect x="652" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="677" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <rect x="702" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="727" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <rect x="752" y="76" width="18" height="18" rx="4" fill="#F04452"/><rect x="777" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <rect x="802" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="827" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <rect x="852" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="877" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <rect x="902" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="927" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <rect x="952" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="977" y="76" width="18" height="18" rx="4" fill="#F04452"/>
+          <rect x="1002" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="1027" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <rect x="1052" y="76" width="18" height="18" rx="4" fill="#15C47E"/><rect x="1077" y="76" width="18" height="18" rx="4" fill="#15C47E"/>
+          <text class="svg-s" x="596" y="122" fill="#0A8F5B">sleep 중인 요청(빨강 2개)은 캐리어 스레드를 놓는다</text>
+          <text class="svg-s" x="596" y="139" fill="#0A8F5B">나머지 요청은 그동안 그대로 처리된다</text>
+
+          <rect x="580" y="164" width="532" height="72" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="580" y="164" width="532" height="72">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">지연이 서버를 막지 않는다</div><div class="s">Java 25 · 설정 한 줄, 별도 의존성 없음</div></div>
+          </foreignObject>
+
+          <foreignObject x="8" y="248" width="1104" height="46">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">손잡이 하나(<b>delay</b>)가 서버 자신을 죽이면, 재현하려던 현상 대신 <b>다른 현상</b>을 관찰하게 된다. 이 설정 한 줄이 그것을 막는다.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 왼쪽은 <b>칸이 전부 빨갛다</b>. 지연시킨 것은 10%인데 200칸이 모두 묶여, 관찰하려던 꼬리 대신 서버 고갈을 보게 된다.</figcaption>
+    </figure>
+
+    <div class="note">
+      <span class="tag">탈락</span>
+      <strong>톰캣 스레드 수 상향</strong> — 숫자를 올려도 <span class="term">rate</span>나 부하가 조금만 커지면 같은 벽에 부딪히고, 얼마로 올려야 하는지의 근거가 없습니다. <strong>그대로 두기</strong> — 위 그림이 그 결과입니다.
+    </div>
+  </section>
+
+  <!-- ===================== 10 ===================== -->
+  <section id="s10" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">10</div>
+      <div><p class="sec-eyebrow">SUMMARY</p><h2 class="sec">결정 요약</h2></div>
+    </div>
+
+    <p class="lead">여덟 개가 모두 닫혔습니다. 검토한 안·탈락 사유·구현 차단 여부의 전문은 <span class="term">01-design.md</span> 6장에 있습니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>결정</th><th>한 줄 근거</th><th>구현 차단</th></tr></thead>
+        <tbody>
+          <tr><td>D-F2-1</td><td>완전 분리 — 프로젝트 2개, 공유 모듈 없음</td><td>공통 모델을 놓을 자리를 없애고, A만 내릴 수 있게 한다</td><td>예</td></tr>
+          <tr><td>D-F2-2</td><td>공급사 전용 필드 — 이름은 계약 JSON 키와 동일</td><td>이름이 곧 규약이고, 조립이 이름을 바꾸지 않는 복사가 된다</td><td>예</td></tr>
+          <tr><td>D-F2-3</td><td>쿼리 파라미터 <span class="term">POST /control/mode</span></td><td>손으로 두들기는 도구다. 네 축을 조합할 수 있어야 한다</td><td>예</td></tr>
+          <tr><td>D-F2-4</td><td>정적 <span class="term">parse</span> + 예외 + 모듈별 핸들러</td><td>A·B 실패 형식의 갈래가 추가 설계 없이 생긴다</td><td>예</td></tr>
+          <tr><td>D-F2-5</td><td>응답 record의 static 팩토리</td><td>응답 모양을 아는 코드를 응답 클래스 옆에 둔다</td><td>예</td></tr>
+          <tr><td>D-F2-6</td><td>수동 2터미널 · A 9091 / B 9092</td><td>A만 내리는 조작이 가장 간단해야 한다</td><td>아니오</td></tr>
+          <tr><td>D-F2-7</td><td>0건 유지 — 모듈에 <span class="term">src/test</span> 없음</td><td>사용자 결정. 남는 위험은 S-01 검산 시나리오를 대본 맨 앞에 고정해 대신 막는다</td><td>아니오</td></tr>
+          <tr><td>D-F2-8</td><td><span class="term">spring.threads.virtual.enabled: true</span></td><td>지연 모드가 모의 서버 자신의 스레드 풀을 말리지 않게</td><td>아니오</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    이 문서는 확정 설계의 <b>시각화</b>입니다 — <b>결정의 원본(SSOT)은 01-design.md</b> 입니다.<br>
+    결정이 바뀌면 md를 먼저 고치고 이 문서를 다시 만듭니다. 여기에만 있는 결정은 두지 않습니다.<br>
+    계약 원본: docs/supplier-api-contract.md · 범위와 완료 기준: docs/features/README.md (F2)
+  </footer>
+
+</div>
+
+<script>
+  /* scroll progress bar */
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  /* fade-in on scroll */
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>
