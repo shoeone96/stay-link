@@ -1060,7 +1060,7 @@ spring:
 
     <h3 id="ax10">공식 문서가 제시하는 형태</h3>
 
-    <p>Spring Framework 6.2.19 「Synchronous Use」는 <strong>여러 원격 호출을 합치는 예제</strong>를 이렇게 소개한다<a href="#r19" class="cite">[19]</a>.</p>
+    <p>Spring Framework 6.2.19 「Synchronous Use」는 <strong>여러 원격 호출을 합치는 예제</strong>를 이렇게 소개한다<a href="#r19" class="cite">[19]</a>. 절 제목이 <span class="term">Synchronous Use</span>라는 것 자체가 <strong>WebClient의 블로킹 사용을 공식 사용법으로 문서화</strong>하고 있다는 뜻이기도 하다.</p>
 
     <blockquote>
       <p>"However if multiple calls need to be made, it's more efficient to avoid blocking on each response individually, and instead wait for the combined result:"</p>
@@ -1083,11 +1083,18 @@ spring:
     <h3 id="ax11">그럼에도 다르게 가는 이유</h3>
 
     <div class="cols">
-      <div class="col o"><h4><span class="mk">1</span>인용문의 대상이 다르다</h4><p>그 문장은 바로 앞의 <b>단일 호출 block 예제</b>를 "However"로 받는다. 대비되는 것은 <b>응답마다 순차로 block하는 경우</b>다. 우리는 각 호출이 자기 가상 스레드에서 <b>동시에</b> 돌아 직렬화되지 않는다.</p></div>
-      <div class="col x"><h4><span class="mk">단</span>승인된 것도 아니다</h4><p>공식 문서가 <b>우리 구성을 명시적으로 승인하지도 않는다.</b> "금지되지 않는다"와 "권장된다"는 다르다 — 여기까지가 정확한 사실이다.</p></div>
+      <div class="col o"><h4><span class="mk">1</span>인용문의 대상이 다르다</h4><p>"However"가 받는 것은 <b>바로 위 예제</b>인데, 그건 호출 두 개를 <b>차례로 발행하고 각각 <span class="term">.block()</span>으로 끝내는 순차 패턴</b>이다. 즉 그 문장은 <b>순차 호출–순차 블록</b>을 두고 하는 말이다. <b>병렬로 발행해 두고 각각 block하는 경우를 비효율이라고 말한 문장은 이 문서에 없다.</b></p></div>
+      <div class="col x"><h4><span class="mk">단</span>승인된 것도 아니다</h4><p>공식 문서가 <b>우리 구성을 명시적으로 승인하지도 않는다.</b> "금지되지 않는다"와 "권장된다"는 다르다. 다만 같은 문서가 그 예제를 <b><span class="term">merely one example</span></b>이라고 스스로 한정하므로, <b><span class="term">Mono.zip</span>이 유일한 정석</b>이라는 명제의 근거로도 쓸 수 없다.</p></div>
     </div>
 
-    <p><strong>인용된 블로그의 시점도 봐야 한다.</strong> 2022년 10월 글이고, 본문이 Virtual Thread를 <em>"available since Java 19 in September 2022 as a preview feature"</em>로 소개한다. 구조적 동시성이 없던 시절의 판단이다. 같은 팀이 1년 뒤 「Spring Framework 6.1 goes GA」에서는 <em>"Virtual Threads are a perfect fit for Spring MVC on a lean Servlet stack"</em>이라고 적었다. 두 서술은 배타적이지 않고 <strong>스택별 역할 분담</strong>에 가깝다.</p>
+    <p><strong>인용된 블로그의 시점과 단락 전체를 봐야 한다.</strong> 2022년 10월 글이고, 본문이 Virtual Thread를 <em>"available since Java 19 in September 2022 as a preview feature"</em>로 소개한다 — 구조적 동시성이 없던 시절의 판단이다. 그리고 같은 단락의 앞 문장이 논지를 다르게 잡는다.</p>
+
+    <blockquote>
+      <p>"We see Virtual Threads <b>complementing</b> reactive programming models in removing barriers of blocking I/O…"</p>
+      <cite>같은 단락 · scatter-gather 문장 바로 앞</cite>
+    </blockquote>
+
+    <p>단락의 논지는 "VT가 리액티브를 <strong>대체하지 않고 보완한다</strong>"이고, ReactiveX의 강점으로 든 것은 선언적 조합과 back pressure·무한 스트림이다. 그리고 같은 팀이 13개월 뒤 「Spring Framework 6.1 goes GA」에서 <em>"Virtual Threads are a perfect fit for Spring MVC on a lean Servlet stack (typically on Tomcat), providing a new degree of scalability with imperative programming"</em>이라 적으며, <strong>리액티브 인프라의 귀속처를 WebFlux(typically on Netty)로 명시</strong>했다<a href="#r22" class="cite">[22]</a>. 축이 "리액티브 대 VT"에서 <strong>스택 단위 이분법</strong>으로 옮겨 갔고, 그 그림에서 <strong>MVC+VT 쪽에 명령형이 배치</strong>된다.</p>
 
     <div class="note key"><span class="tag">우리가 사는 것</span>평범한 스택 트레이스, <strong>살아 있는 <span class="term">ThreadLocal</span>(MDC)</strong>, 서빙과 동일한 사고 모델. 공급사 2개 + 묶음 소수라는 규모에서 연산자 조합의 학습·디버깅 비용이 이 이득을 넘지 못한다고 판단했다.</div>
 
@@ -1104,7 +1111,12 @@ spring:
 
     <a class="ref primary" id="r20" href="https://spring.io/blog/2022/10/11/embracing-virtual-threads/" target="_blank" rel="noopener"><span class="n">20</span><span class="b"><b>Embracing Virtual Threads</b> — Mark Paluch, Spring 공식 블로그, 2022-10-11. scatter-gather 같은 선언적 동시성에는 ReactiveX가 맞다는 서술. <b>당시 Virtual Thread는 Java 19 preview였다</b>는 점을 본문이 밝힌다.<span class="src">https://spring.io/blog/2022/10/11/embracing-virtual-threads/</span><span class="pr p1">1차 출처</span></span></a>
 
-    <div class="note"><span class="tag">확인하지 못한 것</span><span class="term">block()</span>이 <strong>가상 스레드에서 허용된다</strong>는 문장 자체는 어느 공식 문서에도 없다. 금지 조건이 <span class="term">NonBlocking</span> 구현 스레드로 <strong>열거되어 있다</strong>는 사실<a href="#r7" class="cite">[7]</a>과, 서블릿 앱은 현재 스레드를 블록할 수 있다고 전제한다는 서술의 <strong>논리적 귀결</strong>로만 성립한다. 이 한계를 그대로 남긴다.</div>
+
+    <a class="ref primary" id="r21" href="https://projectreactor.io/docs/core/3.7.0/api/reactor/core/scheduler/Schedulers.html" target="_blank" rel="noopener"><span class="n">21</span><span class="b"><b>Schedulers (Reactor Core 3.7.x API)</b> — <span class="term">isInNonBlockingThread()</span>는 스레드가 <span class="term">NonBlocking</span>을 구현했거나 등록된 Predicate가 true일 때만 블로킹을 금지한다고 명시. 금지 조건이 <b>열거형</b>이라는 근거. (Boot 3.5.16의 관리 버전은 reactor-core 3.7.19 — 2026-09-05 확인)<span class="src">https://projectreactor.io/docs/core/3.7.0/api/reactor/core/scheduler/Schedulers.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r22" href="https://spring.io/blog/2023/11/16/spring-framework-6-1-goes-ga/" target="_blank" rel="noopener"><span class="n">22</span><span class="b"><b>Spring Framework 6.1 goes GA</b> — Juergen Hoeller, Spring 공식 블로그, 2023-11-16. Virtual Thread를 서블릿 스택 Spring MVC에 적합한 것으로, 리액티브 인프라를 WebFlux(Netty) 쪽으로 각각 귀속시킨다. [20]보다 13개월 뒤 글이다.<span class="src">https://spring.io/blog/2023/11/16/spring-framework-6-1-goes-ga/</span><span class="pr p1">1차 출처</span></span></a>
+
+    <div class="note"><span class="tag">확인하지 못한 것</span><span class="term">block()</span>이 <strong>가상 스레드에서 허용된다</strong>는 문장 자체는 어느 공식 문서에도 없다. 금지 조건이 <span class="term">NonBlocking</span> 구현 스레드로 <strong>열거되어 있다</strong>는 사실<a href="#r21" class="cite">[21]</a>과, 서블릿 앱은 현재 스레드를 블록할 수 있다고 전제한다는 서술의 <strong>논리적 귀결</strong>로만 성립한다. 이 한계를 그대로 남긴다.</div>
   </section>
 
   <!-- ===================== REFERENCES ===================== -->
