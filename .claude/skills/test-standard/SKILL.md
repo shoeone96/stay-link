@@ -54,7 +54,7 @@ description: |
 - `TST-7` **AssertJ**만 사용. 한 테스트당 assert 주제 1개 (같은 주제의 여러 필드는 `extracting`/`usingRecursiveComparison`으로 한 번에). 예외는 `assertThatThrownBy(...).isInstanceOf(...).hasMessageContaining(...)`.
 - `TST-8` **실행·검증**: 작성 후 `./gradlew test` 실행 → `build/test-results/test/*.xml`로 통과 여부 확인. 결과 없이 "통과"를 쓰지 않는다.
 - `TST-9` **테스트 정리표 필수 산출물**: 아래 「테스트 정리표 형식」대로 `docs/test-cases.md`에 기능별 섹션을 누적한다.
-- `TST-10` **저장소 산출물 금지어**: 테스트 코드·주석·정리표는 프로젝트 CLAUDE.md/체크리스트의 금지어 규칙을 따른다. 정리표의 판정 컬럼명은 "유의미함"으로 고정한다.
+- `TST-10` **저장소 산출물 금지어**: 테스트 코드·주석·정리표는 프로젝트 `CLAUDE.md`와 `.claude/publish-checks.md`의 금지어 규칙을 따른다. 정리표의 판정 컬럼명은 "유의미함"으로 고정한다.
 
 ## 테스트 리스트 형식 (설계 산출물, `01-design.md`)
 
