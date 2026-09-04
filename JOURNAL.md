@@ -33,7 +33,7 @@
 - AI 협업 체계 구축: 숙박 업계 도메인 전문가 에이전트(`hospitality-domain-expert`) + 도메인 분석 스킬(`domain-analysis`) + 대화 자동 기록(`docs/ai-history.md`)
 
 #### 의사결정
-- **프로젝트명 stay-link**: stay-hub·hotel-link·lodge-bridge 등과 비교. "stay"는 숙박 업계 표준 용어라 API 리소스(`/stays/search`)·내부 모델(Stay/RoomType/Supplier)과 용어가 한 벌로 정리되고, "link"가 연동이라는 시스템 정체성을 드러냄. 직관성만 보면 hotel-link가 우위였으나 비호텔 숙소까지 포괄하는 도메인 정확성에서 stay 선택.
+- **프로젝트명 stay-link**: stay-hub·hotel-link·lodge-bridge 등과 비교. "stay"는 숙박 업계 표준 용어라 API 리소스(`/stays/search`)·내부 모델(Stay/Room/Supplier)과 용어가 한 벌로 정리되고, "link"가 연동이라는 시스템 정체성을 드러냄. 직관성만 보면 hotel-link가 우위였으나 비호텔 숙소까지 포괄하는 도메인 정확성에서 stay 선택.
 - **Java 25 (21 아님)**: Virtual Thread를 실제 서빙 모델로 쓸 계획이라 21 대비 실질 개선이 있는 25 선택 — JDK 24 JEP 491(synchronized pinning 해소), JDK 25 JEP 506(Scoped Values 정식화). Spring Boot 3.5.x의 Java 25 호환을 공식 문서로 확인. Structured Concurrency는 25에서도 preview(JEP 505)라 정식 기능으로는 쓰지 않기로.
 - **Kotlin 대신 Java**: 최근 실무 비중이 높아 가장 확신 있게 작성·설명할 수 있는 언어. 7일이라는 기간 제약에서 이 프로젝트의 본질은 언어가 아니라 설계 판단이므로, 언어 전환 마찰 대신 WebClient/Reactor 제어에 집중. 빌드 스크립트만 Kotlin DSL.
 - **WebFlux 전면 도입 안 함**: 논블로킹이 필수인 구간은 공급사 호출뿐. 리액티브는 Supplier fan-out 경계 안에만 가두고(timeout·onErrorResume·zip 연산자로 병렬·타임아웃·부분 실패 제어), 요청 서빙은 MVC + Virtual Thread로 단순하게 유지 — 디버깅 용이성과 숙련도 기반 리스크 관리.

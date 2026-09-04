@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>stay-link DB 스키마</title>
+<!-- 폰트: Pretendard(본문) + JetBrains Mono(코드/라벨). 이 두 개만 사용한다. -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     색/폰트/그림자는 반드시 이 변수로만 참조한다 (임의 hex 금지).
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  /* scroll progress bar */
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  /* page sheet (흰 카드) */
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  /* .sheet.wide — 스키마/ER 같은 표 중심 문서용 넓은 시트 (2026-09-04 추가). SVG viewBox 는 1140 기준 */
+  .sheet.wide{max-width:1300px}
+
+  /* cover */
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  /* toc — 심플 인덱스 (유일한 목차 컴포넌트, 2026-08-02 재설계)
+     1열 세로 나열 = 읽는 순서 그대로. 카드·박스·그리드 금지 (구 2열 카드형·toc-deep 카드형 폐기).
+     하위 항목이 필요하면 li 안에 .ts 를 들여쓴 평문 링크로만 추가한다. */
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  /* sections */
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  /* stchip — 상태 칩: 목록·표 항목의 진행 상태 (ok=확정 / mid=뼈대 / open=미정) */
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  /* blockquote (인용) */
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  /* note / callout (.note 기본 · .key 파랑 · .warn 빨강) */
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  /* figure + SVG 다이어그램 컨테이너 */
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  /* foreignObject 자동 줄바꿈 박스 — 글자가 박스를 절대 넘지 않게 자동 줄바꿈+중앙정렬.
+     라벨 길이가 불확실하거나 한글이 많은 박스엔 .svg-t/.svg-s <text> 대신 이걸 쓴다 (폭 계산 불필요). */
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  /* .fo.left — 표 셀·설명 칸용 좌측 정렬 변형 (2026-09-04 추가). .d 는 본문 설명 텍스트 */
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  /* wide figure — 시트(860px) 폭을 넘는 다이어그램 (긴 시퀀스/타임라인 전용) */
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  /* code block (mac 윈도우 스타일) */
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  /* toggle — 접기/펼치기 (details/summary) */
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  /* 2-column 비교 카드 (.x 중립 · .o 강조) */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  /* table */
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  /* fn-card — 함수/API 시그니처 카드 (어두운 시그니처 바 + 명세 표) */
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  /* 참고문헌 리스트 */
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  /* checklist — 체크 항목 리스트. li 안에 <span class="box"></span> + 텍스트. 완료는 li.done
+     ⚠️ li 는 display:block + 박스는 position:absolute 다 (display:flex 금지).
+     li 안에는 <b>/<strong>/<span class="term"> 같은 인라인 요소가 섞이는데,
+     li 를 flex 로 두면 그 인라인 요소들이 각각 별도 flex item 이 되어
+     좁은 칸에 글자가 "세로로" 쌓이며 깨진다. 그래서 텍스트는 일반 인라인 흐름으로 둔다. */
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  /* carousel — 좌우 슬라이드 (분위기 사진 + 캡션). JS는 화살표 스크롤만.
+     사진이 없으면 .ph 가 플레이스홀더로 남는다 (img onerror 로 .empty 부여). */
+  .carousel{position:relative;margin:34px 0}
+  .carousel .track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+    scroll-behavior:smooth;padding:2px 2px 10px;-webkit-overflow-scrolling:touch}
+  .carousel .track::-webkit-scrollbar{height:6px}
+  .carousel .track::-webkit-scrollbar-thumb{background:var(--g300);border-radius:3px}
+  .carousel .track::-webkit-scrollbar-track{background:transparent}
+  .carousel .slide{flex:0 0 82%;scroll-snap-align:center;background:var(--white);
+    border:1px solid var(--g200);border-radius:20px;overflow:hidden;transition:.18s}
+  .carousel .slide:hover{border-color:var(--blue);box-shadow:var(--shadow-sm)}
+  .carousel .ph{position:relative;aspect-ratio:16/9;background:var(--blue-bg2);
+    display:grid;place-items:center;overflow:hidden}
+  .carousel .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .carousel .ph.empty{background:linear-gradient(135deg,var(--blue-bg2),var(--g100))}
+  .carousel .ph.empty::after{content:attr(data-empty);font-family:var(--mono);font-size:11.5px;
+    font-weight:500;color:var(--g400);letter-spacing:.02em;text-align:center;padding:0 20px;line-height:1.6}
+  .carousel .cap{padding:18px 20px 20px}
+  .carousel .cap .t{display:block;font-size:15.5px;font-weight:700;color:var(--g900);line-height:1.4;margin-bottom:6px}
+  .carousel .cap .d{display:block;font-size:14px;font-weight:500;color:var(--g600);line-height:1.6;word-break:keep-all}
+  .carousel .cap .d b{color:var(--g800);font-weight:700}
+  .carousel .cap .src{display:block;font-family:var(--mono);font-size:10px;color:var(--g400);
+    margin-top:9px;line-height:1.5;word-break:break-all}
+  .carousel .cap .src a{color:var(--g500);text-decoration:none}
+  .carousel .cap .src a:hover{color:var(--blue);text-decoration:underline}
+  .carousel .nav{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
+  .carousel .nav button{width:36px;height:36px;border-radius:12px;border:1px solid var(--g200);
+    background:var(--white);color:var(--g600);cursor:pointer;display:grid;place-items:center;
+    font-family:var(--mono);font-size:15px;font-weight:700;transition:.15s;padding:0}
+  .carousel .nav button:hover{border-color:var(--blue);color:var(--blue-deep);background:var(--blue-bg2)}
+  @media(max-width:720px){.carousel .slide{flex:0 0 88%}}
+
+  /* docnav — 문서 시리즈(여러 HTML 파일) 간 네비게이션 바. cover 와 toc 사이에 둔다 */
+  .docnav{display:flex;flex-wrap:wrap;gap:8px;padding:20px 56px;background:var(--white);
+    border-bottom:1px solid var(--g100)}
+  .docnav a{font-family:var(--mono);font-size:12.5px;font-weight:700;text-decoration:none;
+    padding:9px 14px;border-radius:100px;background:var(--g50);border:1px solid var(--g200);
+    color:var(--g600);transition:.18s}
+  .docnav a:hover{border-color:var(--blue);color:var(--blue-deep);transform:translateY(-1px)}
+  .docnav a.cur{background:var(--blue-bg);border-color:#cfe4ff;color:var(--blue-deep)}
+  .docnav a .n{color:var(--g400);margin-right:6px}
+  .docnav a.cur .n{color:var(--blue)}
+
+  /* book-nav — 책 시리즈 내비게이션 (breadcrumb + prev/next). 스니펫: components.md */
+  .book-nav-crumb{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:15px 56px;
+    background:var(--g50);border-bottom:1px solid var(--g100);
+    font-family:var(--mono);font-size:12px;font-weight:500;color:var(--g600)}
+  .book-nav-crumb a{color:var(--blue);text-decoration:none;font-weight:700}
+  .book-nav-crumb a:hover{text-decoration:underline}
+  .book-nav-crumb .sep{color:var(--g300)}
+  .book-nav-crumb b{color:var(--g800);font-weight:700}
+  .book-nav-foot{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;
+    padding:26px 56px;border-top:1px solid var(--g100);background:var(--g50)}
+  .book-nav-foot .prev,.book-nav-foot .next{display:block;border:1px solid var(--g200);border-radius:14px;
+    padding:13px 17px;text-decoration:none;background:var(--white);transition:.18s}
+  .book-nav-foot a.prev:hover,.book-nav-foot a.next:hover{border-color:var(--blue);box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+  .book-nav-foot .dir{display:block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    color:var(--g500);letter-spacing:.04em;margin-bottom:4px}
+  .book-nav-foot .t{display:block;font-size:13.5px;font-weight:700;color:var(--g900);line-height:1.4}
+  .book-nav-foot .next{text-align:right}
+  .book-nav-foot .toc-link{font-family:var(--mono);font-size:12px;font-weight:700;text-decoration:none;
+    color:var(--blue-deep);background:var(--blue-bg);border:1px solid #cfe4ff;border-radius:100px;
+    padding:10px 18px;transition:.18s}
+  .book-nav-foot .toc-link:hover{border-color:var(--blue)}
+  .book-nav-foot .off{opacity:.6;background:var(--g100);cursor:default}
+  .book-nav-foot .off .t{color:var(--g500)}
+
+  /* book-toc — 책 목차 (허브 전용: 장 행 + 상태 배지). 스니펫: components.md */
+  .bk-part{margin:28px 0}
+  .bk-part-h{display:flex;align-items:baseline;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+  .bk-part-h .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.05em}
+  .bk-part-h .t{font-size:17px;font-weight:800;color:var(--g900)}
+  .bk-list{list-style:none;margin:0;padding:0;border:1px solid var(--g200);border-radius:16px;
+    overflow:hidden;background:var(--white)}
+  .bk-list>li{border-top:1px solid var(--g100)}
+  .bk-list>li:first-child{border-top:none}
+  .bk-list>li>a,.bk-list>li>.row{display:flex;align-items:center;gap:14px;padding:13px 18px;
+    text-decoration:none;transition:background .15s}
+  .bk-list>li>a:hover{background:var(--blue-bg2)}
+  .bk-list .no{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--g400);flex:none;width:32px}
+  .bk-list .tt{font-size:14.5px;font-weight:700;color:var(--g900);line-height:1.45;min-width:0}
+  .bk-list .tt small{display:block;font-size:12.5px;font-weight:500;color:var(--g500)}
+  .bk-list .bdg{margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;font-weight:700;
+    padding:4px 10px;border-radius:100px}
+  .bk-list .bdg.done{background:var(--blue-bg);color:var(--blue-deep)}
+  .bk-list .bdg.part{background:var(--g100);color:var(--g600)}
+  .bk-list .bdg.live{background:var(--green-bg);color:var(--green-deep)}
+  .bk-list .bdg.slot{background:none;border:1px dashed var(--g400);color:var(--g500)}
+  .bk-list>li.slot .tt{color:var(--g500);font-weight:600}
+  .bk-list>li.slot .tt small{color:var(--g400)}
+
+  /* docfab — 플로팅 퀵내비 (섹션 점프 + 허브 복귀). 스니펫: components.md */
+  .docfab{position:fixed;right:22px;bottom:22px;z-index:60;font-family:var(--sans)}
+  .docfab>button{width:48px;height:48px;border-radius:16px;border:1px solid var(--g200);
+    background:var(--white);box-shadow:var(--shadow);cursor:pointer;display:grid;place-items:center;
+    color:var(--g600);transition:.18s;padding:0}
+  .docfab>button:hover{color:var(--blue-deep);border-color:var(--blue)}
+  .docfab>button svg{width:20px;height:20px}
+  .docfab .panel{position:absolute;right:0;bottom:58px;width:min(320px,84vw);max-height:min(430px,68vh);
+    overflow:auto;background:var(--white);border:1px solid var(--g200);border-radius:18px;
+    box-shadow:var(--shadow);padding:10px;display:none}
+  .docfab.open .panel{display:block}
+  .docfab .panel .hd{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--g500);
+    letter-spacing:.06em;padding:8px 10px 4px}
+  .docfab .panel a{display:block;padding:8px 10px;border-radius:10px;font-size:13.5px;font-weight:600;
+    color:var(--g800);text-decoration:none;line-height:1.4}
+  .docfab .panel a:hover{background:var(--blue-bg2);color:var(--blue-deep)}
+  .docfab .panel a.sub{padding-left:24px;font-size:12.5px;font-weight:500;color:var(--g600)}
+  .docfab .panel .hub{margin-top:6px;border-top:1px solid var(--g100);padding-top:8px}
+  .docfab .panel a.hubl{color:var(--blue-deep);font-weight:700}
+  @media(max-width:720px){.docfab{right:14px;bottom:14px}}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer,.docnav{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+    .book-nav-crumb{padding:13px 24px}
+    .book-nav-foot{padding:20px 24px;grid-template-columns:1fr;gap:10px}
+    .book-nav-foot .next{text-align:left}
+    .book-nav-foot .toc-link{justify-self:start}
+    .bk-list .bdg{display:none}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet wide">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>stay-link · DB SCHEMA · SSOT</span>
+      <h1 class="title">stay-link<br><span class="hl">DB 스키마</span></h1>
+      <p class="lede">테이블·컬럼·제약의 <b>단일 원본 문서</b>입니다. <span class="term">schema.sql</span>·엔티티가 바뀌면 같은 커밋에서 이 문서의 다이어그램·설명·변경 이력을 함께 갱신합니다. 현재 테이블은 F1 property-mapping의 2개입니다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">TABLES</span><span class="v">property · room</span></div>
+        <div class="chip"><span class="k">DB</span><span class="v">MySQL 8.4 · schema.sql + ddl-auto validate</span></div>
+        <div class="chip"><span class="k">TEST</span><span class="v">H2 create-drop (FK 미생성)</span></div>
+        <div class="chip"><span class="k">UPDATED</span><span class="v">2026-09-04</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">현재 스키마<span class="hint">property · room</span></a></li>
+      <li><a href="#s3">제약과 관계의 의미</a></li>
+      <li><a href="#s4">코드가 겹칠 때의 저장 예시<span class="hint">예시</span></a></li>
+      <li><a href="#s5">변경 이력</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">CURRENT</p><h2 class="sec">현재 스키마</h2></div>
+    </div>
+    <p class="lead">property가 공급사 코드를 내부 id로 바꾸고, room이 그 id 아래에 객실 유형 코드를 매답니다. room은 공급사의 판매 단위(객실 유형)이며 물리 객실이 아닙니다.</p>
+    <figure>
+      <div class="fig-box" data-fig="ER · CURRENT"><svg viewBox="0 0 1140 529" role="img" aria-label="현재 스키마 ER 다이어그램: property와 room, room.property_id가 property.id를 참조하는 1대N 관계"><defs><marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs><rect x="20" y="20" width="500" height="384" rx="16" fill="#FFFFFF" stroke="#D1D6DB" stroke-width="1.3"/><path d="M36 20 h468 a16 16 0 0 1 16 16 v32 h-500 v-32 a16 16 0 0 1 16 -16 z" fill="#E8F3FF"/><line x1="20" y1="68" x2="520" y2="68" stroke="#3182F6" stroke-width="1.5"/><text class="svg-t" x="34" y="49.0" fill="#1B64DA">property</text><text class="svg-s" x="506" y="48.0" text-anchor="end" fill="#3182F6">숙소 1건 = 행 1개 · 모두 NOT NULL</text><rect x="20" y="68" width="500" height="28" fill="#F9FAFB"/><text class="svg-l" x="34" y="86.0" fill="#8B95A1">KEY</text><text class="svg-l" x="64" y="86.0" fill="#8B95A1">COLUMN</text><text class="svg-l" x="221.2" y="86.0" fill="#8B95A1">TYPE</text><text class="svg-l" x="327.4" y="86.0" fill="#8B95A1">DESCRIPTION</text><line x1="20" y1="96" x2="520" y2="96" stroke="#D1D6DB" stroke-width="1.2"/><text class="svg-l" x="34" y="124.0" fill="#1B64DA">PK</text><text class="svg-s" x="64" y="124.0" fill="#191F28" font-weight="700">id</text><text class="svg-s" x="221.2" y="124.0" fill="#6B7684">BIGINT AI</text><foreignObject x="317.4" y="96" width="188.60000000000002" height="48"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="word-break:normal;overflow-wrap:anywhere"><div class="d">내부 숙소 id. 우리 DB가 채번하며 공급사 채번과 무관 (D4)</div></div></foreignObject><line x1="20" y1="144" x2="520" y2="144" stroke="#E5E8EB" stroke-width="1"/><text class="svg-l" x="34" y="172.0" fill="#0A8F5B">UQ</text><text class="svg-s" x="64" y="172.0" fill="#191F28" font-weight="700">supplier</text><text class="svg-s" x="221.2" y="172.0" fill="#6B7684">VARCHAR(16)</text><foreignObject x="317.4" y="144" width="188.60000000000002" height="48"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="word-break:normal;overflow-wrap:anywhere"><div class="d">행이 온 공급사. enum Supplier(A, B) 문자열</div></div></foreignObject><line x1="20" y1="192" x2="520" y2="192" stroke="#E5E8EB" stroke-width="1"/><text class="svg-l" x="34" y="220.0" fill="#0A8F5B">UQ</text><text class="svg-s" x="64" y="220.0" fill="#191F28" font-weight="700">supplier_property_code</text><text class="svg-s" x="221.2" y="220.0" fill="#6B7684">VARCHAR(64)</text><foreignObject x="317.4" y="192" width="188.60000000000002" height="48"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="word-break:normal;overflow-wrap:anywhere"><div class="d">공급사가 부여한 숙소 코드. 공급사끼리 겹칠 수 있음</div></div></foreignObject><line x1="20" y1="240" x2="520" y2="240" stroke="#E5E8EB" stroke-width="1"/><text class="svg-s" x="64" y="262.0" fill="#191F28" font-weight="700">property_name</text><text class="svg-s" x="221.2" y="262.0" fill="#6B7684">VARCHAR(255)</text><foreignObject x="317.4" y="240" width="188.60000000000002" height="36"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="word-break:normal;overflow-wrap:anywhere"><div class="d">목록 응답의 숙소 이름. 표시용</div></div></foreignObject><line x1="20" y1="276" x2="520" y2="276" stroke="#E5E8EB" stroke-width="1"/><rect x="20" y="276" width="500" height="28" fill="#F9FAFB"/><line x1="20" y1="276" x2="520" y2="276" stroke="#D1D6DB" stroke-width="1.2"/><text class="svg-l" x="34" y="294.0" fill="#8B95A1">CONSTRAINTS</text><line x1="20" y1="304" x2="520" y2="304" stroke="#D1D6DB" stroke-width="1.2"/><text class="svg-l" x="34" y="323" fill="#1B64DA">PK</text><text class="svg-s" x="64" y="323" fill="#191F28" font-weight="700">PRIMARY KEY</text><text class="svg-s" x="64" y="340" fill="#4E5968">(id)</text><line x1="20" y1="350" x2="520" y2="350" stroke="#E5E8EB" stroke-width="1"/><text class="svg-l" x="34" y="369" fill="#0A8F5B">UQ</text><text class="svg-s" x="64" y="369" fill="#191F28" font-weight="700">uq_property_supplier_code</text><text class="svg-s" x="64" y="386" fill="#4E5968">(supplier, supplier_property_code)</text><line x1="20" y1="396" x2="520" y2="396" stroke="#E5E8EB" stroke-width="1"/><rect x="620" y="20" width="500" height="459" rx="16" fill="#FFFFFF" stroke="#D1D6DB" stroke-width="1.3"/><path d="M636 20 h468 a16 16 0 0 1 16 16 v32 h-500 v-32 a16 16 0 0 1 16 -16 z" fill="#E8F3FF"/><line x1="620" y1="68" x2="1120" y2="68" stroke="#3182F6" stroke-width="1.5"/><text class="svg-t" x="634" y="49.0" fill="#1B64DA">room</text><text class="svg-s" x="1106" y="48.0" text-anchor="end" fill="#3182F6">객실 유형 1건 = 행 1개 · 모두 NOT NULL</text><rect x="620" y="68" width="500" height="28" fill="#F9FAFB"/><text class="svg-l" x="634" y="86.0" fill="#8B95A1">KEY</text><text class="svg-l" x="686" y="86.0" fill="#8B95A1">COLUMN</text><text class="svg-l" x="816.8" y="86.0" fill="#8B95A1">TYPE</text><text class="svg-l" x="923.0" y="86.0" fill="#8B95A1">DESCRIPTION</text><line x1="620" y1="96" x2="1120" y2="96" stroke="#D1D6DB" stroke-width="1.2"/><text class="svg-l" x="634" y="124.0" fill="#1B64DA">PK</text><text class="svg-s" x="686" y="124.0" fill="#191F28" font-weight="700">id</text><text class="svg-s" x="816.8" y="124.0" fill="#6B7684">BIGINT AI</text><foreignObject x="913.0" y="96" width="193.0" height="48"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="word-break:normal;overflow-wrap:anywhere"><div class="d">내부 객실 유형 id. 요금·재고는 이 값을 키로 가짐</div></div></foreignObject><line x1="620" y1="144" x2="1120" y2="144" stroke="#E5E8EB" stroke-width="1"/><text class="svg-l" x="634" y="172.0" fill="#C9303C">FK</text><text class="svg-l" x="656" y="172.0" fill="#0A8F5B">UQ</text><text class="svg-s" x="686" y="172.0" fill="#191F28" font-weight="700">property_id</text><text class="svg-s" x="816.8" y="172.0" fill="#6B7684">BIGINT</text><foreignObject x="913.0" y="144" width="193.0" height="48"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="word-break:normal;overflow-wrap:anywhere"><div class="d">소속 숙소의 내부 id → property.id. 이 값이 공급사를 결정</div></div></foreignObject><line x1="620" y1="192" x2="1120" y2="192" stroke="#E5E8EB" stroke-width="1"/><text class="svg-l" x="634" y="228.5" fill="#0A8F5B">UQ</text><text class="svg-s" x="686" y="228.5" fill="#191F28" font-weight="700">supplier_room_code</text><text class="svg-s" x="816.8" y="228.5" fill="#6B7684">VARCHAR(64)</text><foreignObject x="913.0" y="192" width="193.0" height="65"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="word-break:normal;overflow-wrap:anywhere"><div class="d">공급사가 숙소 안에서 부여한 객실 유형 코드. 다른 숙소와 겹칠 수 있음</div></div></foreignObject><line x1="620" y1="257" x2="1120" y2="257" stroke="#E5E8EB" stroke-width="1"/><text class="svg-s" x="686" y="285.0" fill="#191F28" font-weight="700">room_name</text><text class="svg-s" x="816.8" y="285.0" fill="#6B7684">VARCHAR(255)</text><foreignObject x="913.0" y="257" width="193.0" height="48"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="word-break:normal;overflow-wrap:anywhere"><div class="d">목록 응답의 객실 유형 이름. 표시용</div></div></foreignObject><line x1="620" y1="305" x2="1120" y2="305" stroke="#E5E8EB" stroke-width="1"/><rect x="620" y="305" width="500" height="28" fill="#F9FAFB"/><line x1="620" y1="305" x2="1120" y2="305" stroke="#D1D6DB" stroke-width="1.2"/><text class="svg-l" x="634" y="323.0" fill="#8B95A1">CONSTRAINTS</text><line x1="620" y1="333" x2="1120" y2="333" stroke="#D1D6DB" stroke-width="1.2"/><text class="svg-l" x="634" y="352" fill="#1B64DA">PK</text><text class="svg-s" x="686" y="352" fill="#191F28" font-weight="700">PRIMARY KEY</text><text class="svg-s" x="686" y="369" fill="#4E5968">(id)</text><line x1="620" y1="379" x2="1120" y2="379" stroke="#E5E8EB" stroke-width="1"/><text class="svg-l" x="634" y="398" fill="#C9303C">FK</text><text class="svg-s" x="686" y="398" fill="#191F28" font-weight="700">fk_room_property</text><text class="svg-s" x="686" y="415" fill="#4E5968">(property_id) → property(id)</text><line x1="620" y1="425" x2="1120" y2="425" stroke="#E5E8EB" stroke-width="1"/><text class="svg-l" x="634" y="444" fill="#0A8F5B">UQ</text><text class="svg-s" x="686" y="444" fill="#191F28" font-weight="700">uq_room_property_code</text><text class="svg-s" x="686" y="461" fill="#4E5968">(property_id, supplier_room_code)</text><line x1="620" y1="471" x2="1120" y2="471" stroke="#E5E8EB" stroke-width="1"/><path d="M520 120.0 H570.0 V168.0 H617" fill="none" stroke="#F04452" stroke-width="2.5" marker-end="url(#a1)"/><circle cx="520" cy="120.0" r="5" fill="#F04452"/><rect x="536.0" y="130.0" width="68" height="28" rx="14" fill="#FFFFFF" stroke="#F04452" stroke-width="1.5"/><text class="svg-t" x="570.0" y="149.0" text-anchor="middle" fill="#C9303C">1 : N</text><text class="svg-l" x="570.0" y="108.0" text-anchor="middle" fill="#C9303C">id</text><text class="svg-l" x="570.0" y="190.0" text-anchor="middle" fill="#C9303C">property_id</text><text class="svg-l" x="20" y="509" fill="#C9303C">FK fk_room_property</text><text class="svg-s" x="175.39999999999998" y="509" fill="#4E5968">room.property_id → property.id · room = 공급사의 판매 단위(객실 유형), 물리 객실 아님</text></svg></div>
+      <figcaption><b>그림 1.</b> 현재 스키마. KEY 열의 PK·FK·UQ는 해당 컬럼이 참여하는 제약. room의 공급사는 property_id가 가리키는 property 행에서 읽는다.</figcaption>
+    </figure>
+  </section>
+
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">CONSTRAINTS</p><h2 class="sec">제약과 관계의 의미</h2></div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>제약</th><th>대상</th><th>지키는 규칙</th></tr></thead>
+        <tbody>
+          <tr><td><span class="term">uq_property_supplier_code</span></td><td>property (supplier, supplier_property_code)</td><td>"공급사 X의 숙소 코드 Y"는 한 행뿐. 같은 공급사 상품이 언제나 같은 내부 id를 갖는다는 원칙(D4)의 DB 측 보장. 공급사 코드가 서로 겹치는 문제는 여기서 해결된다.</td></tr>
+          <tr><td><span class="term">uq_room_property_code</span></td><td>room (property_id, supplier_room_code)</td><td>"숙소 P 안에서 객실 유형 코드 Z"는 한 행뿐. property_id가 (supplier, supplier_property_code)로 유일한 행을 가리키므로 공급사 구분은 이미 키에 포함된다 (D-F1-9). 다른 숙소의 같은 코드는 허용된다. 메모리 검사는 두지 않는다 (Aggregate가 다르므로, D-F1-4).</td></tr>
+          <tr><td><span class="term">fk_room_property</span></td><td>room.property_id → property.id</td><td>소속 숙소가 없는 객실 유형은 존재할 수 없다. 로컬 MySQL(validate)에서만 생성되고 테스트 H2(create-drop)에서는 만들어지지 않는다 (D-F1-1).</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note warn"><span class="tag">운영 주의</span><span class="term">schema.sql</span>은 <span class="term">CREATE TABLE IF NOT EXISTS</span> + <span class="term">sql.init.mode: always</span>로 매 기동마다 실행된다. 컬럼 추가처럼 <strong>기존 테이블을 바꾸는 변경은 재실행되지 않으므로</strong> 로컬 컨테이너를 <span class="term">docker compose down</span>으로 지우고 다시 띄워야 validate가 통과한다 (2026-09-04 컬럼 추가 실험 중 실제 재현). 첫 ALTER가 필요해지는 시점에 마이그레이션 도구를 재검토한다 (D-F1-2).</div>
+  </section>
+
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">EXAMPLE</p><h2 class="sec">코드가 겹칠 때의 저장 예시</h2></div>
+    </div>
+    <p class="lead">공급사 A와 B가 모두 숙소 코드 <span class="term">H-100</span>, 객실 유형 코드 <span class="term">R-001</span>을 쓰는 경우입니다. 코드가 완전히 겹치는 최악의 상황입니다.</p>
+
+    <h3>property</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>id</th><th>supplier</th><th>supplier_property_code</th><th>property_name</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>A</td><td>H-100</td><td>바다호텔</td></tr>
+          <tr><td>2</td><td>B</td><td>H-100</td><td>산장펜션</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>숙소 코드가 겹쳐도 (supplier, code) UNIQUE 덕에 행이 둘로 갈리고 각각 내부 id 1·2를 받습니다. 이 id는 우리 DB가 채번한 값이라 공급사 채번 방식과 무관합니다.</p>
+
+    <h3>room</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>id</th><th>property_id</th><th>supplier_room_code</th><th>room_name</th></tr></thead>
+        <tbody>
+          <tr><td>10</td><td>1</td><td>R-001</td><td>디럭스</td></tr>
+          <tr><td>11</td><td>2</td><td>R-001</td><td>온돌</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>객실 유형 코드가 겹쳐도 property_id가 1과 2로 다르므로 UNIQUE에 걸리지 않습니다. 공급사가 필요하면 property를 조인해 읽습니다.</p>
+
+    <div class="note"><span class="tag">정리</span>공급사 코드끼리 겹치는 문제는 <strong>property의 (supplier, supplier_property_code) UNIQUE</strong>에서 한 번 해결되고, room은 그 결과인 내부 id에만 매달린다. room에 supplier를 복제하면 유일성 범위는 같고 부모·자식 불일치 상태만 새로 생기므로 두지 않는다 (D-F1-9).</div>
+  </section>
+
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">HISTORY</p><h2 class="sec">변경 이력</h2></div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>변경</th><th>근거</th></tr></thead>
+        <tbody>
+          <tr><td>2026-09-03</td><td>property · room_type 신설. UNIQUE 2개, FK 1개. room_type은 property_id 식별자 참조(별도 Aggregate)</td><td>F1 설계 D-F1-1~7 · PR #1</td></tr>
+          <tr><td>2026-09-04</td><td>room_type UNIQUE에 supplier를 넣는 안을 검토 후 기각 — property_id가 이미 공급사를 결정</td><td>D-F1-9</td></tr>
+          <tr><td>2026-09-04</td><td>room_type → room 으로 개명 (컬럼 supplier_room_code·room_name, 제약 uq_room_property_code·fk_room_property). 의미는 그대로 객실 유형</td><td>D-F1-10</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    stay-link · DB 스키마 SSOT · 갱신 규칙은 CLAUDE.md 「기능 개발」<br>
+    원본: src/main/resources/schema.sql · docs/features/property-mapping/01-design.md · 이 문서는 직접 수정한다
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>

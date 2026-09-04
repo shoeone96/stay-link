@@ -170,3 +170,67 @@
 - **요구**: PR 생성이 하네스에 포함되어 있는지 확인 → 없음(dev-cycle·feature-developer 모두 "커밋·push 금지, 단위 제안만"). 전역 스킬이 아니라 stay-link `.claude` 안에 `pr` 스킬을 추가하고, 작업은 feature 브랜치에서, 브랜치명은 feature 문서 번호 prefix + 기능명으로 고정, 원격 `main`으로 PR. feature-design·dev-cycle에도 반영.
 - **AI 답변 요약**: ① `CLAUDE.md`에 「브랜치·PR」 절 신설(단일 원본): 브랜치 `feature/f<N>-<feature>`(N = feature 목록 번호, feature = 폴더명), PR은 `origin/main`으로 `pr` 스킬 경유, 제목 `[F<N>] <feature>: 요약`, 커밋·PR 모두 금지어·AI 흔적 검사, `main` 직접 커밋은 하네스·워크플로우 변경을 사용자 지시로 할 때만 ② `pr` 스킬 신설: 사전 점검(브랜치 패턴·clean tree·커밋 ≥1·`./gradlew test`·금지어 grep·커밋 메시지 AI 흔적), 본문 템플릿(Summary / 설계 결정 표 / Test plan / Out of scope — 01·02·03·test-cases에서 재료), 사후 `gh pr view` grep, 파괴적 git 명령·커밋 금지 ③ feature-design ①에 브랜치 생성 단계, ⑨·⑩에 커밋·PR 안내 추가 ④ dev-cycle ①에 브랜치 일치 확인(main이면 종료), ⑥에 `/pr` 안내, 체크리스트 항목 추가 ⑤ feature 목록에 브랜치 규칙 한 줄과 상태 값(PR / 완료(병합)) 추가.
 - **결정**: 수용 — 사용자 지시로 하네스 변경은 규칙대로 `main`에 직접 커밋하고 F1 브랜치를 그 위로 rebase. 처음 F1 브랜치에 커밋했다가 ai-history 충돌로 되돌린 뒤 main에 다시 커밋(번호도 main 순서에 맞춰 32번으로).
+
+### 33. 브랜치·PR 워크플로우 전환 + F1 property-mapping 설계 초안 (2026-09-03)
+- **요구(사용자 결정)**: 이후 작업은 브랜치를 따서 main으로 PR을 올리는 방식으로, 연결된 원격에서 진행. F1 설계 시작 — 의견: 속도를 위해 테스트 DB는 H2만(MySQL 전용 쿼리가 나타나면 그때 재검토), 테스트는 간결하게, 로컬은 `ddl-auto: validate`.
+- **AI 답변 요약**: main이 원격보다 14커밋 앞서 있어 feature 목록 커밋 후 main push → `feature/f1-property-mapping` 브랜치 생성·push. F1 설계 초안 작성 — 경량 DDD(Aggregate `Property` + 내부 `RoomType`, `Supplier` enum, 불변식 3개: UNIQUE 2개 + 공백 검증), 패키지 `com.stay.catalog.{domain,application,infrastructure}`, Repository는 domain 인터페이스 + infra `extends JpaRepository, PropertyRepository` 이중 상속(LAY-2 준수, 위임 코드 없음), 유스케이스 `RegisterPropertyUseCase`(숙소 1건 단위 upsert), DDL은 `schema.sql` + validate(Flyway는 새 의존성이라 보류), 테스트는 `src/test/resources/application.yaml`에서 create-drop. 테스트 리스트 8개(domain 3 · application 2 · repository 3), E2E 없음. 결정 카드 8장 중 열린 것 2장(패키지명 `catalog`, 유스케이스 이름).
+- **결정**: 워크플로우 전환 수용·적용. 설계 초안은 사용자 확인 대기(테스트 리스트 confirm 전 저장 안 함).
+
+### 34. F1 설계 확정 — Aggregate 분리·유스케이스 제외 (2026-09-03)
+- **요구(사용자 의견)**: ① Property와 RoomType을 같은 Aggregate로 두는 게 맞는지 의문 — 자체 보유 상품까지 고려하면 객실 타입이 독립적으로 움직일 여지가 크니 별도로 두고 id로 매핑하는 게 낫지 않나. Aggregate 분리는 예측 가능한 변경 범위라 YAGNI 위반이 아니라고 봄(공급사 포트 인터페이스와 같은 급). ② 패키지명은 도메인 이름을 따른다. ③ 등록 유스케이스는 지금 필요 없고, 이름은 `~Service`로, application 세부는 개발 시점에.
+- **AI 답변 요약**: ①은 처음에 같은 Aggregate를 추천(객실 코드 유일성이 숙소 안에서 성립, 목록 응답이 중첩, 크기 작음)했으나 냉정히 다시 검토 — "반드시 한 root"라는 주장은 과했음(유일성은 DB UNIQUE로 충분, 분리해도 서비스 find-or-create로 성립, 스키마 동일). 분리 트리거 표(고빈도 데이터 저장 / 독립 편집 경로 / 공유 / 수백 개)를 제시했고, 자체 보유 상품이 "독립 편집 경로" 트리거에 정확히 해당하므로 분리 쪽에 동의. 정정 2건: 요금·재고는 분리 여부와 무관하게 RoomType 밖의 별도 Aggregate / 분리 시 `@ManyToOne` 대신 `Long propertyId` 식별자 참조, F7 조회는 2회(IN). member/memberDetail 비유는 1:1 영속 분할이라 Aggregate 합성 기준으로는 좁다는 점도 언급. ②·③ 수용 — 패키지 `com.stay.property`, application 레이어는 F1에 없음(F6에서 `~Service`).
+- **결정**: 확정 — `docs/features/property-mapping/01-design.md` 저장(status 확정, 결정 카드 7장 모두 닫힘, 테스트 6개: domain 1 · repository 5). 다음: `/dev-cycle property-mapping` (하네스는 저장소 루트 세션에서만 로드됨).
+
+### 35. F1 property-mapping 구현·리뷰 사이클 (2026-09-03)
+- **요구**: 확정된 F1 설계 문서(01-design.md)를 기반으로 `/dev-cycle property-mapping` 실행.
+- **AI 답변 요약**: ① 사전 점검 — 브랜치 `feature/f1-property-mapping` 일치, 결정 카드 7장 모두 닫힘, `spring-boot-starter-test`·H2(`testRuntimeOnly`) 존재, compile·기존 테스트 1건 통과 확인 ② feature-developer가 T-01~T-06을 TDD로 구현 — `com.stay.property.domain`(Supplier·Property·RoomType·InvalidMappingException·포트 2개) + `infrastructure`(JPA 이중 상속 2개), `schema.sql`(MySQL, FK·UNIQUE) + `ddl-auto: validate`, 테스트용 `application.yaml`(create-drop·init never). T-04는 T-03 구현으로 즉시 통과라 Red 없음으로 기록. `./gradlew test --rerun` 총 19 · 통과 19, bootRun으로 compose MySQL validate 통과까지 확인. 설계 이탈 없음 ③ feature-reviewer round-1: error 0 · warn 3 → 통과. warn: T-04 assert가 두 번째 저장 id의 null을 놓침 / 도메인 예외 메시지에 supplier·코드 같은 식별 컨텍스트 없음(설계 준수라 warn) / `sql.init.mode: always` + schema.sql은 첫 ALTER부터 비멱등(D-F1-2 재검토 시점을 "첫 ALTER"로 당길 것 제안). 금지어 grep 0건, domain 패키지 Spring import 0건 확인 ④ 설계 소관 열린 항목: `Property.create`가 `supplier` null을 도메인에서 검증하지 않음(불변식 3 목록에 없어 위반 아님, DB NOT NULL이 잡음).
+- **결정**: 구현·리뷰 완료(미커밋). 커밋 단위 4개 제안(도메인 모델 / repository 포트·JPA·UNIQUE / schema.sql·validate 설정 / 구현 기록·정리표). warn 3건·supplier null 검증은 사용자 판단 대기. 다음: 커밋 지시 → `/pr property-mapping`.
+
+### 36. F1 커밋·PR 생성 (2026-09-03)
+- **요구**: 구현·리뷰 결과를 커밋하고 PR까지 진행.
+- **AI 답변 요약**: 금지어 grep 0건 확인 후 developer 제안 단위대로 4커밋(도메인 모델 / repository 포트·JPA·UNIQUE / schema.sql·validate / 구현 기록·리뷰·정리표). 커밋 메시지 AI 흔적 0건. `pr` 스킬 사전 점검(브랜치 `feature/f1-property-mapping`, clean tree, origin/main 대비 5커밋·21파일, `./gradlew test --rerun` 19/19) 통과 → push → PR #1 생성(`main` ← `feature/f1-property-mapping`, 제목 `[F1] property-mapping: 매핑 저장 모델 (Property·RoomType, schema.sql+validate)`). 본문은 Summary / 설계 결정 D-F1-1~7 표 / Test plan / Out of scope(F6·F7·F11로 넘기는 것, 리뷰 warn 3건과 supplier null 검증은 후속 결정). 사후 `gh pr view` grep 0건. README 상태표 F1을 `PR`로 갱신.
+- **결정**: PR 생성 완료 — https://github.com/shoeone96/stay-link/pull/1. README·ai-history 갱신은 다음 커밋에 포함. 병합 후 F2는 최신 `main`에서 분기.
+
+### 37. F1 미사용 메서드 제거 (D-F1-8) — fix round-1·리뷰 round-2 (2026-09-04)
+- **요구(사용자 결정)**: 당장 사용하지 않는 메서드는 관련 테스트와 함께 모두 제거. "인덱스도 제거" 요청에 대해 AI가 "스키마의 인덱스는 UNIQUE 2개·FK뿐이고 UNIQUE는 최적화가 아니라 불변식 1·2(D4) 자체"라고 지적 → 사용자가 UNIQUE·FK 유지, 메서드만 제거로 확정.
+- **AI 답변 요약**: 호출자 없는 메서드를 3그룹으로 정리해 범위 확인(rename 2 / 단건 조회 2 / 목록 조회 2 — 후자만 T-05·T-06 테스트 있음). 메인 세션이 `01-design.md`에 D-F1-8 추가(§1 수용 기준 3 삭제·§2 행동·§3 포트 `save`만·§5 T-05·T-06 삭제). feature-developer fix round-1: 메서드 6개·테스트 2개 제거, `./gradlew test --rerun` 17/17, 잔존 grep 0건. feature-reviewer round-2: error 0 · warn 1(신규: getter 6개도 호출자 0건 — D-F1-8 기준의 일관성 문제, 설계 판단으로 넘김) → 통과. round-1 warn 3건은 미처리 유지(#1 T-04 assert는 T-06 삭제로 유일한 제약 범위 테스트가 되어 반영 재권고). 01 §3의 "파생 쿼리 생성" 문구를 현재 상태에 맞게 정정.
+- **결정**: 구현·리뷰 완료(미커밋). 열린 판단: getter 6개 제거 여부, warn #1 T-04 assert 강화 여부.
+
+### 38. F1 getter 제거 — fix round-2·리뷰 round-3 (2026-09-04)
+- **요구(사용자 결정)**: 사용하지 않는 getter도 모두 제거. "assert 강화"가 생성자 검증을 뜻하는지 질문 → AI가 T-04 테스트 검증문(두 번째 저장 id가 null이어도 통과하는 문제) 이야기이며 프로덕션 코드 변경 없이 테스트 한 줄만 바뀐다고 설명.
+- **AI 답변 요약**: 테스트 grep으로 호출되는 getter는 `getId`뿐임을 확인 → D-F1-8과 §2 행동에 "읽기 접근자도 호출자 있는 `getId`만" 명시. feature-developer fix round-2: getter 6개 삭제, 엔티티 public 메서드는 `create`·`getId`·`equals`·`hashCode`만. `./gradlew test --rerun` 17/17(Hibernate 필드 접근이라 영속화 영향 없음). feature-reviewer round-3: error 0 · 신규 warn 0 → 통과, 금지어 0건. round-1 warn 3건은 미처리 유지. 남은 이슈: F6·F7이 필드를 읽을 접근자는 해당 feature 설계에서 추가.
+- **결정**: 구현·리뷰 완료(미커밋). 열린 판단: T-04 검증문 강화 여부. 다음: 커밋 지시 → push로 PR #1 갱신.
+
+### 39. room_type UNIQUE에 supplier 포함 논쟁 → ER 다이어그램 문서(테이블 SSOT) 신설 (2026-09-04)
+- **요구(사용자 의견)**: `(property_id, supplier_room_type_code)`는 공급사 구분이 빠져 유일하지 않다. 공급사 코드 체계는 서로 모르므로 겹칠 수 있고, 제약은 전이적 사실이 아니라 도메인 규칙을 글자 그대로 표현해야 한다(OAuth의 provider + provider_user_id 비유). 판단을 위해 ER 다이어그램 HTML을 요청 → 이어서 "행 구분선 명확히·패딩 확대·행마다 설명 열·시트 폭 1200"으로 개편하고 앞으로 테이블 SSOT로 쓰겠다고 결정.
+- **AI 답변 요약**: ① `property_id`는 우리 DB PK이며 `(supplier, supplier_property_code)` 쌍에 1:1이므로 공급사별로 절대 겹치지 않고, 두 키의 유일성 범위는 현재 모델(D5 병합 없음)에서 동일하다고 반박. OAuth 비유는 `property` 테이블의 `(supplier, code)` UNIQUE에 이미 대응하며 하위 데이터는 내부 id로만 연결하는 것이 통례라고 설명. supplier 복제 시 부모·자식 불일치 상태 허용 비용을 지적 ② 사용자가 의미 명시를 우선해 재확인 → D-F1-9로 기록(양측 근거 병기, 부모·자식 일치는 F6 책임)하고 developer fix round-3 실행: `RoomType.supplier` 추가, UNIQUE `uq_room_type_supplier_property_code`, T-03·T-04 갱신(T-04 assert 강화 포함), 17/17 통과. bootRun 검증에서 이전 컨테이너의 옛 스키마로 `missing column [supplier]` validate 실패 → compose down 후 통과(round-1 warn #3 비멱등 문제의 실제 재현) ③ 사용자 요청으로 developer 보류, `toss-design` 스킬에 `sheet.wide`(1200px)·`fo.left`(좌측 정렬 설명 셀) 변형을 템플릿·components.md에 먼저 추가한 뒤 `docs/db-schema.html` 작성 — 현재 스키마(D-F1-9)·대안 A(PR #1) ER 다이어그램(행마다 KEY·COLUMN·TYPE·DESCRIPTION, 구분선, CONSTRAINTS 블록, FK 관계선), 제약 의미 표, 코드가 완전히 겹치는 예시 데이터 비교, 변경 이력. CLAUDE.md 「기능 개발」에 "테이블 SSOT = docs/db-schema.html, 스키마 변경 커밋에서 함께 갱신" 규칙 추가.
+- **결정**: D-F1-9는 다이어그램 확인 후 최종 판단 대기(코드는 B안 반영 상태로 보류). 테이블 SSOT 문서 신설 확정.
+
+### 40. ER 다이어그램 레이아웃 확정 → 전역 패턴화 (2026-09-04)
+- **요구(사용자)**: 다이어그램을 여러 차례 조정 — 행 구분선·패딩·설명 열 추가 → 테이블 각 500 → 400(1:N 선이 안 보임) → 설명이 TYPE 열 침범 → 열 폭을 글자수로 재분배·설명 줄바꿈 → 타입 약어 금지·TYPE +15·시트 1300. 확정 후 "앞으로 스키마는 이 기준으로 만들고 확인, 이 html·css 기준을 전역에도 넣어달라".
+- **AI 답변 요약**: 최종 레이아웃 = 시트 1300(viewBox 1140), 테이블 500·거터 100, KEY·COLUMN·TYPE·DESCRIPTION 4열(폭은 최장 글자수 배분, 설명은 남는 폭에서 자동 줄바꿈·행 높이 가변), CONSTRAINTS 블록, 거터 중앙 1:N 알약 라벨. 전역화: `toss-design` 스킬에 `scripts/er_schema.py`(JSON 스펙 → SVG 생성기)·components.md 「er-table」 절·`sheet.wide` 1300 반영, 전역 CLAUDE.md 「HTML 시각화」에 "프로젝트마다 docs/db-schema.html = 테이블 SSOT, er-table 패턴으로만" 규칙 추가. stay-link에는 `docs/db-schema/{current,alt-a}.json` 스펙과 `build.py`를 두어 재생성 가능하게 하고 CLAUDE.md 갱신 절차를 명시.
+- **결정**: 확정. D-F1-9 판단은 여전히 대기.
+
+### 41. D-F1-9 기각(원안 복귀) · D-F1-10 RoomType→Room 개명 · 문서 일괄 반영 (2026-09-04)
+- **요구(사용자)**: ER 다이어그램을 보고 "`(supplier, supplier_property_code)`로 유일한 property 행에 연결된 room 레코드라 `(property_id, code)`만으로 유일하다"고 이해 → 원안으로 되돌리기로 결정. 추가로 `RoomType`은 Java에서 enum처럼 읽히니 `Room`이 낫다는 의견, "스키마 내부의 type도 다 삭제", "반영된 내용을 모든 문서에 반영".
+- **AI 답변 요약**: ① D-F1-9를 "검토 후 기각"으로 기록(양측 근거·ER 확인 경위 병기), 01 §1·§2·§3·§5를 원안으로 복귀. T-04 assert 강화는 무관하므로 유지 ② 개명은 목록 설계 문서의 기존 결정("room이 아닌 room_type — 물리 객실 오독 방지")과 업계 용어(room type)를 근거로 `RoomType` 유지를 권했으나 사용자가 가독성 우선으로 `Room` 확정 → D-F1-10 기록. 테이블 `room`, 컬럼 `supplier_room_code`·`room_name`, 제약 `uq_room_property_code`·`fk_room_property`, 클래스·테스트 클래스 일괄 개명. "room = 공급사의 판매 단위(객실 유형), 물리 객실 아님"을 도메인 모델 표·레이어 배치·목록 설계 문서 D3에 명시 ③ 문서 반영: `docs/db-schema/current.json`(A안+Room)·`alt-a.json` 삭제·`build.py` 단일 다이어그램 구조(현재 스키마 / 제약 의미 / 겹침 예시 / 변경 이력)로 재생성, `list-api-integration-design.html`(DDL·매핑 표·D2·D3), `availability-api-integration-design.html`, `todolist.md`, `features/README.md`(F1 열린 질문을 "property 경유로 확정"으로), `JOURNAL.md`, `pr` 스킬 예시 제목. 공급사 응답 필드명(`roomTypeCode`·`roomTypeId`·`roomTypeName`·`roomTypes`)은 외부 이름이라 유지. 금지어 0건 ④ developer에 fix round-4(supplier 되돌리기 + Room 개명, compose down 후 validate) 지시.
+- **결정**: 확정·반영 완료(미커밋). developer fix-4 → reviewer round-4 대기.
+
+### 42. F1 fix round-4·리뷰 round-4 통과 — 원안 복귀·Room 개명 완료 (2026-09-04)
+- **AI 답변 요약**: feature-developer fix-4 — supplier 필드·컬럼·UNIQUE 되돌림, `Room.create` 3-인자, 클래스 5개 `git mv` 개명(이력 유지), 테이블 `room`·컬럼 `supplier_room_code`·`room_name`·제약 `uq_room_property_code`·`fk_room_property`, src 옛 이름 0건, `./gradlew test --rerun` 17/17, compose down 후 bootRun validate 통과. feature-reviewer round-4 — error 0 · 신규 warn 0 → 통과. D-F1-10 이름 글자 단위 대조 ✓, D-F1-9 기각 반영 ✓, T-04 assert 해소 ✓, getter 해소 유지 ✓. 미해소: round-1 warn #2(예외 컨텍스트, 부분) · #3(schema.sql 비멱등 — fix-3·fix-4에서 연속 재현, D-F1-2 "2회 이상" 조건 충족으로 재검토 권고). 참고 정리: 01의 "객실 타입"→"객실 유형" 통일, availability 설계 문서의 내부 검색 응답 예시 `roomTypeId`·`roomTypeName`→`roomId`·`roomName`(표준 필드 행 포함, 공급사 B의 `roomId`는 외부 이름이라 그대로).
+- **결정**: 구현·리뷰 완료(미커밋). 열린 항목: D-F1-2 마이그레이션 재검토, 예외 메시지 식별 컨텍스트, `Property.create` supplier null 검증. 다음: 커밋 지시 → push로 PR #1 갱신(제목·본문의 RoomType 표기도 수정 필요).
+
+### 43. F1 커밋 3개·push·PR #1 갱신 (2026-09-04)
+- **요구**: 커밋·push까지 진행 후 사용자가 점검.
+- **AI 답변 요약**: 금지어 grep 0건 확인 후 3커밋 — ① `refactor:` 미사용 메서드·getter 제거 + RoomType→Room 개명(git mv 이력 유지) ② `docs:` DB 스키마 SSOT 신설 + 설계 문서 일괄 반영 + CLAUDE.md 규칙 ③ `docs:` 02·03·test-cases·ai-history. AI 트레일러 0건. push 후 PR #1 제목을 `(Property·Room, schema.sql+validate, DB 스키마 SSOT)`로, 본문을 D-F1-1~10 표·테스트 17/17·리뷰 round 1~4·Out of scope(미해소 warn 2건, supplier null 검증)로 갱신. 사후 grep에서 금지어·AI 흔적 0건(본문의 `RoomType` 1건은 D-F1-10 개명 전 이름 표기로 의도된 것).
+- **결정**: PR #1 갱신 완료(커밋 8개). 사용자 점검 대기. 이 ai-history 항목은 다음 커밋에 포함.
+
+### 44. docs/db-schema/ 제거 — 스키마 문서는 HTML 한 파일만 (2026-09-04)
+- **요구(사용자)**: `docs/db-schema/`(스펙 JSON·빌드 스크립트)가 무엇인지 확인 못 했다 → 둘 다 제거하고 HTML만 남겨 직접 수정하는 방식으로. 문서가 너무 많은 것도 별로.
+- **AI 답변 요약**: 빌드 스크립트가 저장소 밖 로컬 스킬 경로에 의존해 저장소에 두기 부적절했음을 인정. `docs/db-schema/` 삭제, 재료는 스킬 `examples/`로 이동. 프로젝트·전역 CLAUDE.md와 스킬 components.md의 규칙을 "저장소에는 HTML 한 파일, 이후 변경은 HTML 직접 수정, 스펙·스크립트 커밋 금지"로 정정. HTML 푸터의 생성 경로 문구 제거.
+- **결정**: 제거·커밋. 문서 수 정리는 별도 논의(현황 목록 제시).
+
+### 45. equals/hashCode 제거 (D-F1-11) — 규칙 DDD-3 정정 (2026-09-04)
+- **요구(사용자)**: "equals/hashCode는 왜 만들어놨나" → "JPA 관례에 무조건 만들라는 관례가 있나" → 제거 지시.
+- **AI 답변 요약**: 호출자가 있어서가 아니라 coding-standard DDD-3("식별자 동등성, equals/hashCode는 id")이 시켜서 넣은 것이며 테스트 포함 사용처 0건임을 인정. JPA 명세는 구현을 요구하지 않고, Hibernate ORM 6.6 User Guide `mapping-model-pojo-equalshashcode`(URL 확인)는 컬렉션·detached·다중 세션 비교 시에만 필요하며 그때도 생성 id가 아닌 비즈니스 키를 권장한다고 확인. 현재 코드(id 비교 + 상수 hashCode)는 id 기반의 부작용 우회 기법이라 근거가 약함. DDD-3을 "기본 구현을 두지 않는다 — 호출자가 생길 때 비즈니스 키로, 생성 id 기반 금지"로 정정, 01에 D-F1-11 추가. developer fix-5: 두 엔티티에서 삭제, 17/17. reviewer round-5: error 0·warn 0 통과(Hibernate 1차 캐시·dirty checking은 equals를 쓰지 않아 영속화 영향 없음). 시니어 코멘트: F6·F7 설계 시 DDD-3 정정 문구 참조 필요.
+- **결정**: 제거·커밋. 남은 warn 2건(예외 컨텍스트·schema.sql 비멱등)은 설계 소관 그대로.

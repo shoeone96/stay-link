@@ -20,7 +20,7 @@ description: |
 
 - `DDD-1` **유비쿼터스 언어**: 설계 문서·코드·테스트의 용어가 같다. 프로젝트 CLAUDE.md·설계 문서의 네이밍 결정(금지 이름 포함)을 따른다.
 - `DDD-2` **Aggregate = 불변식 경계**. 트랜잭션 1개는 Aggregate 1개만 수정한다. 다른 Aggregate는 식별자로 참조한다.
-- `DDD-3` **Entity**: 식별자 동등성(`equals/hashCode`는 id). 상태 변경은 의도가 드러나는 메서드로만 — setter 금지. 생성은 정적 팩토리(`create`, `of`, `from`).
+- `DDD-3` **Entity**: 상태 변경은 의도가 드러나는 메서드로만 — setter 금지. 생성은 정적 팩토리(`create`, `of`, `from`). `equals/hashCode`는 기본 구현을 두지 않는다 — 엔티티를 컬렉션에 담거나 영속성 컨텍스트 밖에서 비교하는 호출자가 생길 때 **비즈니스 키(natural id)** 로 구현한다(생성 id 기반 금지 — persist 전 null로 해시가 바뀜. Hibernate User Guide `mapping-model-pojo-equalshashcode`).
 - `DDD-4` **Value Object**: 불변(`record` 또는 final 필드), 값 동등성, 생성 시점 자기 검증(compact constructor에서 `throw`).
 - `DDD-5` **도메인 규칙은 도메인 객체 안에**. 서비스에 `if (entity.getStatus() == ...)` 분기가 생기면 빈약한 모델 신호 — 엔티티 메서드로 옮긴다.
 - `DDD-6` **Domain Service**는 둘 이상 Aggregate에 걸친 규칙에만. 하나의 Aggregate로 표현되면 그 안에 둔다.

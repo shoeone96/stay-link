@@ -334,8 +334,8 @@
           <tr><td>1</td><td>본문 바로 데이터</td><td><code>data</code> 봉투</td><td>어댑터가 봉투 해체</td></tr>
           <tr><td>2</td><td><code>hotelCode</code></td><td><code>propertyId</code></td><td>매핑 역방향 → 내부 property id</td></tr>
           <tr><td>3</td><td><code>hotelName</code></td><td><code>propertyName</code></td><td><code>propertyName</code> — 응답 값 그대로 (D9)</td></tr>
-          <tr><td>4</td><td><code>roomTypeCode</code></td><td><code>roomId</code></td><td>매핑 역방향 → 내부 room_type id</td></tr>
-          <tr><td>5</td><td><code>roomTypeName</code></td><td><code>roomName</code></td><td><code>roomTypeName</code> — 응답 값 그대로 (D9)</td></tr>
+          <tr><td>4</td><td><code>roomTypeCode</code></td><td><code>roomId</code></td><td>매핑 역방향 → 내부 room id</td></tr>
+          <tr><td>5</td><td><code>roomTypeName</code></td><td><code>roomName</code></td><td><code>roomName</code> — 응답 값 그대로 (D9)</td></tr>
           <tr><td>6</td><td colspan="2"><code>maxOccupancy</code> (이름 동일)</td><td>그대로 전달</td></tr>
           <tr><td>7</td><td colspan="2"><code>breakfastIncluded</code> (이름 동일)</td><td>상품 조건으로 전달</td></tr>
           <tr><td>8</td><td colspan="2"><code>currency</code> (이름 동일)</td><td>그대로 전달</td></tr>
@@ -415,8 +415,8 @@ soldOut = (availableRooms == 0)   <span class="cm">// D8: 빼지 않고 노출 +
     {
       "propertyId": 1,                        <span class="cm">// 내부 식별자 (매핑 결과)</span>
       "propertyName": "Haeundae Blue Hotel",  <span class="cm">// 응답 값 그대로 (D9)</span>
-      "roomTypeId": 11,
-      "roomTypeName": "Ocean Double",
+      "roomId": 11,
+      "roomName": "Ocean Double",
       "maxOccupancy": 2,
       "availableRooms": 1,                    <span class="cm">// min(3,1,4) (D7)</span>
       "soldOut": false,                       <span class="cm">// 0이면 true, 빼지 않음 (D8)</span>
