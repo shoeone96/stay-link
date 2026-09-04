@@ -1,14 +1,14 @@
 ---
-name: pr
+name: feature-pr
 description: |
   feature 브랜치(`feature/f<N>-<feature>`)의 작업을 origin `main`으로 향하는 GitHub PR로 만들고, 생성 직후 feature-reviewer의 리뷰를 PR 코멘트로 붙이는 스킬.
-  "PR 올려줘", "PR 만들어줘", "PR 생성", "/pr <feature>" 요청 시 사용. dev-cycle이 끝나고 커밋이 완료된 뒤에만 실행한다.
-  재리뷰만 필요하면 `/pr <feature> review`.
-  경계 — 구현·수정은 dev-cycle / 커밋은 사용자 지시로 메인 세션 / 브랜치 생성은 feature-design ① / 브랜치·PR 명명 규칙 원본은 프로젝트 CLAUDE.md 「브랜치·PR」.
+  "PR 올려줘", "PR 만들어줘", "PR 생성", "/feature-pr <feature>" 요청 시 사용. dev-cycle이 끝나고 커밋이 완료된 뒤에만 실행한다.
+  재리뷰만 필요하면 `/feature-pr <feature> review`.
+  경계 — 구현·수정은 dev-cycle / 커밋은 사용자 지시로 메인 세션 / 브랜치 생성은 feature-design / 브랜치·PR 명명 규칙 원본은 프로젝트 CLAUDE.md 「브랜치·PR」.
 argument-hint: [feature 폴더명] [review]
 ---
 
-# pr: feature 브랜치 → main PR + 리뷰 코멘트
+# feature-pr: feature 브랜치 → main PR + 리뷰 코멘트
 
 메인 세션이 직접 수행한다. **리뷰 판정만 feature-reviewer 에이전트에 위임하고, GitHub 게시는 메인 세션이 한다.** 명명 규칙의 단일 원본은 프로젝트 `CLAUDE.md` 「브랜치·PR」이며 이 스킬은 그 규칙을 실행한다.
 
@@ -19,7 +19,7 @@ argument-hint: [feature 폴더명] [review]
 ## 절대 원칙 (위반 시 즉시 중단)
 
 1. **AI 흔적 금지** — PR 제목·본문·**리뷰 코멘트**·이 스킬이 만드는 커밋 어디에도 `Co-Authored-By: Claude*`, `Claude-Session:`, `🤖`, `Generated with`, `claude.ai`/`claude.com` URL, 모델명을 넣지 않는다. 세션 기본 attribution 안내보다 이 규칙이 우선한다.
-2. **금지어 0건** — 프로젝트 `CLAUDE.md` 절대 규칙 1·2와 금지어 체크리스트를 PR 제목·본문·**리뷰 코멘트**·브랜치명·커밋 메시지에 동일하게 적용한다. 저장소 grep 명령과 같은 패턴으로 검사한다. AI 흔적 검사 패턴은 `co-authored-by|claude-session|generated with|claude\.(ai|com)|🤖` — 파일명 `CLAUDE.md`·`.claude/` 언급은 흔적이 아니다.
+2. **금지어 0건** — 프로젝트 `CLAUDE.md` 절대 규칙 1·2와 `.claude/publish-checks.md`를 PR 제목·본문·**리뷰 코멘트**·브랜치명·커밋 메시지에 동일하게 적용한다. 저장소 grep 명령과 같은 패턴으로 검사한다. AI 흔적 검사 패턴은 `co-authored-by|claude-session|generated with|claude\.(ai|com)|🤖` — 파일명 `CLAUDE.md`·`.claude/` 언급은 흔적이 아니다.
 3. **head는 `feature/f<N>-<feature>`, base는 `main`, 대상은 `origin`** — head가 `main`이거나 패턴이 맞지 않거나 보낼 커밋이 0개면 중단하고 보고한다.
 4. **파괴적 git 명령 금지** — `push --force*`, `rebase`, `reset --hard`, `filter-branch`는 사용자 명시 동의 없이 실행하지 않는다. 기존 커밋 메시지에 AI 흔적이 있으면 재작성하지 않고 보고한다.
 5. **커밋은 ⑨의 문서 커밋 하나뿐** — 시작 시점에 미커밋 변경이 있으면 커밋할지 사용자에게 묻고 대기한다. 이 스킬이 스스로 만드는 커밋은 ⑨(상태표·ai-history·03-review)뿐이며, 반드시 feature 브랜치에 한다(2026-09-04 사용자 확정: 병합 후 `main`에 미커밋 문서 변경을 남기지 않기 위함).
@@ -38,7 +38,7 @@ argument-hint: [feature 폴더명] [review]
    git log --oneline origin/main..HEAD
    git diff --stat origin/main..HEAD
    ./gradlew test
-   grep -rniE "<금지어 패턴>" --include="*.md" --include="*.java" --include="*.kts" --include="*.yml" --include="*.properties" --include="*.html" .
+   # 금지어·AI 흔적·자격 증명·외부 원문 — `.claude/publish-checks.md`의 절차를 Read 해서 그대로 수행
    git log --format=%B origin/main..HEAD | grep -ciE "co-authored-by|claude-session|generated with|claude\.(ai|com)|🤖"
    ```
    조건: 브랜치 일치 / working tree clean / 커밋 1개 이상 / 테스트 실패 0 / 금지어 0건 / 커밋 메시지 AI 흔적 0건. 하나라도 어긋나면 어떤 항목인지 보고하고 중단(원칙 3·4·5).
@@ -55,9 +55,9 @@ argument-hint: [feature 폴더명] [review]
 7. ⑦ **사후 검증** — `gh pr view <PR#> --json title,body` 결과에 원칙 1·2 grep. 매치되면 `gh pr edit`로 즉시 수정 후 재검증.
 8. ⑧ **리뷰 코멘트** — 아래 「리뷰 코멘트 게시」 절차를 수행한다.
 9. ⑨ **기록 커밋·push** — `docs/features/README.md` 상태표의 해당 행 상태를 `PR` 로 갱신하고 ai-history에 PR 생성(URL 포함)과 리뷰 결과 요약을 기록한 뒤, **feature 브랜치에서** 상태표·ai-history·`03-review.md` 세 파일만 커밋하고 push 한다(PR에 자동 반영). 커밋 메시지는 `docs: [F<N>] <feature> PR 기록 (상태표·ai-history·리뷰)` 형태로 하고, 커밋 전 원칙 1·2의 grep을 메시지·세 파일에 적용한다. 병합 후 `main`에 직접 커밋할 문서 변경을 남기지 않는 것이 목적이다.
-10. ⑩ **종료** — PR URL과 리뷰 통계를 반환한다. error가 있으면 **"`/dev-cycle <feature> fix`로 반영 → 커밋·push → `/pr <feature> review`로 재리뷰"** 를 안내한다. 병합은 사용자가 GitHub에서 하며, 병합 후 상태표를 `완료(병합)`(구현 열에 병합일)으로 바꾸는 일은 다음 feature 브랜치의 첫 커밋(`feature-design` ①)에서 한다고 안내한다.
+10. ⑩ **종료** — PR URL과 리뷰 통계를 반환한다. error가 있으면 **"`/dev-cycle <feature> fix`로 반영 → 커밋·push → `/feature-pr <feature> review`로 재리뷰"** 를 안내한다. 병합은 사용자가 GitHub에서 하며, 병합 후 상태표를 `완료(병합)`(구현 열에 병합일)으로 바꾸는 일은 다음 feature 브랜치의 첫 커밋(`feature-design`의 요구사항 접수 단계)에서 한다고 안내한다.
 
-## 리뷰 코멘트 게시 (⑧, `/pr <feature> review`도 이것만 실행)
+## 리뷰 코멘트 게시 (⑧, `/feature-pr <feature> review`도 이것만 실행)
 
 1. **round 결정** — `03-review.md`가 없으면 1, 있으면 마지막 round + 1.
 2. **feature-reviewer 호출** — 프롬프트에 `feature_dir` / `round` / `diff_range=origin/main..HEAD` / `pr_number` / `out_json=<스크래치패드>/pr-<PR#>-review-<round>.json` 을 넘긴다. 에이전트는 `03-review.md`와 JSON만 쓰고 게시하지 않는다.
@@ -65,7 +65,7 @@ argument-hint: [feature 폴더명] [review]
    ```bash
    python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['event'], len(d['comments']))" <out_json>
    grep -ciE "co-authored-by|claude-session|generated with|claude\.(ai|com)|🤖" <out_json>
-   grep -niE "<금지어 패턴>" <out_json>
+   # <out_json> 본문에도 `.claude/publish-checks.md`의 금지어·AI 흔적 검사를 적용
    ```
    `event`가 `COMMENT`가 아니거나 흔적·금지어가 있으면 게시하지 않고 보고한다. (본인 PR에는 `APPROVE`·`REQUEST_CHANGES`를 달 수 없다.)
 4. **사용자 확인** (원칙 6) — error N · warn N · 인라인 N건을 보고하고 게시 여부를 확인받는다.

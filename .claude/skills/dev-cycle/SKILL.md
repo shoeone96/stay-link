@@ -1,7 +1,7 @@
 ---
 name: dev-cycle
 description: |
-  승인된 설계 문서(docs/features/<feature>/01-design.md)를 입력으로 feature-developer가 끊김 없이 구현하도록 돌리는 개발 오케스트레이션 스킬. 구현 중에는 리뷰하지 않는다 — 리뷰는 PR 생성 후 코멘트로 붙는다(`pr` 스킬 ⑨).
+  승인된 설계 문서(docs/features/<feature>/01-design.md)를 입력으로 feature-developer가 끊김 없이 구현하도록 돌리는 개발 오케스트레이션 스킬. 구현 중에는 리뷰하지 않는다 — 리뷰는 PR 생성 후 코멘트로 붙는다(`feature-pr` 스킬의 리뷰 코멘트 단계).
   "설계대로 구현해줘", "개발 사이클 돌려", "이 설계 문서로 개발", "TDD로 구현", "/dev-cycle <feature>" 요청 시 사용.
   PR 리뷰 코멘트를 코드에 반영할 때는 `/dev-cycle <feature> fix`.
   경계 — 설계 문서가 없으면 feature-design 선행 / 숙박 도메인 관행 판단은 domain-analysis / 기술 레퍼런스 비교는 tech-research / 리뷰는 pr 스킬.
@@ -25,19 +25,19 @@ argument-hint: [feature 폴더명] [fix]
 | `coding-standard` / `test-standard` 스킬 | 규칙 ID. 에이전트에 `skills:`로 주입됨 |
 | `docs/features/<feature>/01-design.md` | 무엇을 만드는가 (테스트 리스트 T-NN·결정 카드 D-?N) |
 | `docs/features/<feature>/02-implementation.md` | developer 산출. round 섹션 누적 |
-| `docs/features/<feature>/03-review.md` | reviewer 산출. **PR 생성 후** `pr` 스킬 ⑨가 채운다 |
+| `docs/features/<feature>/03-review.md` | reviewer 산출. **PR 생성 후** `feature-pr` 스킬의 리뷰 코멘트 단계가 채운다 |
 | `docs/test-cases.md` | 테스트 정리표 (단일 파일 누적) |
-| 프로젝트 `CLAUDE.md` · 금지어 체크리스트 | 기록·커밋·금지어 규칙, 「브랜치·PR」 명명 규칙 |
+| 프로젝트 `CLAUDE.md` · `.claude/publish-checks.md` | 기록·커밋·금지어 규칙, 「브랜치·PR」 명명 규칙 |
 
 ## 절대 원칙
 
 1. **`01-design.md` 없이 코드 금지.** 없으면 "`/feature-design <feature>` 먼저"를 안내하고 종료한다.
 2. **`src/` 쓰기는 feature-developer만.** 메인 세션은 직접 코드를 작성·수정하지 않는다. 에이전트가 거부·실패해도 대신 쓰지 않고 원인을 보고한다.
 3. **단계 간 전달은 파일로만.** 에이전트에는 `feature_dir`·`mode`·`round`만 넘긴다. 설계 내용·위반 목록을 프롬프트에 복붙하지 않는다.
-4. **구현 중 리뷰하지 않는다.** feature-reviewer를 호출하지 않는다. 리뷰는 `pr` 스킬 ⑨가 PR 코멘트로 수행한다.
+4. **구현 중 리뷰하지 않는다.** feature-reviewer를 호출하지 않는다. 리뷰는 `feature-pr` 스킬의 리뷰 코멘트 단계가 PR 코멘트로 수행한다.
 5. **④의 커밋 전 검사는 생략 불가.** `./gradlew test` 실패 0 · 금지어 grep 0건 · T-NN 커버 대조. 하나라도 어긋나면 커밋을 제안하지 않고 사용자에게 보고한다.
 6. **테스트 통과는 gradle 결과로만 주장한다.** 에이전트 요약이 아니라 `build/test-results/test/*.xml`을 확인한다.
-7. **커밋은 사용자 지시 시에만, feature 브랜치에만.** 프로젝트 커밋 규칙(금지어 grep 0건, AI 트레일러 금지)이 세션 기본 attribution보다 우선한다. PR은 커밋 완료 후 `pr` 스킬(`/pr <feature>`)로 별도 진행하며 이 스킬은 PR을 만들지 않는다.
+7. **커밋은 사용자 지시 시에만, feature 브랜치에만.** 프로젝트 커밋 규칙(금지어 grep 0건, AI 트레일러 금지)이 세션 기본 attribution보다 우선한다. PR은 커밋 완료 후 `feature-pr` 스킬(`/feature-pr <feature>`)로 별도 진행하며 이 스킬은 PR을 만들지 않는다.
 8. **프로젝트 CLAUDE.md의 기록 규칙**(예: ai-history 자동 기록)을 종료 시 수행한다.
 
 ## 워크플로우 — 구현 (기본)
@@ -48,22 +48,22 @@ argument-hint: [feature 폴더명] [fix]
 4. ④ **커밋 전 검사** (메인 세션이 직접, 병렬 실행) —
    ```bash
    ./gradlew test
-   grep -rniE "<금지어 패턴>" --include="*.md" --include="*.java" --include="*.kts" --include="*.yml" --include="*.properties" --include="*.html" .
+   # 금지어·AI 흔적·자격 증명·외부 원문 — `.claude/publish-checks.md`의 절차를 Read 해서 그대로 수행
    git status --short
    ```
    그리고 `01`의 테스트 리스트 T-NN이 `docs/test-cases.md`에 모두 있는지 대조한다(설계가 테스트를 두지 않기로 한 기능이면 그 근거 문장이 `01`에 있는지 확인하고, 대신 `01`의 검증 계획대로 확인했는지 `02`에서 본다). 어긋나면 커밋을 제안하지 않고 보고한다(원칙 5).
-5. ⑤ **최종 보고** — `02` 최신 status / 테스트 총·통과·실패 / 변경 파일 수 / 미결 결정 카드 / 커밋 단위 제안(커밋은 하지 않는다) / 다음 단계 안내: **"커밋 지시 → `/pr <feature>` — PR 생성 직후 리뷰가 코멘트로 붙습니다."**
+5. ⑤ **최종 보고** — `02` 최신 status / 테스트 총·통과·실패 / 변경 파일 수 / 미결 결정 카드 / 커밋 단위 제안(커밋은 하지 않는다) / 다음 단계 안내: **"커밋 지시 → `/feature-pr <feature>` — PR 생성 직후 리뷰가 코멘트로 붙습니다."**
 6. ⑥ 프로젝트 기록 규칙 수행.
 
 ## 워크플로우 — fix (`/dev-cycle <feature> fix`)
 
-PR에 붙은 리뷰 코멘트를 코드에 반영하는 경로다. `pr` 스킬 ⑨가 `03-review.md`에 round 섹션을 남겨 두었으므로 그것이 입력이다.
+PR에 붙은 리뷰 코멘트를 코드에 반영하는 경로다. `feature-pr` 스킬의 리뷰 코멘트 단계가 `03-review.md`에 round 섹션을 남겨 두었으므로 그것이 입력이다.
 
 1. ① 브랜치 확인(위와 동일) → `03-review.md` 최신 round Read.
 2. ② **사용자 분류** — error 항목은 기본 반영 대상, warn 항목은 사용자가 고를 것만. 목록을 제시하고 무엇을 반영할지 확인받는다. 반영하지 않기로 한 항목은 이유와 함께 남긴다.
 3. ③ **feature-developer 호출** — `mode=fix`, `round=N`.
 4. ④ 커밋 전 검사(구현 워크플로우 ④와 동일).
-5. ⑤ 보고 + 다음 단계 안내: "커밋·push 지시 → PR에 자동 반영. 재리뷰가 필요하면 `/pr <feature> review`."
+5. ⑤ 보고 + 다음 단계 안내: "커밋·push 지시 → PR에 자동 반영. 재리뷰가 필요하면 `/feature-pr <feature> review`."
 6. ⑥ 기록 규칙 수행.
 
 ## 체크리스트 (종료 전)
