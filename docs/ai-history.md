@@ -219,3 +219,13 @@
 ### 42. F1 fix round-4·리뷰 round-4 통과 — 원안 복귀·Room 개명 완료 (2026-09-04)
 - **AI 답변 요약**: feature-developer fix-4 — supplier 필드·컬럼·UNIQUE 되돌림, `Room.create` 3-인자, 클래스 5개 `git mv` 개명(이력 유지), 테이블 `room`·컬럼 `supplier_room_code`·`room_name`·제약 `uq_room_property_code`·`fk_room_property`, src 옛 이름 0건, `./gradlew test --rerun` 17/17, compose down 후 bootRun validate 통과. feature-reviewer round-4 — error 0 · 신규 warn 0 → 통과. D-F1-10 이름 글자 단위 대조 ✓, D-F1-9 기각 반영 ✓, T-04 assert 해소 ✓, getter 해소 유지 ✓. 미해소: round-1 warn #2(예외 컨텍스트, 부분) · #3(schema.sql 비멱등 — fix-3·fix-4에서 연속 재현, D-F1-2 "2회 이상" 조건 충족으로 재검토 권고). 참고 정리: 01의 "객실 타입"→"객실 유형" 통일, availability 설계 문서의 내부 검색 응답 예시 `roomTypeId`·`roomTypeName`→`roomId`·`roomName`(표준 필드 행 포함, 공급사 B의 `roomId`는 외부 이름이라 그대로).
 - **결정**: 구현·리뷰 완료(미커밋). 열린 항목: D-F1-2 마이그레이션 재검토, 예외 메시지 식별 컨텍스트, `Property.create` supplier null 검증. 다음: 커밋 지시 → push로 PR #1 갱신(제목·본문의 RoomType 표기도 수정 필요).
+
+### 43. F1 커밋 3개·push·PR #1 갱신 (2026-09-04)
+- **요구**: 커밋·push까지 진행 후 사용자가 점검.
+- **AI 답변 요약**: 금지어 grep 0건 확인 후 3커밋 — ① `refactor:` 미사용 메서드·getter 제거 + RoomType→Room 개명(git mv 이력 유지) ② `docs:` DB 스키마 SSOT 신설 + 설계 문서 일괄 반영 + CLAUDE.md 규칙 ③ `docs:` 02·03·test-cases·ai-history. AI 트레일러 0건. push 후 PR #1 제목을 `(Property·Room, schema.sql+validate, DB 스키마 SSOT)`로, 본문을 D-F1-1~10 표·테스트 17/17·리뷰 round 1~4·Out of scope(미해소 warn 2건, supplier null 검증)로 갱신. 사후 grep에서 금지어·AI 흔적 0건(본문의 `RoomType` 1건은 D-F1-10 개명 전 이름 표기로 의도된 것).
+- **결정**: PR #1 갱신 완료(커밋 8개). 사용자 점검 대기. 이 ai-history 항목은 다음 커밋에 포함.
+
+### 44. docs/db-schema/ 제거 — 스키마 문서는 HTML 한 파일만 (2026-09-04)
+- **요구(사용자)**: `docs/db-schema/`(스펙 JSON·빌드 스크립트)가 무엇인지 확인 못 했다 → 둘 다 제거하고 HTML만 남겨 직접 수정하는 방식으로. 문서가 너무 많은 것도 별로.
+- **AI 답변 요약**: 빌드 스크립트가 저장소 밖 로컬 스킬 경로에 의존해 저장소에 두기 부적절했음을 인정. `docs/db-schema/` 삭제, 재료는 스킬 `examples/`로 이동. 프로젝트·전역 CLAUDE.md와 스킬 components.md의 규칙을 "저장소에는 HTML 한 파일, 이후 변경은 HTML 직접 수정, 스펙·스크립트 커밋 금지"로 정정. HTML 푸터의 생성 경로 문구 제거.
+- **결정**: 제거·커밋. 문서 수 정리는 별도 논의(현황 목록 제시).
