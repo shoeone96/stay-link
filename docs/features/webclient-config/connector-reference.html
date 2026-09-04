@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebClient 커넥터와 3계층 타임아웃</title>
+<!-- 폰트: Pretendard(본문) + JetBrains Mono(코드/라벨). 이 두 개만 사용한다. -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     색/폰트/그림자는 반드시 이 변수로만 참조한다 (임의 hex 금지).
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  /* scroll progress bar */
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  /* page sheet (흰 카드) */
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  /* .sheet.wide — 스키마/ER 같은 표 중심 문서용 넓은 시트 (2026-09-04 추가). SVG viewBox 는 1140 기준 */
+  .sheet.wide{max-width:1300px}
+
+  /* cover */
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  /* toc — 심플 인덱스 (유일한 목차 컴포넌트, 2026-08-02 재설계)
+     1열 세로 나열 = 읽는 순서 그대로. 카드·박스·그리드 금지 (구 2열 카드형·toc-deep 카드형 폐기).
+     하위 항목이 필요하면 li 안에 .ts 를 들여쓴 평문 링크로만 추가한다. */
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  /* sections */
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  /* stchip — 상태 칩: 목록·표 항목의 진행 상태 (ok=확정 / mid=뼈대 / open=미정) */
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  /* blockquote (인용) */
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  /* note / callout (.note 기본 · .key 파랑 · .warn 빨강) */
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  /* figure + SVG 다이어그램 컨테이너 */
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  /* foreignObject 자동 줄바꿈 박스 — 글자가 박스를 절대 넘지 않게 자동 줄바꿈+중앙정렬.
+     라벨 길이가 불확실하거나 한글이 많은 박스엔 .svg-t/.svg-s <text> 대신 이걸 쓴다 (폭 계산 불필요). */
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  /* .fo.left — 표 셀·설명 칸용 좌측 정렬 변형 (2026-09-04 추가). .d 는 본문 설명 텍스트 */
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  /* wide figure — 시트(860px) 폭을 넘는 다이어그램 (긴 시퀀스/타임라인 전용) */
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  /* code block (mac 윈도우 스타일) */
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  /* toggle — 접기/펼치기 (details/summary) */
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  /* 2-column 비교 카드 (.x 중립 · .o 강조) */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  /* table */
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  /* fn-card — 함수/API 시그니처 카드 (어두운 시그니처 바 + 명세 표) */
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  /* 참고문헌 리스트 */
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  /* checklist — 체크 항목 리스트. li 안에 <span class="box"></span> + 텍스트. 완료는 li.done
+     ⚠️ li 는 display:block + 박스는 position:absolute 다 (display:flex 금지).
+     li 안에는 <b>/<strong>/<span class="term"> 같은 인라인 요소가 섞이는데,
+     li 를 flex 로 두면 그 인라인 요소들이 각각 별도 flex item 이 되어
+     좁은 칸에 글자가 "세로로" 쌓이며 깨진다. 그래서 텍스트는 일반 인라인 흐름으로 둔다. */
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  /* carousel — 좌우 슬라이드 (분위기 사진 + 캡션). JS는 화살표 스크롤만.
+     사진이 없으면 .ph 가 플레이스홀더로 남는다 (img onerror 로 .empty 부여). */
+  .carousel{position:relative;margin:34px 0}
+  .carousel .track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+    scroll-behavior:smooth;padding:2px 2px 10px;-webkit-overflow-scrolling:touch}
+  .carousel .track::-webkit-scrollbar{height:6px}
+  .carousel .track::-webkit-scrollbar-thumb{background:var(--g300);border-radius:3px}
+  .carousel .track::-webkit-scrollbar-track{background:transparent}
+  .carousel .slide{flex:0 0 82%;scroll-snap-align:center;background:var(--white);
+    border:1px solid var(--g200);border-radius:20px;overflow:hidden;transition:.18s}
+  .carousel .slide:hover{border-color:var(--blue);box-shadow:var(--shadow-sm)}
+  .carousel .ph{position:relative;aspect-ratio:16/9;background:var(--blue-bg2);
+    display:grid;place-items:center;overflow:hidden}
+  .carousel .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .carousel .ph.empty{background:linear-gradient(135deg,var(--blue-bg2),var(--g100))}
+  .carousel .ph.empty::after{content:attr(data-empty);font-family:var(--mono);font-size:11.5px;
+    font-weight:500;color:var(--g400);letter-spacing:.02em;text-align:center;padding:0 20px;line-height:1.6}
+  .carousel .cap{padding:18px 20px 20px}
+  .carousel .cap .t{display:block;font-size:15.5px;font-weight:700;color:var(--g900);line-height:1.4;margin-bottom:6px}
+  .carousel .cap .d{display:block;font-size:14px;font-weight:500;color:var(--g600);line-height:1.6;word-break:keep-all}
+  .carousel .cap .d b{color:var(--g800);font-weight:700}
+  .carousel .cap .src{display:block;font-family:var(--mono);font-size:10px;color:var(--g400);
+    margin-top:9px;line-height:1.5;word-break:break-all}
+  .carousel .cap .src a{color:var(--g500);text-decoration:none}
+  .carousel .cap .src a:hover{color:var(--blue);text-decoration:underline}
+  .carousel .nav{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
+  .carousel .nav button{width:36px;height:36px;border-radius:12px;border:1px solid var(--g200);
+    background:var(--white);color:var(--g600);cursor:pointer;display:grid;place-items:center;
+    font-family:var(--mono);font-size:15px;font-weight:700;transition:.15s;padding:0}
+  .carousel .nav button:hover{border-color:var(--blue);color:var(--blue-deep);background:var(--blue-bg2)}
+  @media(max-width:720px){.carousel .slide{flex:0 0 88%}}
+
+  /* docnav — 문서 시리즈(여러 HTML 파일) 간 네비게이션 바. cover 와 toc 사이에 둔다 */
+  .docnav{display:flex;flex-wrap:wrap;gap:8px;padding:20px 56px;background:var(--white);
+    border-bottom:1px solid var(--g100)}
+  .docnav a{font-family:var(--mono);font-size:12.5px;font-weight:700;text-decoration:none;
+    padding:9px 14px;border-radius:100px;background:var(--g50);border:1px solid var(--g200);
+    color:var(--g600);transition:.18s}
+  .docnav a:hover{border-color:var(--blue);color:var(--blue-deep);transform:translateY(-1px)}
+  .docnav a.cur{background:var(--blue-bg);border-color:#cfe4ff;color:var(--blue-deep)}
+  .docnav a .n{color:var(--g400);margin-right:6px}
+  .docnav a.cur .n{color:var(--blue)}
+
+  /* book-nav — 책 시리즈 내비게이션 (breadcrumb + prev/next). 스니펫: components.md */
+  .book-nav-crumb{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:15px 56px;
+    background:var(--g50);border-bottom:1px solid var(--g100);
+    font-family:var(--mono);font-size:12px;font-weight:500;color:var(--g600)}
+  .book-nav-crumb a{color:var(--blue);text-decoration:none;font-weight:700}
+  .book-nav-crumb a:hover{text-decoration:underline}
+  .book-nav-crumb .sep{color:var(--g300)}
+  .book-nav-crumb b{color:var(--g800);font-weight:700}
+  .book-nav-foot{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;
+    padding:26px 56px;border-top:1px solid var(--g100);background:var(--g50)}
+  .book-nav-foot .prev,.book-nav-foot .next{display:block;border:1px solid var(--g200);border-radius:14px;
+    padding:13px 17px;text-decoration:none;background:var(--white);transition:.18s}
+  .book-nav-foot a.prev:hover,.book-nav-foot a.next:hover{border-color:var(--blue);box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+  .book-nav-foot .dir{display:block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    color:var(--g500);letter-spacing:.04em;margin-bottom:4px}
+  .book-nav-foot .t{display:block;font-size:13.5px;font-weight:700;color:var(--g900);line-height:1.4}
+  .book-nav-foot .next{text-align:right}
+  .book-nav-foot .toc-link{font-family:var(--mono);font-size:12px;font-weight:700;text-decoration:none;
+    color:var(--blue-deep);background:var(--blue-bg);border:1px solid #cfe4ff;border-radius:100px;
+    padding:10px 18px;transition:.18s}
+  .book-nav-foot .toc-link:hover{border-color:var(--blue)}
+  .book-nav-foot .off{opacity:.6;background:var(--g100);cursor:default}
+  .book-nav-foot .off .t{color:var(--g500)}
+
+  /* book-toc — 책 목차 (허브 전용: 장 행 + 상태 배지). 스니펫: components.md */
+  .bk-part{margin:28px 0}
+  .bk-part-h{display:flex;align-items:baseline;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+  .bk-part-h .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.05em}
+  .bk-part-h .t{font-size:17px;font-weight:800;color:var(--g900)}
+  .bk-list{list-style:none;margin:0;padding:0;border:1px solid var(--g200);border-radius:16px;
+    overflow:hidden;background:var(--white)}
+  .bk-list>li{border-top:1px solid var(--g100)}
+  .bk-list>li:first-child{border-top:none}
+  .bk-list>li>a,.bk-list>li>.row{display:flex;align-items:center;gap:14px;padding:13px 18px;
+    text-decoration:none;transition:background .15s}
+  .bk-list>li>a:hover{background:var(--blue-bg2)}
+  .bk-list .no{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--g400);flex:none;width:32px}
+  .bk-list .tt{font-size:14.5px;font-weight:700;color:var(--g900);line-height:1.45;min-width:0}
+  .bk-list .tt small{display:block;font-size:12.5px;font-weight:500;color:var(--g500)}
+  .bk-list .bdg{margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;font-weight:700;
+    padding:4px 10px;border-radius:100px}
+  .bk-list .bdg.done{background:var(--blue-bg);color:var(--blue-deep)}
+  .bk-list .bdg.part{background:var(--g100);color:var(--g600)}
+  .bk-list .bdg.live{background:var(--green-bg);color:var(--green-deep)}
+  .bk-list .bdg.slot{background:none;border:1px dashed var(--g400);color:var(--g500)}
+  .bk-list>li.slot .tt{color:var(--g500);font-weight:600}
+  .bk-list>li.slot .tt small{color:var(--g400)}
+
+  /* docfab — 플로팅 퀵내비 (섹션 점프 + 허브 복귀). 스니펫: components.md */
+  .docfab{position:fixed;right:22px;bottom:22px;z-index:60;font-family:var(--sans)}
+  .docfab>button{width:48px;height:48px;border-radius:16px;border:1px solid var(--g200);
+    background:var(--white);box-shadow:var(--shadow);cursor:pointer;display:grid;place-items:center;
+    color:var(--g600);transition:.18s;padding:0}
+  .docfab>button:hover{color:var(--blue-deep);border-color:var(--blue)}
+  .docfab>button svg{width:20px;height:20px}
+  .docfab .panel{position:absolute;right:0;bottom:58px;width:min(320px,84vw);max-height:min(430px,68vh);
+    overflow:auto;background:var(--white);border:1px solid var(--g200);border-radius:18px;
+    box-shadow:var(--shadow);padding:10px;display:none}
+  .docfab.open .panel{display:block}
+  .docfab .panel .hd{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--g500);
+    letter-spacing:.06em;padding:8px 10px 4px}
+  .docfab .panel a{display:block;padding:8px 10px;border-radius:10px;font-size:13.5px;font-weight:600;
+    color:var(--g800);text-decoration:none;line-height:1.4}
+  .docfab .panel a:hover{background:var(--blue-bg2);color:var(--blue-deep)}
+  .docfab .panel a.sub{padding-left:24px;font-size:12.5px;font-weight:500;color:var(--g600)}
+  .docfab .panel .hub{margin-top:6px;border-top:1px solid var(--g100);padding-top:8px}
+  .docfab .panel a.hubl{color:var(--blue-deep);font-weight:700}
+  @media(max-width:720px){.docfab{right:14px;bottom:14px}}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer,.docnav{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+    .book-nav-crumb{padding:13px 24px}
+    .book-nav-foot{padding:20px 24px;grid-template-columns:1fr;gap:10px}
+    .book-nav-foot .next{text-align:left}
+    .book-nav-foot .toc-link{justify-self:start}
+    .bk-list .bdg{display:none}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <!-- ===================== COVER ===================== -->
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>F3a webclient-config · 결정 근거</span>
+      <h1 class="title">Tomcat 위에서 WebClient를 쓴다<br><span class="hl">커넥터 · 3계층 타임아웃 · 은닉</span></h1>
+      <p class="lede">서버는 Tomcat인데 클라이언트가 왜 Netty인가. 타임아웃을 왜 세 겹으로 거는가. 호출부에서 <b>메서드처럼</b> 쓰게 감싸면 무엇을 얻고 무엇을 잃는가. 이 세 가지를 그림으로 잇는다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">STACK</span><span class="v">Java 25 · Boot 3.5.16 · MVC + Virtual Thread</span></div>
+        <div class="chip"><span class="k">대상</span><span class="v">공급사 A · B 연동 클라이언트</span></div>
+        <div class="chip"><span class="k">결정</span><span class="v">제약: WebClient · 결정: D-F3a-1 커넥터 · D-F3a-2 동시성 모델</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">서버와 클라이언트는 다른 축이다<span class="hint">오해 풀기</span></a></li>
+      <li><a href="#s2">커넥터란 무엇이고 어디서 갈아 끼우나<span class="hint">교체 지점</span></a></li>
+      <li><a href="#s3">타임아웃을 왜 세 겹으로 거는가<span class="hint">시간 축</span></a></li>
+      <li><a href="#s4">커넥터 4종 — 같은 장애, 다른 손잡이<span class="hint">비교</span></a></li>
+      <li><a href="#s5">은닉 — 메서드처럼 쓰게 감싸기<span class="hint">전후 비교</span></a></li>
+      <li><a href="#s6">Reactor를 어디서 소멸시킬 것인가<span class="hint">레이어</span></a></li>
+      <li><a href="#s7">그래서 무엇을 고르나<span class="hint">결정 카드</span></a></li>
+      <li><a href="#s8">공식 문서는 무엇을 권하나<span class="hint">반대 근거</span></a></li>
+      <li><a href="#refs">참고문헌</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- ============ 1 ============ -->
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">INBOUND vs OUTBOUND</p><h2 class="sec">서버와 클라이언트는 다른 축이다</h2></div>
+    </div>
+
+    <p class="lead">"우리는 Tomcat인데 왜 Netty를 쓰느냐"는 질문은 정확한 질문이고, 답은 <em>둘이 서로 다른 방향을 맡기 때문</em>이다.</p>
+
+    <p>웹 애플리케이션에는 방향이 두 개 있다. 밖에서 <strong>들어오는</strong> 요청을 받는 쪽과, 우리가 밖으로 <strong>내보내는</strong> 요청을 거는 쪽이다. Tomcat은 앞쪽만 담당한다. 사용자의 HTTP 요청을 받아 서블릿으로 넘기는 컨테이너다. 반대로 <span class="term">WebClient</span>는 뒤쪽만 담당한다. 공급사 서버로 소켓을 열고 요청을 보내는 <em>클라이언트</em>다.</p>
+
+    <p>그리고 WebClient가 실제로 소켓을 다루는 일은 자기가 직접 하지 않고 <strong>커넥터</strong>라는 부품에 맡긴다. 그 커넥터의 기본 구현이 Reactor Netty일 뿐이다. 즉 <strong>Netty는 우리 서버가 아니라 우리가 거는 전화기</strong>다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 720 262" role="img" aria-label="사용자에서 Tomcat, 애플리케이션, WebClient 커넥터를 거쳐 공급사 서버로 이어지는 흐름. 앞의 세 단계는 인바운드, 뒤의 세 단계는 아웃바운드로 표시">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="30" y="86" width="108" height="76" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="30" y="86" width="108" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">사용자</div><div class="s">브라우저</div></div></foreignObject>
+
+          <rect x="168" y="86" width="108" height="76" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="168" y="86" width="108" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">Tomcat</div><div class="s">서블릿 컨테이너</div></div></foreignObject>
+
+          <rect x="306" y="86" width="108" height="76" rx="16" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.6"/>
+          <foreignObject x="306" y="86" width="108" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">우리 앱</div><div class="s">MVC + VT</div></div></foreignObject>
+
+          <rect x="444" y="86" width="108" height="76" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="444" y="86" width="108" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">WebClient</div><div class="s">+ 커넥터</div></div></foreignObject>
+
+          <rect x="582" y="86" width="108" height="76" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="582" y="86" width="108" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">공급사</div><div class="s">A · B 서버</div></div></foreignObject>
+
+          <line x1="140" y1="124" x2="164" y2="124" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="278" y1="124" x2="302" y2="124" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="416" y1="124" x2="440" y2="124" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="554" y1="124" x2="578" y2="124" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
+
+          <path d="M30 186 L30 194 L414 194 L414 186" fill="none" stroke="#3182F6" stroke-width="1.6"/>
+          <text class="svg-l" x="222" y="212" text-anchor="middle" fill="#1B64DA">인바운드 — 받는 쪽 (Tomcat)</text>
+
+          <path d="M306 226 L306 234 L690 234 L690 226" fill="none" stroke="#15C47E" stroke-width="1.6"/>
+          <text class="svg-l" x="498" y="252" text-anchor="middle" fill="#0A8F5B">아웃바운드 — 거는 쪽 (커넥터)</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 1.</b> 두 구간이 겹치는 지점은 <b>우리 앱 코드</b> 하나뿐이다. Netty는 오른쪽 절반에만 존재하고, 왼쪽 절반은 끝까지 Tomcat이다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">공식 근거</span>Spring Boot 문서는 <strong>두 스타터를 함께 넣으면 WebFlux가 아니라 Spring MVC로 자동 구성된다</strong>고 명시하고, 그 이유로 "많은 개발자가 reactive <span class="term">WebClient</span>를 쓰려고 <span class="term">spring-boot-starter-webflux</span>를 MVC 앱에 추가하기 때문"을 든다. 즉 우리 구성은 예외가 아니라 <strong>문서가 상정한 표준 사례</strong>다.<a href="#r1" class="cite">[1]</a></div>
+
+    <p>우리 저장소는 이미 그 상태다. <span class="term">build.gradle.kts</span>에 <span class="term">spring-boot-starter-web</span>과 <span class="term">spring-boot-starter-webflux</span>가 함께 선언되어 있고, 실행 클래스패스에는 <span class="term">reactor-netty-http 1.2.18</span>만 올라와 있다<a href="#r15" class="cite">[15]</a>. 서버는 Tomcat으로 뜨고 클라이언트는 Netty를 쓴다.</p>
+
+    <div class="note"><span class="tag">잃는 것 하나</span>서버와 클라이언트가 같은 기술이면 HTTP 리소스를 공유할 수 있다는 이점이 있는데, 우리는 서버가 Tomcat이라 <strong>그 이점은 얻지 못한다</strong><a href="#r2" class="cite">[2]</a>. 정확성 문제가 아니라 최적화 기회를 하나 포기하는 것이다.</div>
+  </section>
+
+  <!-- ============ 2 ============ -->
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">CLIENT HTTP CONNECTOR</p><h2 class="sec">커넥터란 무엇이고 어디서 갈아 끼우나</h2></div>
+    </div>
+
+    <p class="lead">WebClient는 HTTP를 직접 말하지 않는다. <em>무엇으로 말할지</em>를 부품으로 분리해 뒀고, 그 부품이 커넥터다.</p>
+
+    <p><span class="term">WebClient</span>가 하는 일은 "어떤 URL에 어떤 헤더로 무엇을 보내고, 응답 본문을 어떤 타입으로 바꿀지"를 정하는 것까지다. 실제로 TCP 연결을 열고 바이트를 주고받는 일은 <span class="term">ClientHttpConnector</span>라는 인터페이스 뒤에 있다. 구현체가 넷이고, 그중 하나가 꽂힌다.</p>
+
+    <p>이 갈아 끼우는 자리가 있기 때문에 "우리가 쓰는 HTTP 엔진"을 <strong>애플리케이션 코드를 한 줄도 고치지 않고</strong> 바꿀 수 있다. Boot 3.5는 아예 설정 한 줄로 바꾸게 해 뒀다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 02">
+        <svg viewBox="0 0 720 330" role="img" aria-label="WebClient 아래에 ClientHttpConnector 인터페이스가 있고, 그 아래 Reactor Netty, Jetty, Apache HttpClient 5, JDK HttpClient 네 구현체가 붙는 구조. 현재는 Reactor Netty가 선택됨">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="260" y="18" width="200" height="60" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="260" y="18" width="200" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">WebClient</div><div class="s">URL · 헤더 · 본문 변환</div></div></foreignObject>
+
+          <line x1="360" y1="80" x2="360" y2="106" stroke="#8B95A1" stroke-width="2" marker-end="url(#a2)"/>
+
+          <rect x="200" y="108" width="320" height="62" rx="16" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.6" stroke-dasharray="6 4"/>
+          <foreignObject x="200" y="108" width="320" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">ClientHttpConnector — 갈아 끼우는 자리</div><div class="s">spring.http.reactiveclient.connector</div></div></foreignObject>
+
+          <line x1="105" y1="172" x2="105" y2="216" stroke="#15C47E" stroke-width="2.4" marker-end="url(#a2)"/>
+          <line x1="275" y1="172" x2="275" y2="216" stroke="#D1D6DB" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <line x1="445" y1="172" x2="445" y2="216" stroke="#D1D6DB" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <line x1="615" y1="172" x2="615" y2="216" stroke="#D1D6DB" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+          <path d="M200 139 L105 139 L105 172" fill="none" stroke="#15C47E" stroke-width="2.4"/>
+          <path d="M520 139 L615 139 L615 172" fill="none" stroke="#D1D6DB" stroke-width="2" stroke-dasharray="5 4"/>
+          <path d="M200 152 L275 152 L275 172" fill="none" stroke="#D1D6DB" stroke-width="2" stroke-dasharray="5 4"/>
+          <path d="M520 152 L445 152 L445 172" fill="none" stroke="#D1D6DB" stroke-width="2" stroke-dasharray="5 4"/>
+
+          <rect x="30" y="218" width="150" height="72" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.6"/>
+          <foreignObject x="30" y="218" width="150" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">Reactor Netty</div><div class="s">탐지 1순위 · 현재</div></div></foreignObject>
+
+          <rect x="200" y="218" width="150" height="72" rx="14" fill="#F2F4F6" stroke="#D1D6DB" stroke-width="1.3"/>
+          <foreignObject x="200" y="218" width="150" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Jetty</div><div class="s">2순위 · lib 필요</div></div></foreignObject>
+
+          <rect x="370" y="218" width="150" height="72" rx="14" fill="#F2F4F6" stroke="#D1D6DB" stroke-width="1.3"/>
+          <foreignObject x="370" y="218" width="150" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Apache HC5</div><div class="s">3순위 · lib 필요</div></div></foreignObject>
+
+          <rect x="540" y="218" width="150" height="72" rx="14" fill="#F2F4F6" stroke="#D1D6DB" stroke-width="1.3"/>
+          <foreignObject x="540" y="218" width="150" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">JDK HttpClient</div><div class="s">4순위 · 내장</div></div></foreignObject>
+
+          <text class="svg-l" x="105" y="308" text-anchor="middle" fill="#0A8F5B">클래스패스에 있는 유일한 구현</text>
+          <text class="svg-l" x="445" y="308" text-anchor="middle" fill="#8B95A1">넣으면 후보가 되지만 순위는 뒤</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 2.</b> 위 두 층은 그대로 두고 <b>맨 아래 한 칸만</b> 바뀐다. 아무것도 지정하지 않으면 탐지 순서(Reactor → Jetty → Apache → JDK)에서 앞선 것이 뽑힌다.<a href="#r2" class="cite">[2]</a><a href="#r3" class="cite">[3]</a></figcaption>
+    </figure>
+
+    <h3>지금 우리 앱은 무엇이 꽂혀 있나</h3>
+
+    <p>실행 클래스패스를 실제로 확인하면 <span class="term">reactor-netty-http:1.2.18</span> 하나뿐이고 Jetty·Apache는 없다. 그래서 <strong>아무 설정 없이도 Reactor Netty가 선택된다.</strong> 바꾸고 싶으면 속성 한 줄이면 된다.</p>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFC56B"></span><span class="dot" style="background:#15C47E"></span><span class="fn">application.yaml</span></div>
+<pre><span class="cm"># Boot 3.5부터 생긴 속성. 값은 reactor | jetty | http-components | jdk</span>
+spring:
+  http:
+    reactiveclient:
+      connector: reactor      <span class="cm"># 지정 안 하면 자동 탐지로 같은 결과</span>
+      connect-timeout: 2s     <span class="cm"># ① 연결</span>
+      read-timeout: 3s        <span class="cm"># ② 읽기 — 의미가 커넥터마다 다르다(3장)</span></pre>
+    </div>
+
+    <div class="note warn"><span class="tag">함정</span>이름이 비슷한 <span class="term">spring.http.client.*</span>는 <strong>RestClient·RestTemplate 전용</strong>이다. WebClient에 쓰려고 이쪽에 적으면 <strong>오류 없이 조용히 무시된다.</strong> WebClient 쪽은 <span class="term">reactiveclient</span>다.<a href="#r4" class="cite">[4]</a><a href="#r2" class="cite">[2]</a></div>
+  </section>
+
+  <!-- ============ 3 ============ -->
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">THREE LAYERS</p><h2 class="sec">타임아웃을 왜 세 겹으로 거는가</h2></div>
+    </div>
+
+    <p class="lead">한 겹으로 부족한 이유는 단순하다. <em>느려지는 방식이 세 가지</em>이고, 각각 다른 지점에서만 감지된다.</p>
+
+    <p>호출 하나가 늦어지는 이유는 서로 다르다. ① 상대 서버가 아예 안 받아서 <strong>연결</strong>이 안 될 수도 있고, ② 연결은 됐는데 <strong>응답 데이터가 안 오고</strong> 있을 수도 있고, ③ 데이터는 오는데 <strong>찔끔찔끔 와서</strong> 총 시간이 하염없이 늘어날 수도 있다. 세 번째가 가장 위험한데, 앞의 두 겹으로는 잡히지 않기 때문이다.</p>
+
+    <div class="note key"><span class="tag">가장 중요한 오해</span>Reactor Netty의 <span class="term">responseTimeout</span>은 <strong>응답 전체의 마감 시각이 아니다.</strong> 공식 정의는 "응답을 읽는 동안 <strong>네트워크 read 작업 사이</strong>에 허용되는 최대 간격"이다.<a href="#r7" class="cite">[7]</a> 즉 상대가 1초마다 한 조각씩 계속 흘려보내면 이 값은 <strong>영원히 걸리지 않는다.</strong> 그래서 ③ 전체 예산은 선택이 아니라 <strong>필수</strong>다.</div>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 03">
+        <svg viewBox="0 0 720 300" role="img" aria-label="시간 축 위에 연결 타임아웃, 읽기 간격 타임아웃, 전체 예산 세 계층을 겹쳐 그린 그림. 응답 조각이 0.8초 간격으로 계속 도착해 읽기 간격 타임아웃은 걸리지 않고, 2초의 전체 예산이 호출을 자른다">
+          <defs>
+            <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <line x1="70" y1="262" x2="694" y2="262" stroke="#D1D6DB" stroke-width="1.5"/>
+          <g fill="#8B95A1" class="svg-s" text-anchor="middle">
+            <text x="70" y="282">0s</text><text x="190" y="282">1s</text><text x="310" y="282">2s</text>
+            <text x="430" y="282">3s</text><text x="550" y="282">4s</text><text x="670" y="282">5s</text>
+          </g>
+          <g stroke="#E5E8EB" stroke-width="1">
+            <line x1="190" y1="46" x2="190" y2="262"/><line x1="430" y1="46" x2="430" y2="262"/>
+            <line x1="550" y1="46" x2="550" y2="262"/><line x1="670" y1="46" x2="670" y2="262"/>
+          </g>
+
+          <text class="svg-l" x="16" y="76" fill="#1B64DA">①</text>
+          <rect x="70" y="60" width="48" height="26" rx="8" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="128" y="78" fill="#1B64DA">connect 0.4s — 여기서 끝. 연결은 성공했다</text>
+
+          <text class="svg-l" x="16" y="138" fill="#0A8F5B">②</text>
+          <g fill="#15C47E">
+            <circle cx="190" cy="130" r="5"/><circle cx="286" cy="130" r="5"/><circle cx="382" cy="130" r="5"/>
+            <circle cx="478" cy="130" r="5"/><circle cx="574" cy="130" r="5"/><circle cx="670" cy="130" r="5"/>
+          </g>
+          <line x1="118" y1="130" x2="694" y2="130" stroke="#15C47E" stroke-width="1.4" stroke-dasharray="4 4"/>
+          <line x1="196" y1="152" x2="280" y2="152" stroke="#0A8F5B" stroke-width="1.4" marker-start="url(#a3)" marker-end="url(#a3)"/>
+          <text class="svg-s" x="238" y="170" text-anchor="middle" fill="#0A8F5B">0.8s</text>
+          <text class="svg-s" x="300" y="170" fill="#0A8F5B">간격이 매번 read-timeout(1s)보다 짧다 → 절대 안 걸린다</text>
+
+          <text class="svg-l" x="16" y="216" fill="#C9303C">③</text>
+          <rect x="70" y="200" width="240" height="26" rx="8" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-s" x="190" y="218" text-anchor="middle" fill="#C9303C">전체 예산 2s</text>
+          <line x1="310" y1="46" x2="310" y2="262" stroke="#F04452" stroke-width="2.2"/>
+          <text class="svg-l" x="322" y="216" fill="#C9303C">여기서 자른다</text>
+          <text class="svg-s" x="322" y="234" fill="#F04452">이 선이 없으면 5s를 넘겨 계속 기다린다</text>
+
+          <text class="svg-l" x="70" y="36" fill="#4E5968">호출 1건의 시간 축 — 공급사가 응답을 조금씩 흘려보내는 상황</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 3.</b> ①은 <b>연결까지만</b> 본다. ②는 <b>조각 사이 간격만</b> 본다. 총 소요를 보는 것은 ③ 하나뿐이라, 세 값이 다 있어야 구멍이 없다.</figcaption>
+    </figure>
+
+    <h3>값의 대소가 어긋나면 한 겹이 무의미해진다</h3>
+
+    <p>세 값은 독립적으로 정하는 것이 아니라 <strong>① &lt; ② &lt; ③</strong> 관계를 지켜야 한다. 예를 들어 전체 예산을 1초로 두고 연결 타임아웃을 2초로 두면, 연결 타임아웃은 영원히 발동하지 않는다. 항상 전체 예산이 먼저 잘라 버리기 때문이다. 그러면 로그에 남는 실패 사유가 전부 "예산 초과"가 되어, <em>연결이 안 된 것인지 응답이 느린 것인지 구분할 수 없게 된다.</em></p>
+
+    <div class="note"><span class="tag">우리 프로젝트 맥락</span>공급사 호출은 검색 API 하나가 여러 공급사로 갈라져 나가는 fan-out 구조다. 사용자 응답 시간의 상한이 곧 <strong>③의 값</strong>이고, ①·②는 그 안에서 <em>실패 원인을 구분해 주는 계측기</em> 역할을 한다. 값 자체는 설계 단계에서 근거와 함께 정한다(<span class="term">D-F3a-3</span>).</div>
+  </section>
+
+  <!-- ============ 4 ============ -->
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">FOUR CONNECTORS</p><h2 class="sec">커넥터 4종 — 같은 장애, 다른 손잡이</h2></div>
+    </div>
+
+    <p class="lead">네 구현체의 진짜 차이는 성능이 아니라 <em>손잡이를 몇 개 따로 돌릴 수 있는가</em>다.</p>
+
+    <p>앞 장의 세 계층을 각 커넥터가 어떻게 제공하는지 보면 선택이 갈린다. 어떤 것은 ①②③을 각각 다른 값으로 걸 수 있고, 어떤 것은 ②와 ③이 한 손잡이로 붙어 있어 <strong>"연결은 빨리 포기하되 응답은 길게 기다린다"를 표현할 수 없다.</strong></p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 04">
+        <svg viewBox="0 0 720 292" role="img" aria-label="네 커넥터가 연결, 읽기, 전체 예산 세 계층을 각각 독립적으로 설정할 수 있는지 비교. Reactor Netty와 Apache는 모두 독립, Jetty는 읽기가 유휴 기준, JDK는 읽기와 전체 예산이 한 손잡이로 합쳐짐">
+          <g class="svg-l" text-anchor="middle" fill="#4E5968">
+            <text x="356" y="34">① connect</text><text x="486" y="34">② read</text><text x="616" y="34">③ 전체 예산</text>
+          </g>
+          <line x1="30" y1="46" x2="690" y2="46" stroke="#E5E8EB" stroke-width="1.4"/>
+
+          <foreignObject x="30" y="56" width="300" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left green"><div class="t">Reactor Netty</div><div class="s">탐지 1순위 · 이미 클래스패스에 있음</div></div></foreignObject>
+          <circle cx="356" cy="79" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <circle cx="486" cy="79" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <circle cx="616" cy="79" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <text class="svg-s" x="356" y="83" text-anchor="middle" fill="#0A8F5B">✓</text>
+          <text class="svg-s" x="486" y="83" text-anchor="middle" fill="#0A8F5B">✓</text>
+          <text class="svg-s" x="616" y="83" text-anchor="middle" fill="#0A8F5B">✓</text>
+
+          <line x1="30" y1="104" x2="690" y2="104" stroke="#F2F4F6" stroke-width="1.2"/>
+
+          <foreignObject x="30" y="114" width="300" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left grey"><div class="t">Jetty</div><div class="s">브리지 라이브러리 추가 필요</div></div></foreignObject>
+          <circle cx="356" cy="137" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <circle cx="486" cy="137" r="11" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.8"/>
+          <circle cx="616" cy="137" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <text class="svg-s" x="356" y="141" text-anchor="middle" fill="#0A8F5B">✓</text>
+          <text class="svg-s" x="486" y="141" text-anchor="middle" fill="#6B7684">유휴</text>
+          <text class="svg-s" x="616" y="141" text-anchor="middle" fill="#0A8F5B">✓</text>
+
+          <line x1="30" y1="162" x2="690" y2="162" stroke="#F2F4F6" stroke-width="1.2"/>
+
+          <foreignObject x="30" y="172" width="300" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left grey"><div class="t">Apache HttpClient 5</div><div class="s">의존성 추가 · 기본값이 fan-out에 적대적</div></div></foreignObject>
+          <circle cx="356" cy="195" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <circle cx="486" cy="195" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <circle cx="616" cy="195" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <text class="svg-s" x="356" y="199" text-anchor="middle" fill="#0A8F5B">✓</text>
+          <text class="svg-s" x="486" y="199" text-anchor="middle" fill="#0A8F5B">✓</text>
+          <text class="svg-s" x="616" y="199" text-anchor="middle" fill="#0A8F5B">✓</text>
+
+          <line x1="30" y1="220" x2="690" y2="220" stroke="#F2F4F6" stroke-width="1.2"/>
+
+          <foreignObject x="30" y="230" width="300" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left red"><div class="t">JDK HttpClient</div><div class="s">내장 · 의존성 0</div></div></foreignObject>
+          <circle cx="356" cy="253" r="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+          <text class="svg-s" x="356" y="257" text-anchor="middle" fill="#0A8F5B">✓</text>
+          <rect x="452" y="240" width="196" height="26" rx="13" fill="#FEEFEF" stroke="#F04452" stroke-width="1.6"/>
+          <text class="svg-s" x="550" y="258" text-anchor="middle" fill="#C9303C">②③이 한 손잡이 — 분리 불가</text>
+
+          <text class="svg-s" x="30" y="286" fill="#8B95A1">✓ = 다른 값으로 따로 걸 수 있다 · 유휴 = 총 시간이 아니라 무통신 구간만 잰다</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 4.</b> JDK는 "요청 하나의 마감 시각" 하나만 갖는다. 값은 걸 수 있지만 <b>연결 지연과 응답 지연을 구분해 다루지 못한다.</b></figcaption>
+    </figure>
+
+    <h3>기준 축으로 놓고 비교</h3>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>기준</th><th>Reactor Netty</th><th>선택 시 이득</th><th>JDK / Apache / Jetty</th></tr></thead>
+        <tbody>
+          <tr><td>3계층 분리</td><td>①②③ 분리 + 요청별 ② 재정의<a href="#r6" class="cite">[6]</a></td><td>공급사별로 다른 예산</td><td>JDK는 ②③ 합침<a href="#r9" class="cite">[9]</a><a href="#r10" class="cite">[10]</a> / Apache는 4단계로 더 세밀 / Jetty는 ②가 유휴<a href="#r14" class="cite">[14]</a></td></tr>
+          <tr><td>커넥션 풀</td><td>호스트(공급사)당 제어<a href="#r8" class="cite">[8]</a></td><td>A가 느려도 B 몫이 안 줄어든다</td><td>Apache는 route(대상 호스트)당 기본 5<a href="#r17" class="cite">[17]</a> / JDK는 JVM 전역 프로퍼티뿐<a href="#r12" class="cite">[12]</a> / Jetty는 destination당 64<a href="#r13" class="cite">[13]</a></td></tr>
+          <tr><td>도입 비용</td><td>의존성·설정 0 (이미 있음)</td><td>지금 당장 씀</td><td>Jetty·Apache는 라이브러리 추가, JDK는 커넥터 명시 지정</td></tr>
+          <tr><td>운영 부담</td><td>direct buffer · cancel 경로 주의</td><td>—</td><td>Apache는 기본값(호스트당 5 · connect 3분<a href="#r16" class="cite">[16]</a>) 반드시 재설정</td></tr>
+          <tr><td>자료 성숙도</td><td>Spring 공식 예제의 기본값</td><td>막힐 때 참고할 게 많다</td><td>Jetty 경유 사례가 가장 적다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>축 하나씩 — 무슨 말이고, 고르면 무엇이 달라지나</h3>
+
+    <p>표의 다섯 줄은 임의로 고른 항목이 아니다. 넷은 이 프로젝트가 기술 비교를 할 때 쓰는 고정 축(구현 복잡도 · 확정 스택 적합성 · 운영 관리 포인트 · 문서 성숙도)이고, 맨 위 하나는 <em>이 결정에만 있는 축</em>이다. 아래에서 한 줄씩 푼다.</p>
+
+    <h3 id="ax1">축 ① 3계층을 따로 걸 수 있는가</h3>
+
+    <p><strong>무슨 얘기인가.</strong> 3장에서 본 세 계층을 <em>각각 다른 값으로</em> 설정할 수 있느냐는 것이다. 어떤 커넥터는 손잡이가 셋이고, 어떤 커넥터는 둘이 붙어 있어 하나로만 돌아간다.</p>
+
+    <p><strong>붙어 있으면 무엇을 못 하나.</strong> "연결은 1초 안에 안 되면 포기하되, 응답은 5초까지 기다린다"를 표현할 수 없다. 값을 하나만 가지므로 둘 중 느슨한 쪽(5초)에 맞춰야 하고, 그러면 <strong>연결조차 안 되는 죽은 서버를 5초 동안 붙잡고 있게 된다.</strong> 반대로 1초로 조이면 정상인데 조금 느린 응답까지 잘라 버린다.</p>
+
+    <div class="note key"><span class="tag">이 프로젝트에서의 이득</span>뒤 단계에 <strong>공급사별 실패 사유를 응답에 싣는 기능</strong>이 있다. 손잡이가 셋이면 실패가 <em>연결 실패 / 응답 지연 / 예산 초과</em>로 갈려 그 사유 체계가 실제로 채워진다. 하나면 전부 "타임아웃"으로 뭉개져 <strong>사유 필드가 있으나 마나 해진다.</strong> 재시도 정책도 마찬가지다 — 연결 실패는 재시도할 값어치가 있고 예산 초과는 없는데, 구분이 안 되면 정책을 세울 수 없다.</div>
+
+    <p>여기에 Reactor Netty는 <strong>요청 단위 재정의</strong>까지 준다<a href="#r6" class="cite">[6]</a>. 공급사 A가 평소 200ms인데 B가 2초라면, 같은 클라이언트를 쓰면서 A 호출에만 짧은 값을 걸 수 있다. 공통 값 하나로 맞추면 A의 장애를 B 기준(느슨한 값)으로 늦게 알게 된다.</p>
+
+    <h3 id="ax2">축 ② 커넥션 풀을 무엇 단위로 제한하는가</h3>
+
+    <p><strong>무슨 얘기인가.</strong> HTTP 호출은 매번 새로 연결하지 않고 <em>연결을 만들어 두고 재사용</em>한다. 그 보관함이 커넥션 풀이고, 동시에 열어 둘 수 있는 개수에 상한이 있다. 질문은 <strong>그 상한이 무엇을 기준으로 걸리느냐</strong>다 — 공급사(호스트)마다 따로인가, 앱 전체에 하나인가.</p>
+
+    <p><strong>왜 이게 갈림길인가.</strong> 검색 한 건이 공급사 여러 곳으로 동시에 나간다. 이때 한 공급사가 느려지면 그 응답을 기다리는 커넥션이 반납되지 않고 쌓인다. 상한이 <em>전체에 하나</em>면, 느린 공급사가 만든 대기가 보관함을 다 차지해 <strong>멀쩡한 공급사의 호출까지 자리를 못 얻는다.</strong></p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 05">
+        <svg viewBox="0 0 720 268" role="img" aria-label="왼쪽은 공급사별로 분리된 커넥션 풀이라 A가 가득 차도 B는 정상 응답하고, 오른쪽은 전역 풀 하나라 A의 대기가 자리를 다 차지해 B까지 막히는 비교">
+          <defs>
+            <marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <text class="svg-l" x="180" y="24" text-anchor="middle" fill="#0A8F5B">호스트별 풀 — Reactor Netty</text>
+          <rect x="20" y="36" width="320" height="182" rx="18" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.2"/>
+
+          <rect x="40" y="62" width="130" height="62" rx="12" fill="#FEEFEF" stroke="#F04452" stroke-width="1.4"/>
+          <foreignObject x="40" y="62" width="130" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">A 풀</div><div class="s">가득 참</div></div></foreignObject>
+          <rect x="190" y="62" width="130" height="62" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+          <foreignObject x="190" y="62" width="130" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">B 풀</div><div class="s">여유 있음</div></div></foreignObject>
+
+          <line x1="105" y1="126" x2="105" y2="152" stroke="#F04452" stroke-width="2" marker-end="url(#a4)"/>
+          <line x1="255" y1="126" x2="255" y2="152" stroke="#15C47E" stroke-width="2" marker-end="url(#a4)"/>
+          <text class="svg-s" x="105" y="170" text-anchor="middle" fill="#C9303C">A만 지연·실패</text>
+          <text class="svg-s" x="255" y="170" text-anchor="middle" fill="#0A8F5B">B는 정상 응답</text>
+          <rect x="40" y="182" width="280" height="26" rx="9" fill="#E7F9F1" stroke="#BFECD8" stroke-width="1.2"/>
+          <text class="svg-s" x="180" y="200" text-anchor="middle" fill="#0A8F5B">부분 실패가 부분에서 멈춘다</text>
+
+          <text class="svg-l" x="540" y="24" text-anchor="middle" fill="#C9303C">전역 풀 하나 — JDK</text>
+          <rect x="380" y="36" width="320" height="182" rx="18" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.2"/>
+
+          <rect x="400" y="62" width="280" height="62" rx="12" fill="#FEEFEF" stroke="#F04452" stroke-width="1.4"/>
+          <foreignObject x="400" y="62" width="280" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">전역 풀</div><div class="s">A의 대기가 자리를 다 차지</div></div></foreignObject>
+
+          <line x1="470" y1="126" x2="470" y2="152" stroke="#F04452" stroke-width="2" marker-end="url(#a4)"/>
+          <line x1="610" y1="126" x2="610" y2="152" stroke="#F04452" stroke-width="2" marker-end="url(#a4)"/>
+          <text class="svg-s" x="470" y="170" text-anchor="middle" fill="#C9303C">A 지연·실패</text>
+          <text class="svg-s" x="610" y="170" text-anchor="middle" fill="#C9303C">B도 자리를 못 얻음</text>
+          <rect x="400" y="182" width="280" height="26" rx="9" fill="#FEEFEF" stroke="#f8d4d4" stroke-width="1.2"/>
+          <text class="svg-s" x="540" y="200" text-anchor="middle" fill="#C9303C">부분 실패가 전체 실패로 번진다</text>
+
+          <text class="svg-s" x="360" y="248" text-anchor="middle" fill="#8B95A1">같은 상황(공급사 A만 느려짐)에서 갈리는 결과</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 5.</b> 오른쪽이 찾기 어려운 장애다. 로그에는 <b>B가 실패했다</b>고 남지만 원인은 A에 있다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">이 프로젝트에서의 이득</span>"한 공급사가 죽어도 나머지 결과로 응답한다"가 요구사항인데, <strong>전역 풀이면 그 요구가 코드가 아니라 인프라 층에서 무너진다.</strong> 어떤 공급사가 얼마나 느려지든 다른 공급사 호출은 자기 몫의 커넥션에서 나가야 한다 — 그래서 호스트 단위 제어가 필요하다. Reactor Netty는 원격 호스트당 활성 500 · 대기 1,000 · 획득 45초를 기본으로 두고 조정할 수 있다<a href="#r8" class="cite">[8]</a>.</div>
+
+    <p>다른 둘은 각자의 이유로 이 축에서 밀린다. Apache는 <strong>route당 기본 5개</strong>라<a href="#r17" class="cite">[17]</a> 분리는 되지만 상한이 너무 낮아, 코드를 50개씩 묶어 여러 번 부르는 우리 호출 패턴에서 곧바로 병목이 된다(반드시 올려야 한다). JDK는 아예 <strong>JVM 전역 시스템 프로퍼티로만</strong> 조정되어<a href="#r12" class="cite">[12]</a> 앱 안에서 공급사별로 나눌 방법이 없다.</p>
+
+    <h3 id="ax3">축 ③ 도입 비용</h3>
+
+    <p><strong>무슨 얘기인가.</strong> 이걸 쓰기 위해 새로 넣어야 하는 의존성과 설정이 얼마나 되느냐다.</p>
+
+    <p>이 프로젝트에는 <em>"이게 없으면 무엇이 깨지는지 확인한 뒤에만 의존성을 넣는다"</em>는 규칙이 있다. 그 기준에서 Reactor Netty는 <strong>비용이 0</strong>이다 — 이미 클래스패스에 있고, 탐지 1순위라 설정을 한 줄도 쓰지 않아도 선택된다<a href="#r2" class="cite">[2]</a><a href="#r3" class="cite">[3]</a>. Jetty·Apache는 라이브러리를 새로 넣고 이후 버전까지 같이 관리해야 한다. JDK는 의존성은 0이지만 탐지 최하위라 <em>명시적으로 지정하는 설정</em>이 늘어난다.</p>
+
+    <div class="note"><span class="tag">이득</span>새 의존성이 없다는 것은 단순히 편한 게 아니라 <strong>취약점 공지·버전 충돌·빌드 시간을 새로 떠안지 않는다</strong>는 뜻이다. 지금 이미 들어와 있는 것을 쓰는 쪽이 안 쓰는 쪽보다 항상 싸다.</div>
+
+    <h3 id="ax4">축 ④ 운영하며 계속 신경 써야 하는 것</h3>
+
+    <p><strong>무슨 얘기인가.</strong> 고르고 나면 끝이 아니라, 각 선택지마다 "이건 알고 있어야 한다"는 항목이 따라온다. 이 축의 이득은 <em>함정이 없다</em>가 아니라 <strong>함정이 알려져 있고 문서화돼 있다</strong>는 것이다.</p>
+
+    <div class="cols">
+      <div class="col o"><h4><span class="mk">Reactor</span>알려진 함정</h4><p>힙 밖 메모리(direct buffer)를 쓰고, 요청 취소 경로에서 응답 버퍼가 새는 사례가 <b>공개 사례로 보고돼 있다.</b> 무엇을 조심할지 알고 시작한다.</p></div>
+      <div class="col x"><h4><span class="mk">Apache</span>기본값이 함정</h4><p>연결 타임아웃 기본이 <b>3분</b>이다<a href="#r16" class="cite">[16]</a>. 재설정을 잊으면 사용자가 이미 떠난 뒤까지 서버가 기다린다.</p></div>
+    </div>
+
+    <p>JDK는 다른 종류의 부담이 있다. 튜닝 손잡이가 JVM 전역이라, 나중에 다른 목적의 HTTP 호출이 생기면 <strong>서로 다른 요구가 같은 설정 하나를 두고 다투게 된다.</strong></p>
+
+    <h3 id="ax5">축 ⑤ 문서와 사례가 얼마나 있는가</h3>
+
+    <p><strong>무슨 얘기인가.</strong> 막혔을 때 참고할 <em>1차 문서</em>가 있느냐다. 이 축은 평소엔 안 보이다가 문제가 생겼을 때 시간 차이로 나타난다.</p>
+
+    <p>Spring 공식 레퍼런스의 WebClient 설정 예제는 Reactor Netty가 기준이고, 우리가 쓸 코드 형태가 문서에 그대로 있다<a href="#r6" class="cite">[6]</a>. 반대쪽 사례로, 이번 조사에서 <strong>Jetty 경로로 요청별 총 타임아웃을 거는 공식 예시는 끝내 찾지 못했다.</strong> Jetty를 골랐다면 그 부분은 문서를 보고 따라 쓰는 대신 <em>우리가 실험해서 알아내야</em> 한다.</p>
+
+    <h3 id="ax6">그런데 Reactor와 Apache는 거의 같지 않나</h3>
+
+    <p class="lead">거의 같다. <em>능력으로는 갈리지 않는다</em>는 것을 먼저 인정하고 시작해야 이 선택의 진짜 근거가 보인다.</p>
+
+    <p>축 ①에서 "3계층을 따로 걸 수 있다"는 <strong>Apache도 된다.</strong> 오히려 더 잘게 나뉘어 있다 — 연결 / 풀에서 커넥션을 빌려 오는 대기 / 소켓 / 응답 도착이 각각 별도 손잡이다. 축 ②의 "호스트별 풀"도 Apache가 제공한다(route 단위인데, route는 <strong>대상 호스트·프록시·로컬주소</strong>로 정의되고 <strong>URL 경로는 포함하지 않아</strong> 결국 호스트 단위다<a href="#r18" class="cite">[18]</a>). 즉 <strong>두 축 모두 Apache가 지는 축이 아니다.</strong></p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>Reactor Netty</th><th>판정</th><th>Apache HttpClient 5</th></tr></thead>
+        <tbody>
+          <tr><td>연결 타임아웃</td><td><span class="term">CONNECT_TIMEOUT_MILLIS</span></td><td>같음</td><td><span class="term">setConnectTimeout</span> (기본 3분<a href="#r16" class="cite">[16]</a>)</td></tr>
+          <tr><td>풀 대여 대기</td><td>획득 타임아웃 기본 45초<a href="#r8" class="cite">[8]</a></td><td>같음</td><td><span class="term">connectionRequestTimeout</span> (기본 3분)</td></tr>
+          <tr><td>읽기·응답</td><td><span class="term">responseTimeout</span> — read 간격</td><td>Apache가 세밀</td><td><span class="term">socketTimeout</span> + <span class="term">responseTimeout</span></td></tr>
+          <tr><td>전체 예산</td><td>없음 → <span class="term">timeout()</span> 필요</td><td>같음</td><td><b>없음</b> — 문서가 "response timeout은 데드라인이 아니다"라고 명시<a href="#r16" class="cite">[16]</a></td></tr>
+          <tr><td>풀 제어 단위</td><td>원격 호스트당</td><td>같음</td><td>route당 — <b>route = 대상 호스트·프록시·로컬주소</b>이며 <b>URL 경로는 포함하지 않는다</b><a href="#r18" class="cite">[18]</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">여기가 핵심</span>Apache의 <span class="term">responseTimeout</span>도 <strong>데드라인이 아니다</strong> — 자동 재실행 같은 경우 그 값을 넘길 수 있다고 문서가 못 박는다. Reactor의 read 간격과 성격은 다르지만, <strong>"③ 전체 예산을 따로 걸어야 한다"는 결론은 두 커넥터에서 똑같다.</strong> 3장의 그림은 어느 쪽을 골라도 유효하다.</div>
+
+    <h3 id="ax7">그러면 무엇이 갈리나 — 세 가지뿐이다</h3>
+
+    <div class="cols">
+      <div class="col o"><h4><span class="mk">1</span>설정하지 않았을 때의 상태</h4><p>Reactor의 기본값은 넉넉하고(호스트당 500), Apache는 <b>경로당 5 · 연결 3분</b>이다. 둘 다 바꿀 수 있지만, <b>잊었을 때 벌어지는 일</b>이 다르다. Apache는 재설정을 잊으면 조용히 병목이 생기고 3분을 기다린다.</p></div>
+      <div class="col x"><h4><span class="mk">2</span>지금 들어와 있는가</h4><p>Reactor는 이미 클래스패스에 있고 탐지 1순위다. Apache는 의존성을 추가해야 하고, <b>자체 I/O 스레드 풀이 하나 더 생겨</b> 관리·모니터링 대상이 늘어난다.</p></div>
+    </div>
+
+    <p><strong>3. 예제가 어느 쪽 기준인가.</strong> Spring 레퍼런스의 WebClient 설정 예제와 <em>요청별 타임아웃 재정의</em> 예시가 Reactor 기준으로 쓰여 있다<a href="#r6" class="cite">[6]</a>. Apache 경유로 같은 것을 하는 공식 예시는 <strong>이번 조사에서 확인하지 못했다</strong> — 없다는 뜻이 아니라 <em>못 찾았다</em>는 뜻이고, 그만큼 우리가 실험할 몫이 늘어난다.</p>
+
+    <div class="note"><span class="tag">Apache가 나은 점도 있다</span>손잡이가 더 또렷하게 나뉘어 있어 <strong>"풀에서 커넥션을 못 빌려서 늦은 것"과 "서버가 늦게 답해서 늦은 것"을 별도 값으로 계측</strong>할 수 있다. 그리고 우리가 부담으로 적어 둔 <strong>Netty의 direct buffer 취소 누수 사례에서 자유롭다</strong> — 그건 Netty 쪽 이야기다.</div>
+
+    <div class="note key"><span class="tag">정정된 결론</span>Reactor Netty는 <strong>능력으로 이기는 게 아니다.</strong> "이미 들어와 있고, 아무 설정 없이 선택되며, 공식 예제가 그 기준"이라는 <strong>비용과 정합성으로 이긴다.</strong> 그리고 이 결정은 되돌리기 쉽다 — 커넥터는 <span class="term">spring.http.reactiveclient.connector</span> 한 줄로 바뀌므로, 나중에 풀 대여 대기를 따로 계측해야 할 일이 실제로 생기면 그때 Apache로 옮기면 된다. <strong>싸고 되돌릴 수 있는 쪽을 먼저 고르는 것</strong>이 이 선택의 성격이다.</div>
+
+    <h3 id="ax8">"설정 0"이 정확히 어디까지인가</h3>
+
+    <p class="lead">앞에서 "설정 없이 선택된다"고 쓴 것은 <em>커넥터 선택</em>에 한정된 말이다. 타임아웃과 풀은 별개다.</p>
+
+    <p>세 단계로 나뉜다. 무엇이 yaml로 되고 무엇이 코드를 요구하는지가 다르다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>무엇을</th><th>어떻게</th><th>Reactor에서</th><th>Apache로 바꾸면</th></tr></thead>
+        <tbody>
+          <tr><td>커넥터 선택</td><td>자동 탐지</td><td><b>진짜 0줄</b> — 클래스패스에 그것뿐이라 저절로 잡힌다</td><td>의존성 추가 + <span class="term">connector: http-components</span> 1줄</td></tr>
+          <tr><td>① connect · ② read</td><td>yaml 2줄</td><td><span class="term">spring.http.reactiveclient.connect-timeout</span> · <span class="term">read-timeout</span><a href="#r4" class="cite">[4]</a></td><td>같은 속성을 그대로 쓴다</td></tr>
+          <tr><td>③ 전체 예산</td><td><b>코드</b></td><td>해당 속성이 없다 — <span class="term">timeout()</span> 연산자나 어댑터의 blockTimeout으로</td><td>동일하게 코드</td></tr>
+          <tr><td>커넥션 풀</td><td><b>코드</b></td><td>속성 없음. 다만 기본값이 넉넉해 <b>당장은 안 건드려도 된다</b></td><td><b>반드시 코드로 상향</b> — 기본 5는 fan-out에서 즉시 병목</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">그래서 정확히는</span>"yaml만 하면 되는가"의 답은 <strong>절반은 그렇다</strong>이다. 커넥터와 ①②는 yaml로 끝나지만, <strong>③ 전체 예산은 어느 커넥터를 골라도 코드가 필요하다</strong>(속성이 아예 없다). 풀은 Reactor에서는 <em>지금은</em> 생략 가능하고 Apache에서는 <em>필수</em>다 — 이것이 "도입 비용" 축의 실제 내용이다.</div>
+
+    <h3 id="ax9">목록 호출과 가격 호출의 풀을 나누면 이득 아닌가</h3>
+
+    <p class="lead">발상은 맞다. 다만 <em>커넥터를 바꿔서 얻는 것이 아니고</em>, 지금 규모에서는 실익이 없다.</p>
+
+    <p><strong>먼저 사실 하나.</strong> Apache의 route는 <span class="term">HttpRoute</span>가 정의하는데, 그 구성 요소는 <strong>대상 호스트 · 프록시 · 로컬 주소 · 보안 여부</strong>이고 <strong>URL 경로는 들어가지 않는다</strong><a href="#r18" class="cite">[18]</a>. 즉 같은 공급사의 <span class="term">/a/v1/hotels</span>와 <span class="term">/a/v1/availability</span>는 <strong>같은 route</strong>다. Apache를 골라도 목록과 가격이 풀을 따로 쓰지는 않는다 — 이 점에서 Reactor(원격 호스트당)와 결과가 같다.</p>
+
+    <p><strong>그러면 나누려면 어떻게 하나.</strong> 커넥터의 문제가 아니라 <strong>클라이언트 인스턴스를 나누는 문제</strong>다. 용도별로 커넥션 공급자를 따로 만든 WebClient를 두 개 두면 두 호출이 서로의 커넥션을 잠식하지 못한다. 이건 어느 커넥터에서도 된다. 격벽(bulkhead)이라고 부르는 패턴이다.</p>
+
+    <div class="note"><span class="tag">지금 나눌 값어치가 있나</span>목록 호출은 <strong>기동 시 1회 + 주기 갱신</strong>이라 공급사당 커넥션 한두 개를 잠깐 쓴다. 가격 호출은 사용자 검색마다 나간다. 호스트당 활성 500이 기본인 풀에서 <strong>목록이 검색을 굶기는 상황은 만들어지지 않는다.</strong> 지금 나누면 얻는 것 없이 빈과 설정만 두 배가 된다 — 필요해지기 전에 만들지 않는다는 원칙에 걸린다.</div>
+
+    <p><strong>그런데 "resilience 영역인가"는 절반만 맞다.</strong> 풀 격리 자체는 지금 필요 없지만, <em>실패를 세는 단위</em>는 뒤에서 반드시 갈라야 한다. 주기적인 목록 갱신이 실패해서 <strong>사용자 검색 경로의 차단기가 열리면</strong> 멀쩡한 검색이 막힌다. 이건 커넥션 풀이 아니라 <strong>차단기·재시도를 어느 단위로 두느냐</strong>의 문제이고, 견고성 단계에서 다룬다.</p>
+
+    <div class="note key"><span class="tag">이 문서에서 가져갈 결론</span>지금 단계에서 할 일은 <strong>나누는 것이 아니라 나눌 수 있게 열어 두는 것</strong>이다. 공통 배선을 "전역 WebClient 빈 하나"로 못 박지 말고 <strong>설정을 받아 인스턴스를 찍어내는 형태</strong>로 만들어 두면, 나중에 용도별·공급사별로 쪼갤 때 배선을 다시 짜지 않아도 된다. 이건 F3a 설계에 반영할 항목이다.</div>
+
+    <div class="note key"><span class="tag">2026-09-05 확정</span><strong>가안을 채택했다.</strong> fan-out은 <span class="term">Executors.newVirtualThreadPerTaskExecutor()</span>와 <span class="term">invokeAll(tasks, 예산, 단위)</span>로 만든다 — 후자가 <strong>전체 예산과 미완료 작업 취소</strong>를 표준으로 준다. 구조적 동시성(<span class="term">StructuredTaskScope</span>)은 <strong>Java 25에서 아직 preview</strong>라(JDK 25.0.2에서 직접 확인) 쓰지 않는다. 대가는 공급사별 개별 타임아웃·부분 실패 취합·동시 호출 수 제한을 손으로 짜는 것이고, 얻는 것은 <strong>평범한 Java 스택 트레이스와 살아 있는 MDC</strong>다.</div>
+
+    <div class="note key"><span class="tag">다섯 축을 합치면</span>①②는 <strong>이 선택이 뒤 기능(부분 실패·재시도·서킷)을 가능하게 하느냐</strong>를 묻고, ③④⑤는 <strong>그 선택을 감당할 수 있느냐</strong>를 묻는다. ①②에서 JDK는 확실히 밀리지만 <strong>Apache는 밀리지 않는다</strong>(바로 위 절). 그래서 Reactor Netty가 이기는 자리는 ③④⑤ — 비용과 정합성이다. 대신 <strong>취소 경로의 메모리 문제 하나를 떠안는다</strong> — 이게 이 선택의 가격표다.</div>
+
+    <div class="note"><span class="tag">JDK를 고를 때 하나 더</span>JDK의 <span class="term">connectTimeout</span>은 <strong>새 연결을 맺어야 할 때만</strong> 동작한다. 풀에서 커넥션을 재사용하면 <strong>이 값은 아무 효과가 없다</strong><a href="#r11" class="cite">[11]</a>. 즉 부하가 붙어 커넥션이 재사용되기 시작하면 ① 계층이 조용히 사라진다.</div>
+
+    <div class="note warn"><span class="tag">추천안이 지는 지점</span>전체 예산 <span class="term">timeout()</span>은 진행 중인 요청을 <strong>취소(cancel)</strong>시킨다. 그런데 Reactor Netty에서 보고된 대표적 운영 사고가 바로 <strong>cancel 경로에서 응답 본문 버퍼가 해제되지 않아 생기는 메모리 누수</strong>다(사내 조사 문서 <span class="term">docs/tech-reference-research.html</span> 2장 [22]). 우리가 쓰려는 무기와 알려진 리스크가 같은 경로에 있다 — 이건 뒤 단계(F7) 구현 시 반드시 점검할 항목으로 넘긴다.</div>
+  </section>
+
+  <!-- ============ 5 ============ -->
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">ENCAPSULATION</p><h2 class="sec">은닉 — 메서드처럼 쓰게 감싸기</h2></div>
+    </div>
+
+    <p class="lead">호출하는 쪽이 <span class="term">WebClient</span>도 <span class="term">Mono</span>도 몰라야 한다면, 그 감싸는 일을 <em>우리가 손으로 할 필요는 없다.</em></p>
+
+    <p>공급사를 부르는 코드가 매번 "URL 조립 → 헤더 붙이기 → 응답 타입 지정 → 리액티브 타입 풀기"를 반복하면, 그 네 가지가 온 코드베이스에 퍼진다. 공급사가 늘거나 헤더 규칙이 바뀌면 퍼진 만큼 고쳐야 한다.</p>
+
+    <p>Spring에는 이미 이걸 위한 장치가 있다. 인터페이스에 <span class="term">@HttpExchange</span>로 "이 메서드는 이 경로를 GET한다"만 선언해 두면, <span class="term">HttpServiceProxyFactory</span>가 그 인터페이스의 구현체를 런타임에 만들어 주고, <span class="term">WebClientAdapter</span>가 그 구현체를 WebClient 위에서 돌게 잇는다. <strong>세 클래스 모두 이미 우리 클래스패스에 있어 새 의존성이 필요 없다.</strong></p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 06">
+        <svg viewBox="0 0 720 300" role="img" aria-label="감싸기 전에는 호출부가 WebClient 체인과 리액티브 타입을 직접 다루지만, 감싼 뒤에는 인터페이스 메서드 하나를 호출한다. 그 사이를 HttpServiceProxyFactory와 WebClientAdapter가 잇는다">
+          <defs>
+            <marker id="a5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <text class="svg-l" x="150" y="24" text-anchor="middle" fill="#8B95A1">감싸기 전 — 호출부가 다 안다</text>
+          <rect x="20" y="36" width="260" height="150" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <g class="svg-s" fill="#4E5968">
+            <text x="38" y="62">webClient.get()</text>
+            <text x="38" y="82">  .uri("/a/v1/hotels")</text>
+            <text x="38" y="102">  .header("X-Api-Key", k)</text>
+            <text x="38" y="122">  .retrieve()</text>
+            <text x="38" y="142">  .bodyToMono(Resp.class)</text>
+            <text x="38" y="162">  .timeout(budget)</text>
+          </g>
+          <text class="svg-s" x="150" y="204" text-anchor="middle" fill="#C9303C">경로 · 헤더 · 응답타입 · 리액티브 타입</text>
+          <text class="svg-s" x="150" y="220" text-anchor="middle" fill="#C9303C">네 가지가 호출부마다 반복된다</text>
+
+          <rect x="300" y="80" width="120" height="62" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="300" y="80" width="120" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">프록시</div><div class="s">Factory + Adapter</div></div></foreignObject>
+          <line x1="282" y1="111" x2="296" y2="111" stroke="#3182F6" stroke-width="2" marker-end="url(#a5)"/>
+          <line x1="422" y1="111" x2="436" y2="111" stroke="#3182F6" stroke-width="2" marker-end="url(#a5)"/>
+          <text class="svg-s" x="360" y="162" text-anchor="middle" fill="#3182F6">우리가 안 짜도</text>
+          <text class="svg-s" x="360" y="177" text-anchor="middle" fill="#3182F6">Spring이 만들어 준다</text>
+
+          <text class="svg-l" x="570" y="24" text-anchor="middle" fill="#0A8F5B">감싼 뒤 — 메서드 하나</text>
+          <rect x="440" y="36" width="260" height="150" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+          <g class="svg-s" fill="#0A8F5B">
+            <text x="458" y="70">@HttpExchange("/a/v1")</text>
+            <text x="458" y="90">interface SupplierA {</text>
+            <text x="458" y="112">  @GetExchange("/hotels")</text>
+            <text x="458" y="132">  Hotels hotels();</text>
+            <text x="458" y="152">}</text>
+          </g>
+          <text class="svg-s" x="570" y="204" text-anchor="middle" fill="#0A8F5B">호출부는 supplierA.hotels() 한 줄</text>
+          <text class="svg-s" x="570" y="220" text-anchor="middle" fill="#0A8F5B">WebClient도 Mono도 보이지 않는다</text>
+
+          <rect x="20" y="242" width="330" height="44" rx="12" fill="#E7F9F1" stroke="#BFECD8" stroke-width="1.2"/>
+          <foreignObject x="20" y="242" width="330" height="44"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left green"><div class="s">얻는 것 — 전송 계층이 한 곳에 모이고, 공급사 추가는 인터페이스 1개</div></div></foreignObject>
+
+          <rect x="370" y="242" width="330" height="44" rx="12" fill="#FEEFEF" stroke="#f8d4d4" stroke-width="1.2"/>
+          <foreignObject x="370" y="242" width="330" height="44"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left red"><div class="s">잃는 것 — 반환 타입을 순수 타입으로 두면 fan-out을 연산자로 못 짠다</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>그림 6.</b> 가운데 파란 상자는 <b>우리가 작성하지 않는 코드</b>다. 왼쪽의 네 가지 관심사가 인터페이스 선언 한 곳으로 접힌다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">전체 예산은 어디로 가나</span>메서드가 <span class="term">Mono</span>가 아니라 일반 타입을 반환하면 <span class="term">timeout()</span>을 걸 자리가 없어 보이지만, 어댑터에 <span class="term">setBlockTimeout(Duration)</span>이 있다. 반환 타입이 블로킹일 때 내부적으로 그 시간만큼만 기다린다. <strong>③ 계층이 사라지는 게 아니라 설정 위치가 옮겨간다.</strong></div>
+  </section>
+
+  <!-- ============ 6 ============ -->
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">LAYERING</p><h2 class="sec">Reactor를 어디서 소멸시킬 것인가</h2></div>
+    </div>
+
+    <p class="lead">은닉의 목적을 "편하게 쓰기"가 아니라 <em>"전송 계층이 도메인 밖에 머무르게"</em>로 잡으면, 질문이 하나로 좁혀진다.</p>
+
+    <p>이 프로젝트의 규칙은 이미 정해져 있다. <strong>도메인은 프레임워크 의존이 0</strong>이고(<span class="term">LAY-2</span>), 공급사 조회의 <strong>포트 인터페이스는 도메인이 소유하고 구현은 인프라</strong>가 한다. 그러니 어떤 선택을 하든 <strong>도메인이 WebClient를 보는 일은 없다.</strong> 진짜 질문은 그 다음이다 — <em>리액티브 타입이 어느 선까지 올라오느냐.</em></p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 07">
+        <svg viewBox="0 0 720 250" role="img" aria-label="포트 반환 타입에 따라 Reactor가 사는 범위가 달라지는 세 가지 안. 가안은 인프라 안에서 소멸, 나안은 도메인까지 올라옴, 다안은 fan-out까지 인프라가 수행해 도메인은 순수하게 유지">
+          <g class="svg-l" text-anchor="middle" fill="#4E5968">
+            <text x="130" y="26">가 — 순수 타입</text><text x="360" y="26">나 — Mono 반환</text><text x="590" y="26">다 — 묶음 포트</text>
+          </g>
+
+          <g>
+            <rect x="30" y="40" width="200" height="46" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.4"/>
+            <foreignObject x="30" y="40" width="200" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="s">도메인 — 순수</div></div></foreignObject>
+            <rect x="30" y="94" width="200" height="46" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+            <foreignObject x="30" y="94" width="200" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="s">인프라 — Reactor 소멸</div></div></foreignObject>
+            <rect x="30" y="148" width="200" height="40" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+            <foreignObject x="30" y="148" width="200" height="40"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">WebClient</div></div></foreignObject>
+            <text class="svg-s" x="130" y="212" text-anchor="middle" fill="#C9303C">fan-out은 VT 병렬로 바꿔야</text>
+          </g>
+
+          <g>
+            <rect x="260" y="40" width="200" height="46" rx="12" fill="#FEEFEF" stroke="#F04452" stroke-width="1.4"/>
+            <foreignObject x="260" y="40" width="200" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="s">도메인 — Reactor 침투</div></div></foreignObject>
+            <rect x="260" y="94" width="200" height="46" rx="12" fill="#FEEFEF" stroke="#f8d4d4" stroke-width="1.4"/>
+            <foreignObject x="260" y="94" width="200" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="s">인프라</div></div></foreignObject>
+            <rect x="260" y="148" width="200" height="40" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+            <foreignObject x="260" y="148" width="200" height="40"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">WebClient</div></div></foreignObject>
+            <text class="svg-s" x="360" y="212" text-anchor="middle" fill="#C9303C">LAY-2 위반</text>
+          </g>
+
+          <g>
+            <rect x="490" y="40" width="200" height="46" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.4"/>
+            <foreignObject x="490" y="40" width="200" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="s">도메인 — 순수</div></div></foreignObject>
+            <rect x="490" y="94" width="200" height="46" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.8"/>
+            <foreignObject x="490" y="94" width="200" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="s">인프라 — fan-out까지 여기서</div></div></foreignObject>
+            <rect x="490" y="148" width="200" height="40" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+            <foreignObject x="490" y="148" width="200" height="40"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">WebClient</div></div></foreignObject>
+            <text class="svg-s" x="590" y="212" text-anchor="middle" fill="#0A8F5B">도메인 순수 + Reactor 유지</text>
+          </g>
+
+          <text class="svg-s" x="360" y="238" text-anchor="middle" fill="#8B95A1">초록 = Reactor가 사는 범위 · 빨강 = 규칙과 부딪히는 지점</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 7.</b> <b>나</b>는 도메인 포트가 <span style="font-family:var(--mono)">Mono</span>를 반환하는 순간 도메인이 리액티브 런타임에 묶인다. <b>다</b>는 포트 단위를 "공급사 전체 조회 1건"으로 올려 fan-out을 인프라 안에 가둔다.</figcaption>
+    </figure>
+
+    <div class="cols">
+      <div class="col o"><h4><span class="mk">채택</span>가 — 순수 타입 · Virtual Thread</h4><p>코드가 평범한 Java라 스택 트레이스와 디버거가 그대로 쓰이고, <b>ThreadLocal이 살아 있어 MDC 로깅이 자동으로 따라간다.</b> 서빙도 VT라 사고 모델이 하나로 유지된다.</p></div>
+      <div class="col x"><h4><span class="mk">기각</span>나 · 다</h4><p><b>나</b>는 도메인이 리액티브 런타임에 묶여 LAY-2 위반. <b>다</b>는 도메인은 지키지만, 공급사 2개 + 묶음 몇 개라는 규모가 리액티브 학습·디버깅·MDC 전파 부담의 값을 하지 못한다.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ 7 ============ -->
+  <section id="s7" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">7</div>
+      <div><p class="sec-eyebrow">DECISION</p><h2 class="sec">그래서 무엇을 고르나</h2></div>
+    </div>
+
+    <p class="lead">커넥터는 닫혔다. 무게가 실린 것은 그 뒤의 결정이다.</p>
+
+    <div class="note key"><span class="tag">D-F3a-1 — 닫는 근거</span>앞의 다섯 축을 따라가면 <strong>Apache와의 능력 차이는 남지 않는다.</strong> 기본값의 안전성도 어차피 명시적으로 덮어쓸 값이라 기준이 못 되고, 3계층 분리도 풀 제어 단위도 동급이다. 남는 근거는 하나다 — <strong>Apache로 가면 아티팩트 2개(httpclient5 · httpcore5)와 함께 취약점 공지를 따라가야 할 조직이 하나 늘어난다.</strong> "없으면 무엇이 깨지는지 확인한 뒤에만 의존성을 넣는다"는 이 프로젝트 규칙에서, 깨지는 것이 없으면 넣지 않는 쪽이 답이다. <b>재검토 조건</b>: 풀에서 커넥션을 못 빌려 생긴 지연을 서버 지연과 분리해 계측해야 할 때 / direct buffer 관련 메모리 문제가 실제로 관측될 때. 전환 비용은 그때도 의존성 한 줄 + 속성 한 줄이다.</div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>질문</th><th>기본안</th><th>상태</th></tr></thead>
+        <tbody>
+          <tr><td>D-F3a-1</td><td>커넥터를 무엇으로</td><td><b>Reactor Netty 유지.</b> 능력 차이가 아니라 <b>새 아티팩트 0개</b> — 추적할 취약점 공지 조직을 늘리지 않는다</td><td>결정됨</td></tr>
+          <tr><td>D-F3a-2</td><td>동시성 모델 · 포트 반환 타입</td><td><b>가안 확정.</b> 순수 타입 + fan-out은 <span class="term">newVirtualThreadPerTaskExecutor</span> · <span class="term">invokeAll(예산)</span>. Reactor 연산자를 쓰지 않는다</td><td>결정됨</td></tr>
+          <tr><td>—</td><td>클라이언트 라이브러리</td><td><b>WebClient — 주어진 제약.</b> 선택지가 아니므로 결정 카드가 아니다. 사용 형태만 정한다(<span class="term">@HttpExchange</span> 프록시 + <span class="term">setBlockTimeout</span>)</td><td>제약</td></tr>
+          <tr><td>D-F3a-3</td><td>타임아웃 3값</td><td>① &lt; ② &lt; ③ 관계만 확정, 값은 설계에서</td><td>설계 단계</td></tr>
+          <tr><td>D-F3a-6</td><td>커넥션 풀</td><td><b>이번 범위 밖.</b> 기본값(호스트당 500)에 기댄다 — 값을 정할 부하 데이터가 아직 없다</td><td>명시적 보류</td></tr>
+          <tr><td>D-F3a-4</td><td>리다이렉트 기본값</td><td>Boot 3.5부터 따라가는 것이 기본<a href="#r5" class="cite">[5]</a> — 공급사 호출에 맞는지 판단</td><td>설계 단계</td></tr>
+          <tr><td>D-F3a-5</td><td>로그 레벨·마스킹</td><td>API 키는 반드시 마스킹</td><td>설계 단계</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>이번 범위에서 만드는 것과 만들지 않는 것</h3>
+
+    <ul class="checklist">
+      <li><span class="box"></span><b>만든다</b> — WebClient 공통 빌더, 3계층 타임아웃, 요청·응답 로깅 필터, 프록시 팩토리 빈 <span class="tag">F3a</span></li>
+      <li><span class="box"></span><b>만들지 않는다</b> — 공급사별 <span class="term">@HttpExchange</span> 인터페이스와 원본 DTO <span class="tag">F3</span></li>
+      <li><span class="box"></span><b>만들지 않는다</b> — 도메인 포트와 어댑터, 실패 유형 정규화 <span class="tag">F4</span></li>
+      <li><span class="box"></span><b>만들지 않는다</b> — 병렬 fan-out, 재시도·서킷, 캐시 <span class="tag">F7~F10</span></li>
+    </ul>
+
+    <div class="note"><span class="tag">확인해 둘 제약</span>공급사 B는 <strong>실패해도 HTTP 200</strong>이고 본문의 <span class="term">resultCode</span>로 성패를 알린다. 선언형 인터페이스는 상태 코드로 성패를 가르므로, B의 실패 판정을 어느 계층이 맡을지는 별도로 그어야 한다.</div>
+  </section>
+
+  <section id="s8" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">8</div>
+      <div><p class="sec-eyebrow">WHAT THE DOCS SAY</p><h2 class="sec">공식 문서는 무엇을 권하나</h2></div>
+    </div>
+
+    <p class="lead">우리 선택과 <em>반대 방향</em>의 공식 서술이 실재한다. 먼저 그대로 적고, 그다음에 왜 다르게 가는지 적는다.</p>
+
+    <h3 id="ax10">공식 문서가 제시하는 형태</h3>
+
+    <p>Spring Framework 6.2.19 「Synchronous Use」는 <strong>여러 원격 호출을 합치는 예제</strong>를 이렇게 소개한다<a href="#r19" class="cite">[19]</a>.</p>
+
+    <blockquote>
+      <p>"However if multiple calls need to be made, it's more efficient to avoid blocking on each response individually, and instead wait for the combined result:"</p>
+      <cite>Spring Framework 6.2.19 · Synchronous Use</cite>
+    </blockquote>
+
+    <p>그리고 바로 뒤에 오는 예제가 <span class="term">Mono.zip(personMono, hobbiesMono, ...).block()</span>이다. 같은 절에 이 문장도 있다.</p>
+
+    <div class="note"><span class="tag">같은 절의 다른 문장 둘</span>① <strong>"WebClient can be used in synchronous style by blocking at the end for the result"</strong> — 마지막에 block하는 동기 사용을 <strong>공식 절 제목으로</strong> 다룬다. ② <strong>"With Flux or Mono, you should never have to block in a Spring MVC or Spring WebFlux controller."</strong> — 다만 이 금지는 <strong>컨트롤러 한정</strong>이다.</div>
+
+    <p>Spring 공식 블로그는 한 걸음 더 나아가 <strong>fan-out을 콕 집어</strong> 말한다<a href="#r20" class="cite">[20]</a>.</p>
+
+    <blockquote>
+      <p>"ReactiveX is the right approach for concurrent scenarios in which declarative concurrency (such as scatter-gather) matters."</p>
+      <cite>Embracing Virtual Threads · Mark Paluch · 2022-10-11</cite>
+    </blockquote>
+
+    <p>scatter-gather가 곧 fan-out이다. 여기에 더해, <strong>MVC 스택에서 WebClient를 block으로 fan-out 한 기업 공식 사례를 찾지 못했다.</strong> 확인된 국내 공식 사례는 전부 WebFlux 스택에 <span class="term">Mono.zip</span>이다.</p>
+
+    <h3 id="ax11">그럼에도 다르게 가는 이유</h3>
+
+    <div class="cols">
+      <div class="col o"><h4><span class="mk">1</span>인용문의 대상이 다르다</h4><p>그 문장은 바로 앞의 <b>단일 호출 block 예제</b>를 "However"로 받는다. 대비되는 것은 <b>응답마다 순차로 block하는 경우</b>다. 우리는 각 호출이 자기 가상 스레드에서 <b>동시에</b> 돌아 직렬화되지 않는다.</p></div>
+      <div class="col x"><h4><span class="mk">단</span>승인된 것도 아니다</h4><p>공식 문서가 <b>우리 구성을 명시적으로 승인하지도 않는다.</b> "금지되지 않는다"와 "권장된다"는 다르다 — 여기까지가 정확한 사실이다.</p></div>
+    </div>
+
+    <p><strong>인용된 블로그의 시점도 봐야 한다.</strong> 2022년 10월 글이고, 본문이 Virtual Thread를 <em>"available since Java 19 in September 2022 as a preview feature"</em>로 소개한다. 구조적 동시성이 없던 시절의 판단이다. 같은 팀이 1년 뒤 「Spring Framework 6.1 goes GA」에서는 <em>"Virtual Threads are a perfect fit for Spring MVC on a lean Servlet stack"</em>이라고 적었다. 두 서술은 배타적이지 않고 <strong>스택별 역할 분담</strong>에 가깝다.</p>
+
+    <div class="note key"><span class="tag">우리가 사는 것</span>평범한 스택 트레이스, <strong>살아 있는 <span class="term">ThreadLocal</span>(MDC)</strong>, 서빙과 동일한 사고 모델. 공급사 2개 + 묶음 소수라는 규모에서 연산자 조합의 학습·디버깅 비용이 이 이득을 넘지 못한다고 판단했다.</div>
+
+    <h3 id="ax12">감수하는 위험 — 숨기지 않는다</h3>
+
+    <ul class="checklist">
+      <li><span class="box"></span><b>공개 선례가 없다.</b> 막혔을 때 참고할 사례가 없고 우리가 처음 밟는 경로다</li>
+      <li><span class="box"></span><b>동시 호출 수가 제한되지 않는다.</b> <span class="term">newVirtualThreadPerTaskExecutor()</span>는 스레드 수 상한이 없어 묶음이 늘면 동시 호출이 그대로 는다 — F7에서 직접 막아야 한다 <span class="tag">F7</span></li>
+      <li><span class="box"></span><b>되돌리는 비용</b>이 커넥터 결정보다 크다. 포트가 순수 타입이라 어댑터 내부만 바꾸면 되지만 fan-out 코드는 다시 쓴다</li>
+    </ul>
+
+
+    <a class="ref primary" id="r19" href="https://docs.spring.io/spring-framework/reference/6.2/web/webflux-webclient/client-synchronous.html" target="_blank" rel="noopener"><span class="n">19</span><span class="b"><b>Synchronous Use :: Spring Framework 6.2.19</b> — WebClient를 마지막에 block해 동기로 쓰는 공식 절. 여러 호출은 <span class="term">Mono.zip(...).block()</span>으로 합치는 것이 더 효율적이라고 서술하고, 컨트롤러에서는 block하지 말라고 한정한다.<span class="src">https://docs.spring.io/spring-framework/reference/6.2/web/webflux-webclient/client-synchronous.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r20" href="https://spring.io/blog/2022/10/11/embracing-virtual-threads/" target="_blank" rel="noopener"><span class="n">20</span><span class="b"><b>Embracing Virtual Threads</b> — Mark Paluch, Spring 공식 블로그, 2022-10-11. scatter-gather 같은 선언적 동시성에는 ReactiveX가 맞다는 서술. <b>당시 Virtual Thread는 Java 19 preview였다</b>는 점을 본문이 밝힌다.<span class="src">https://spring.io/blog/2022/10/11/embracing-virtual-threads/</span><span class="pr p1">1차 출처</span></span></a>
+
+    <div class="note"><span class="tag">확인하지 못한 것</span><span class="term">block()</span>이 <strong>가상 스레드에서 허용된다</strong>는 문장 자체는 어느 공식 문서에도 없다. 금지 조건이 <span class="term">NonBlocking</span> 구현 스레드로 <strong>열거되어 있다</strong>는 사실<a href="#r7" class="cite">[7]</a>과, 서블릿 앱은 현재 스레드를 블록할 수 있다고 전제한다는 서술의 <strong>논리적 귀결</strong>로만 성립한다. 이 한계를 그대로 남긴다.</div>
+  </section>
+
+  <!-- ===================== REFERENCES ===================== -->
+  <section id="refs" class="fade">
+    <div class="sec-head">
+      <div class="sec-num" style="background:var(--g700);box-shadow:none">§</div>
+      <div><p class="sec-eyebrow">SOURCES</p><h2 class="sec">참고문헌</h2></div>
+    </div>
+
+    <p>아래 항목은 <strong>URL 실재 · 내용 일치 · 출처 등급을 별도 검증</strong>한 것만 실었다. 검증에서 걸러진 항목과 버전이 어긋난 URL은 제외했고, 남긴 것에는 단서를 달았다.</p>
+
+    <a class="ref primary" id="r1" href="https://docs.spring.io/spring-boot/3.5/reference/web/reactive.html" target="_blank" rel="noopener"><span class="n">1</span><span class="b"><b>Reactive Web Applications :: Spring Boot</b> — 두 스타터를 함께 넣으면 WebFlux가 아니라 Spring MVC로 자동 구성되며, 그 이유가 "reactive WebClient를 쓰려고 webflux를 추가하는 개발자가 많아서"라고 명시.<span class="src">https://docs.spring.io/spring-boot/3.5/reference/web/reactive.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r2" href="https://docs.spring.io/spring-boot/3.5/reference/io/rest-client.html" target="_blank" rel="noopener"><span class="n">2</span><span class="b"><b>Calling REST Services :: Spring Boot</b> — 커넥터 자동 탐지 선호 순서, <span class="term">reactiveclient</span>(WebClient) 와 <span class="term">client</span>(블로킹) 속성 계열 분리, starter-webflux가 서버·클라이언트 구현을 모두 포함한다는 서술.<span class="src">https://docs.spring.io/spring-boot/3.5/reference/io/rest-client.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r3" href="https://docs.spring.io/spring-boot/3.5/api/java/org/springframework/boot/http/client/reactive/ClientHttpConnectorBuilder.html" target="_blank" rel="noopener"><span class="n">3</span><span class="b"><b>ClientHttpConnectorBuilder (Spring Boot 3.5.16 API)</b> — <span class="term">detect()</span>가 reactor → jetty → httpComponents → jdk 순으로 선호한다는 API 레벨 확정.<span class="src">https://docs.spring.io/spring-boot/3.5/api/java/org/springframework/boot/http/client/reactive/ClientHttpConnectorBuilder.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r4" href="https://docs.spring.io/spring-boot/3.5/appendix/application-properties/index.html" target="_blank" rel="noopener"><span class="n">4</span><span class="b"><b>Common Application Properties :: Spring Boot</b> — 3.5.16 기준 <span class="term">spring.http.client.*</span>와 <span class="term">spring.http.reactiveclient.*</span> 두 계열이 실재하고 복수형 <span class="term">clients</span>는 없음. 리액티브 쪽 키는 <span class="term">factory</span>가 아니라 <span class="term">connector</span>다.<span class="src">https://docs.spring.io/spring-boot/3.5/appendix/application-properties/index.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r5" href="https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-3.5-Release-Notes" target="_blank" rel="noopener"><span class="n">5</span><span class="b"><b>Spring Boot 3.5 Release Notes</b> — "ClientHttpConnector Builder and Configuration Properties" 절. WebClient 전역 설정 속성이 3.5 신규이며 <b>follow redirects가 기본 활성으로 바뀌었다</b>. (속성 접두사 자체는 이 문서가 아니라 [2]·[4]가 근거)<span class="src">https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-3.5-Release-Notes</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r6" href="https://docs.spring.io/spring-framework/reference/6.2/web/webflux-webclient/client-builder.html" target="_blank" rel="noopener"><span class="n">6</span><span class="b"><b>WebClient Configuration :: Spring Framework 6.2</b> — 커넥터 4종 구성 코드와 Reactor Netty의 connect · read/write · response 타임아웃, <b>요청별 responseTimeout 재정의</b> 예시. <b>6.2.x 고정 경로</b>(버전 비고정 URL은 현재 7.0.x를 서빙해 사용하지 않는다).<span class="src">https://docs.spring.io/spring-framework/reference/6.2/web/webflux-webclient/client-builder.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r7" href="https://projectreactor.io/docs/netty/1.2.18/api/reactor/netty/http/client/HttpClient.html" target="_blank" rel="noopener"><span class="n">7</span><span class="b"><b>HttpClient (reactor-netty 1.2.18)</b> — <span class="term">responseTimeout</span>이 "각 네트워크 read 작업 사이에 허용되는 최대 간격"이며 파라미터 이름이 <span class="term">maxReadOperationInterval</span>이라는 것. 응답 전체 데드라인이 아니라는 근거.<span class="src">https://projectreactor.io/docs/netty/1.2.18/api/reactor/netty/http/client/HttpClient.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r8" href="https://projectreactor.io/docs/netty/1.2.18/reference/http-client.html" target="_blank" rel="noopener"><span class="n">8</span><span class="b"><b>HTTP Client :: Reactor Netty Reference Guide (1.2.18)</b> — 커넥션 풀 기본값(원격 호스트당 활성 500 · pending 1,000 · 획득 45초). <b>1.2.18 고정 경로</b>(<span class="term">/release/</span>는 현재 1.3.x를 서빙한다).<span class="src">https://projectreactor.io/docs/netty/1.2.18/reference/http-client.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r9" href="https://docs.spring.io/spring-framework/docs/6.2.x/javadoc-api/org/springframework/http/client/reactive/JdkClientHttpConnector.html" target="_blank" rel="noopener"><span class="n">9</span><span class="b"><b>JdkClientHttpConnector (Spring Framework 6.2.19 API)</b> — <span class="term">setReadTimeout(Duration)</span>이 6.2 신규이며 <span class="term">HttpRequest.Builder.timeout</span>에 대응. JDK 경로에서 ②와 ③이 한 축인 근거.<span class="src">https://docs.spring.io/spring-framework/docs/6.2.x/javadoc-api/org/springframework/http/client/reactive/JdkClientHttpConnector.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r10" href="https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/java/net/http/HttpRequest.Builder.html" target="_blank" rel="noopener"><span class="n">10</span><span class="b"><b>HttpRequest.Builder (Java SE 25 API)</b> — <span class="term">timeout(Duration)</span>이 <b>응답 수신까지의 전체 데드라인</b>이며, 설정하지 않으면 무한 대기와 같다.<span class="src">https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/java/net/http/HttpRequest.Builder.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r11" href="https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/java/net/http/HttpClient.Builder.html" target="_blank" rel="noopener"><span class="n">11</span><span class="b"><b>HttpClient.Builder (Java SE 25 API)</b> — <span class="term">connectTimeout</span>은 새 연결을 맺어야 할 때만 유효하며, <b>커넥션이 재사용되면 효과가 없다</b>.<span class="src">https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/java/net/http/HttpClient.Builder.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r12" href="https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/module-summary.html" target="_blank" rel="noopener"><span class="n">12</span><span class="b"><b>java.net.http 모듈 (Java SE 25 API)</b> — 풀 조정이 <span class="term">jdk.httpclient.connectionPoolSize</span>(기본 0 = 무제한) · <span class="term">jdk.httpclient.keepalive.timeout</span>(기본 30초) 같은 <b>JVM 전역 시스템 프로퍼티로만</b> 가능.<span class="src">https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/module-summary.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r13" href="https://jetty.org/docs/jetty/12/programming-guide/client/http.html" target="_blank" rel="noopener"><span class="n">13</span><span class="b"><b>HTTP Client :: Eclipse Jetty 12</b> — <span class="term">maxConnectionsPerDestination</span> 기본 64, <span class="term">Request.timeout(...)</span>이 요청·응답 사이클 전체를 중단시키는 총 타임아웃.<span class="src">https://jetty.org/docs/jetty/12/programming-guide/client/http.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r14" href="https://jetty.org/docs/jetty/12/programming-guide/client/io-arch.html" target="_blank" rel="noopener"><span class="n">14</span><span class="b"><b>I/O Architecture :: Eclipse Jetty 12</b> — <span class="term">connectTimeout</span> 기본 5초(DNS + TCP 포함), <span class="term">idleTimeout</span> 기본 30초이며 <b>비활성 기준</b>이라는 정의.<span class="src">https://jetty.org/docs/jetty/12/programming-guide/client/io-arch.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r15" href="https://docs.spring.io/spring-boot/3.5/appendix/dependency-versions/coordinates.html" target="_blank" rel="noopener"><span class="n">15</span><span class="b"><b>Managed Dependency Coordinates :: Spring Boot 3.5.16</b> — 관리 버전 확인: reactor-netty-http 1.2.18 · httpclient5 5.5.2 · jetty 12.0.36 · jetty-reactive-httpclient 4.0.14.<span class="src">https://docs.spring.io/spring-boot/3.5/appendix/dependency-versions/coordinates.html</span><span class="pr p1">1차 출처</span></span></a>
+
+    <a class="ref primary" id="r16" href="https://hc.apache.org/httpcomponents-client-5.5.x/current/httpclient5/apidocs/org/apache/hc/client5/http/config/RequestConfig.Builder.html" target="_blank" rel="noopener"><span class="n">16</span><span class="b"><b>RequestConfig.Builder (Apache HttpClient 5.6.4 API)</b> — <span class="term">connectionRequestTimeout</span> 기본 3분, <span class="term">setConnectTimeout</span>은 deprecated. <b>단서: 이 URL은 5.6.x 문서로 리다이렉트되며, 우리 관리 버전은 5.5.2다. 두 버전의 기본값이 같은지는 확인하지 못했다.</b><span class="src">https://hc.apache.org/httpcomponents-client-5.5.x/current/httpclient5/apidocs/org/apache/hc/client5/http/config/RequestConfig.Builder.html</span><span class="pr p1">1차 출처 · 버전 단서</span></span></a>
+
+    <a class="ref primary" id="r17" href="https://hc.apache.org/httpcomponents-client-5.5.x/current/httpclient5/apidocs/constant-values.html" target="_blank" rel="noopener"><span class="n">17</span><span class="b"><b>Constant Field Values (Apache HttpClient 5.6.4 API)</b> — <span class="term">DEFAULT_MAX_CONNECTIONS_PER_ROUTE = 5</span>, <span class="term">DEFAULT_MAX_TOTAL_CONNECTIONS = 25</span>. <b>단서: 위와 같은 버전 리다이렉트가 걸린다.</b><span class="src">https://hc.apache.org/httpcomponents-client-5.5.x/current/httpclient5/apidocs/constant-values.html</span><span class="pr p1">1차 출처 · 버전 단서</span></span></a>
+
+
+    <a class="ref primary" id="r18" href="https://hc.apache.org/httpcomponents-client-5.5.x/current/httpclient5/apidocs/org/apache/hc/client5/http/HttpRoute.html" target="_blank" rel="noopener"><span class="n">18</span><span class="b"><b>HttpRoute (Apache HttpClient 5.6.4 API)</b> — "Connection route definition for HTTP requests". 생성자 파라미터가 대상 호스트 · 프록시 · 로컬 주소 · 보안 여부이며 <b>URL 경로는 포함하지 않는다</b> — Apache의 route별 풀이 결국 호스트 단위인 근거. <b>단서: 5.6.x 문서로 리다이렉트된다.</b><span class="src">https://hc.apache.org/httpcomponents-client-5.5.x/current/httpclient5/apidocs/org/apache/hc/client5/http/HttpRoute.html</span><span class="pr p1">1차 출처 · 버전 단서</span></span></a>
+
+    <div class="note"><span class="tag">확인하지 못한 것</span>Jetty 경로에서 <span class="term">WebClient.httpRequest()</span>로 요청별 총 타임아웃을 거는 공식 예시, JDK <span class="term">connectTimeout</span> 미설정 시의 기본값, 그리고 Boot의 <span class="term">reactiveclient.read-timeout</span>이 커넥터별로 어떤 API에 매핑되는지를 못 박는 공식 문장 — 셋 다 확인하지 못했다. 특히 마지막 항목은 <strong>구현 시 실측으로 확인</strong>한다.</div>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    F3a webclient-config 결정 근거 문서 · 결정의 원본은 01-design.md<br>
+    Spring Boot 3.5 · Spring Framework 6.2 · Reactor Netty 1.2.18 · Java SE 25 공식 문서
+  </footer>
+
+</div>
+<script>
+  /* scroll progress bar */
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  /* fade-in on scroll */
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+  /* carousel — 화살표로 한 칸씩 스크롤 */
+  document.querySelectorAll('.carousel').forEach(c=>{
+    const tr=c.querySelector('.track');
+    const step=()=>tr.querySelector('.slide').getBoundingClientRect().width+14;
+    c.querySelectorAll('[data-dir]').forEach(b=>
+      b.addEventListener('click',()=>tr.scrollBy({left:step()*(b.dataset.dir==='next'?1:-1),behavior:'smooth'})));
+  });
+  /* docfab — 섹션 점프 + 허브 복귀 (요소 없으면 no-op). 스니펫: components.md */
+  (()=>{const fab=document.getElementById('docfab');if(!fab)return;
+    const panel=fab.querySelector('.panel'),hub=panel.querySelector('.hub');
+    const add=(href,text,sub)=>{const a=document.createElement('a');a.href=href;a.textContent=text;if(sub)a.className='sub';panel.insertBefore(a,hub)};
+    const tocs=document.querySelectorAll('nav.toc ol.toc-index>li');
+    if(tocs.length){tocs.forEach(li=>{const a=li.querySelector(':scope>a');if(!a)return;
+      add(a.getAttribute('href'),(a.childNodes[0].textContent||a.textContent).trim());
+      li.querySelectorAll('.ts a').forEach(s=>add(s.getAttribute('href'),s.textContent.trim(),true));});}
+    else{document.querySelectorAll('main section[id]').forEach(sec=>{const h=sec.querySelector('h2');
+      if(h)add('#'+sec.id,h.textContent.trim());});}
+    fab.querySelector('button').addEventListener('click',e=>{e.stopPropagation();fab.classList.toggle('open')});
+    panel.addEventListener('click',e=>{const t=e.target.closest('a');if(!t)return;
+      if(t.hasAttribute('data-top')){e.preventDefault();window.scrollTo({top:0,behavior:'smooth'})}
+      fab.classList.remove('open')});
+    document.addEventListener('click',e=>{if(!fab.contains(e.target))fab.classList.remove('open')});
+  })();
+</script>
+
+</body>
+</html>
