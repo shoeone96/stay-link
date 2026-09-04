@@ -5,7 +5,8 @@
 ## 확정 기술 스택 (2026-09-01)
 
 - Java 25 (LTS) + Spring Boot 3.5.x + Gradle (Kotlin DSL)
-- 동시성 모델: Spring MVC + Virtual Thread(요청 서빙) + WebClient(Supplier 병렬 fan-out은 Reactor 연산자로 제어)
+- 동시성 모델: Spring MVC + Virtual Thread(요청 서빙) + WebClient(주어진 조건). **Supplier 병렬 fan-out은 Virtual Thread Executor로 제어** — `Executors.newVirtualThreadPerTaskExecutor()` + `invokeAll(예산)`. Reactor 연산자로 조합하지 않는다 (2026-09-05, D-F3a-2)
+- WebClient는 `@HttpExchange` 선언형 프록시 뒤에서 전송을 담당한다. 애플리케이션 코드에 `Mono`를 노출하지 않는다
 - WebFlux 전면 도입은 하지 않음 — 근거는 README·설계 문서에 기록
 - DB: MySQL 8.4 — 로컬 실행은 `compose.yaml` + spring-boot-docker-compose(bootRun 시 자동 기동·연결), 테스트는 H2 in-memory
 

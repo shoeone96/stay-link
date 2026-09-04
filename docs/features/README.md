@@ -12,7 +12,8 @@
                                                                             │
 [F1 property-mapping] ──────────────────────────┐                           │
                                                  ├─→ [F6 catalog-sync] ─────┤
-[F2 mock-supplier-server] → [F3 supplier-client] ┤                          │
+[F2 mock-supplier-server] ─┐                    │
+                           └→ [F3a webclient-config] → [F3 supplier-client] ┤                          │
                                      │           └─→ [F4 catalog-adapter]───┤
                                      │                                      │
                                      └─→ [F5 availability-adapter] → [F7 stay-search-api]
@@ -36,7 +37,8 @@
 | F0 | `api-response` | 조회 1 파생(자사 API 응답·오류 본문) | 완료(병합) | 2026-09-04 | 2026-09-04 |
 | F1 | `property-mapping` | 사전작업 1(스키마) 구현화 | 완료(병합) | 2026-09-03 | 2026-09-04 |
 | F2 | `mock-supplier-server` | 사전작업 2 | 대기 | - | - |
-| F3 | `supplier-client` | 사전작업 3 | 대기 | - | - |
+| F3a | `webclient-config` | 사전작업 3 (공통 HTTP 배선) | 설계중 | - | - |
+| F3 | `supplier-client` | 사전작업 3 (공급사별) | 대기 | - | - |
 | F4 | `supplier-catalog-adapter` | 사전작업 4 (목록) | 대기 | - | - |
 | F5 | `supplier-availability-adapter` | 사전작업 4 (재고·요금) | 대기 | - | - |
 | F6 | `catalog-sync` | 사전작업 5 | 대기 | - | - |
@@ -102,20 +104,35 @@
 
 > 2026-09-05: 1프로세스·단일 포트로 구현했던 첫 시도를 커밋 전에 폐기했다. 사유는 `docs/ai-history.md` 55번.
 
+## F3a. `webclient-config` — 공통 HTTP 호출 배선
+
+- **목적**: 공급사와 무관한 HTTP 호출 기반. 공급사별 클라이언트(F3)가 이 위에 얹힌다. WebClient 빈 배선·3계층 타임아웃·요청 응답 로깅·선언형 프록시 팩토리까지.
+- **포함**
+  - `WebClient.Builder` 커스터마이즈와 커넥터 구성 — connect / read 타임아웃 (D-F3a-1)
+  - 호출당 총 시간 상한 — `WebClientAdapter.setBlockTimeout` (D-F3a-2)
+  - 요청 응답 로깅 필터 — 메서드·URI·상태·소요시간, `X-Api-Key` 마스킹 (D-F3a-5)
+  - `HttpServiceProxyFactory` 팩토리 — 설정을 받아 인스턴스를 찍어내는 형태로 둔다(나중에 용도별로 쪼갤 수 있게)
+- **제외**: 공급사별 `@HttpExchange` 인터페이스와 원본 DTO(F3), 실패 판정(F3·F4), 커넥션 풀 튜닝(D-F3a-6, 명시적 보류), 병렬 fan-out(F7), retry/circuit(F9)
+- **선행**: 없음. 단위 테스트는 F2 없이 돌아간다
+- **확정된 결정** (2026-09-05, `features/webclient-config/01-design.md` D-F3a-1~7)
+  - 커넥터는 Reactor Netty 유지 — 능력 차이가 아니라 새 아티팩트를 추가하지 않기 위해
+  - 동시성 모델은 **Virtual Thread Executor** — Reactor 연산자를 쓰지 않는다. 도메인 포트는 순수 타입
+  - WebClient는 **주어진 제약**이며 `@HttpExchange` 선언형 프록시 뒤에서 전송을 담당한다
+  - 커넥션 풀은 이번 범위 밖. 기본값에 기댄다는 것을 명시해 둔다
+- **완료 기준**: 프록시 인터페이스 호출이 평범한 타입을 돌려주고, connect / read / 호출 예산 세 계층이 각각 정해진 시간 안에 호출을 자르며, 로그에 API 키가 노출되지 않는다.
+
 ## F3. `supplier-client` — 공급사 HTTP 클라이언트
 
 - **목적**: WebClient 기반 공급사 호출 계층과 타임아웃 계층. 응답을 공급사별 원본 DTO로 받는 데까지.
 - **포함**
-  - 공급사별 WebClient 인스턴스 (base URL·API key 설정 분리)
-  - 타임아웃 계층: connect / response(read) / 호출 전체 예산 — 값과 근거 확정 (이연 항목)
+  - 공급사별 `@HttpExchange` 인터페이스와 인스턴스 (base URL·API key 설정 분리) — F3a가 만든 공통 배선 위에 얹는다
   - 공급사별 원본 응답 DTO (목록·재고요금·실패 본문) — 어댑터(F4·F5)의 입력
   - A는 4xx/5xx를, B는 200 + `resultCode != "0000"`을 각각 "실패 응답"으로 구분해 어댑터에 넘길 수 있는 형태
-- **제외**: 표준 모델 변환(F4·F5), retry/circuit(F9), 병렬 fan-out(F7)
-- **선행**: F2 (로컬 확인용). 단위 테스트는 F2 없이 돌아가야 한다
+- **제외**: 공통 HTTP 배선·타임아웃 계층·로깅 필터(F3a), 표준 모델 변환(F4·F5), retry/circuit(F9), 병렬 fan-out(F7)
+- **선행**: F3a(공통 배선), F2(로컬 확인용). 단위 테스트는 F2 없이 돌아가야 한다
 - **닫아야 할 결정**
-  - 클라이언트 테스트 방식: 새 의존성(MockWebServer·WireMock) vs 기존 의존성만으로 가능한지 먼저 검토
-  - 타임아웃 값 3종과 근거 — `tech-research` 필요 시 사용
-  - Reactor `Mono`를 그대로 노출할지, 클라이언트 경계에서 block 할지 (확정 스택: Virtual Thread 서빙 + Reactor는 fan-out 제어용)
+  - 공급사 B의 실패(HTTP 200 + `resultCode`)를 클라이언트가 판정할지 어댑터(F4)로 넘길지
+  - ~~클라이언트 테스트 방식~~ · ~~타임아웃 값 3종~~ · ~~`Mono` 노출 여부~~ — **F3a에서 닫힘**
 - **완료 기준**: 정상·장애·무응답 3모드 각각에서 클라이언트가 예측된 결과(DTO / 실패 DTO / 타임아웃)를 정해진 시간 안에 돌려준다.
 
 ## F4. `supplier-catalog-adapter` — 목록 어댑터 + 도메인 포트
@@ -174,12 +191,14 @@
 - **포함**
   - 자사 API 스펙 확정 (조회 작업 1): 요청 파라미터(checkIn·checkOut·adults·children), 검증 규칙(날짜 순서·과거 날짜·인원 범위), 응답 = `results[]` + `suppliers[]` (D10 구조)
   - 매핑 역조회로 내부 `propertyId`·`roomId` 부여, 미매핑 코드는 동기 경로에서 항목 제외 + 로그 (D11 동기 트랙). 역방향 조회 메서드는 F1에서 이관된 항목으로 여기서 추가한다 (D-F1-8)
-  - 공급사별 병렬 호출 — Reactor 연산자로 fan-out, 결과를 하나로 합침
+  - 공급사별 병렬 호출 — **Virtual Thread Executor로 fan-out**(`newVirtualThreadPerTaskExecutor` + `invokeAll(예산)`), 결과를 하나로 합침 (D-F3a-2)
   - 이 단계에서는 정상 경로 위주. 실패 처리는 F8에서 완성하되, 한쪽 실패가 전체를 죽이지 않는 골격은 여기서 잡는다
 - **제외**: 실패 유형 표기 완성(F8), retry/circuit(F9), 캐시(F10)
 - **선행**: F1, F5, F6(매핑 데이터)
 - **닫아야 할 결정**
   - ~~요청 검증 실패 응답 형식 (자사 API 오류 본문)~~ — **F0에서 확정**. `ApiResponse` 형식과 검증 실패 처리를 그대로 쓴다
+  - **동시 호출 수 제한** — `Executors.newVirtualThreadPerTaskExecutor()`는 스레드 수가 제한되지 않는다. 코드 묶음이 늘면 동시 호출이 그대로 늘어나므로 세마포어 등으로 직접 막아야 한다 (D-F3a-2가 남긴 비용)
+  - fan-out 전체 예산 값 — `호출당 예산 < fan-out 예산` 관계를 지켜야 한다 (F3a 3장)
   - 결과 정렬 기준 (공급사 순 / 숙소명 / 가격) 또는 정렬 없음
   - 코드 묶음 분할 로직을 지금 넣을지 (현재 데이터는 공급사당 1묶음) — 50개 제한이 명세에 있으므로 분할 자체는 필요
 - **완료 기준**: 모의 서버 정상 모드에서 검색 요청 1건에 A·B 상품이 합쳐진 응답이 오고 `suppliers[]`가 모두 OK다.
@@ -211,7 +230,7 @@
 - **제외**: 캐시(F10)
 - **선행**: F8
 - **닫아야 할 결정**
-  - 수단: Resilience4j(새 의존성) vs Reactor `retryWhen` 등 기존 의존성 — `tech-research`로 비교 후 결정
+  - 수단: Resilience4j(새 의존성) vs 직접 구현 — 호출부가 동기 코드가 되어(D-F3a-2) Reactor `retryWhen`은 선택지에서 빠진다. `tech-research`로 비교 후 결정
   - 수치(횟수·백오프·차단 임계) 와 근거
 - **완료 기준**: 일시 장애 후 복구되는 모의 시나리오에서 재시도로 성공하고, 연속 실패 시 circuit이 열려 호출이 차단됨이 테스트로 확인된다.
 
