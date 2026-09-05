@@ -52,6 +52,12 @@ out/
 *.local.json
 .claude/settings.local.json
 
+# 모의 서버의 H2 파일 DB. 조작자가 손으로 지우고 더한 결과라 사람마다 다르고,
+# 시드로 되돌리는 방법이 곧 이 파일을 지우는 것이다 (설계 3.6).
+mock-supplier-*/data/
+*.mv.db
+*.trace.db
+
 # 자격 증명
 .env
 .env.*
