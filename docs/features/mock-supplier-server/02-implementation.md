@@ -349,3 +349,133 @@ java -cp "$(find ~/.gradle/caches -name 'h2-*.jar' ! -name '*sources*' | head -1
 | 4 | A·B의 `ExceptionHandler` | `feat: 조회 실패 경로 로그` |
 | 5 | A·B의 `Catalog` 거절 + `http/scenarios.http` | `feat: 없는 객실 코드 삭제도 거절 (대본 S-47)` |
 | 6 | `docs/features/mock-supplier-server/02-implementation.md` · `docs/test-cases.md` | `docs: F2 카탈로그 DB 이관 구현 기록` |
+
+---
+
+## implement round 4 (2026-09-06 01:30)
+
+status: 완료
+
+### 이번 범위
+
+`01-design.md` 3.1 정정(2026-09-05, 「설계 수정 이력」 마지막 행) — **모듈 안 패키지를 `api`·`control`·`catalog`·`fault` 넷으로 나눈다.** 이번 라운드는 **순수 이동**이다. 클래스 이름·시그니처·필드·로직·응답 JSON을 하나도 바꾸지 않았고, 바뀐 것은 `package` 줄과 그에 따라 필요해진 `import` 줄뿐이다.
+
+"바꾸지 않았다"를 말로 두지 않고 기계로 확인했다 — 51개 파일 전부에 대해 **`package`·`import` 줄과 빈 줄을 뺀 나머지가 이동 전과 글자 단위로 같은지** 대조했고 차이 0건이다. 아래 검증표의 첫 행이 그 결과다.
+
+### 이동표
+
+| 패키지 | A (`com.stay.mock.a`) | B (`com.stay.mock.b`) |
+|---|---|---|
+| (루트) | `MockSupplierAApplication` | `MockSupplierBApplication` |
+| `api` | `AController` · `SearchQuery` · `AHotelsResponse` · `AAvailabilityResponse` · `AErrorResponse` · `AExceptionHandler` · `ErrorKind` · `InvalidRequestException` (8) | `BController` · `SearchQuery` · `BEnvelope` · `BResultCode` · `BPropertiesData` · `BSearchData` · `BExceptionHandler` · `ErrorKind` · `InvalidRequestException` (9) |
+| `control` | `AControlController` (1) | `BControlController` (1) |
+| `catalog` | `ACatalog` · `AProperty` · `ARoom` · `APropertyEntity` · `ARoomEntity` · `APropertyRepository` · `ARoomRepository` · `ARates` · `Nights` (9) | `BCatalog` · `BProperty` · `BRoom` · `BPropertyEntity` · `BRoomEntity` · `BPropertyRepository` · `BRoomRepository` · `BRates` · `Nights` (9) |
+| `fault` | `FaultRegistry` · `FaultState` · `FaultMode` · `Endpoint` · `Decision` · `FaultException` (6) | 같은 6개 |
+| 합계 | 25 | 26 |
+
+### 접근 제어자 — 조정 0건
+
+**아무것도 올리지 않았다.** 패키지가 갈리면 package-private 이던 것이 안 보이므로 필요한 것만 `public`으로 올릴 참이었는데, 실제로 세어 보니 올릴 대상이 없었다.
+
+- 최상위 타입 51개가 **이미 전부 `public`** 이다.
+- 멤버는 `public` 아니면 `private` 둘 중 하나다. 그 사이 등급을 쓴 자리가 없었다.
+- 엔티티의 `protected` 무인자 생성자는 JPA용이고 패키지 밖에서 부르지 않으므로 그대로 둔다.
+- 리포지토리 인터페이스의 메서드와 enum 상수·생성자는 modifier 없이 적혀 있지만 언어 규칙상 각각 암묵적 `public`·상수라 영향이 없다.
+
+`AControlController.ControlState`가 `FaultState`(다른 패키지)를 담는 자리도 손대지 않았다 — `FaultState`가 이미 `public`이라 반환 타입 노출에 부족한 것이 없다.
+
+### 추가한 import — 교차 패키지 참조 58줄
+
+같은 파일 안에서 쓰던 이름이 다른 폴더로 가면서 필요해진 것이고, 그 외에는 한 줄도 더하지 않았다. 정렬은 기존 규칙(전체 문자열 사전순)을 따라 `com.*`가 `java.*`·`org.*` 앞에 온다.
+
+| 방향 | 어디에서 | 무엇을 |
+|---|---|---|
+| `api` → `catalog` | `?Controller` · `?ControlController`(control) · `AHotelsResponse`/`BPropertiesData` · `AAvailabilityResponse`/`BSearchData` | `?Catalog` · `?Property` · `?Room` · `?Rates` · `Nights` |
+| `api`·`control` → `fault` | `?Controller` · `?ControlController` · `?ExceptionHandler` | `FaultRegistry` · `FaultState` · `FaultMode` · `Endpoint` · `Decision` · `FaultException` |
+| `catalog`·`fault` → `api` | `?Catalog` · `FaultState` · `FaultMode` · `Endpoint` | `ErrorKind` · `InvalidRequestException` |
+
+**javadoc만 쓰는 import 2개**를 뒀다 — `catalog/Nights`의 `{@link SearchQuery#parse}`와 `fault/FaultException`의 `{@link InvalidRequestException}`이다. 코드가 부르지는 않지만 링크가 풀리려면 import가 있어야 하고, javac는 이것을 미사용으로 경고하지 않는다. 링크를 `{@code}`로 낮춰 import를 없앨 수도 있었지만 그러면 **본문을 고치는 셈**이라 순수 이동이라는 이번 범위를 벗어난다.
+
+### A·B 복사본의 불변식 — 유지했다 (문장은 정정한다)
+
+지금까지 이 성질을 "`package` 줄만 다르고 나머지는 바이트 단위로 같다"고 적어 왔다. 패키지를 나눈 뒤로 **그 문장 그대로는 성립하지 않는다** — `fault`의 세 파일이 `api`를 import 하게 되면서 `import com.stay.mock.a.api.…` / `…b.api.…`가 다른 줄로 하나 더 생기기 때문이다. 없앨 방법이 없다. `fault`가 `api`의 `ErrorKind`·`InvalidRequestException`을 실제로 던지고, 완전 수식 이름을 쓰더라도 같은 자리에 `a`/`b`가 남는다.
+
+성립하지 않게 된 것은 문장이고, **그 문장이 지키려던 성질은 그대로다** — 두 파일은 `com.stay.mock.a` ↔ `com.stay.mock.b` 치환 한 번으로 완전히 같아진다. 그래서 불변식을 이렇게 다시 적는다.
+
+> **A와 B의 복사본은 `com.stay.mock.a` → `com.stay.mock.b` 치환 후 `diff` 결과가 0줄이어야 한다.**
+
+치환 후 대조 결과: `Nights` · `FaultRegistry` · `FaultState` · `FaultMode` · `Endpoint` · `Decision` · `FaultException` **7개 전부 0줄**. (`Decision`·`FaultException`도 원래 같은 성질을 만족하고 있었다.) `SearchQuery`·`ErrorKind`·`InvalidRequestException`은 이동 전부터 A·B가 갈라져 있고(D-F2-1의 "두 파일이 갈라져도 각자 옳다"), 이번에 더 갈라지지 않았다.
+
+### 스캔 설정 — 추가 0건
+
+`@EntityScan` · `@EnableJpaRepositories` · `@ComponentScan` 중 어느 것도 넣지 않았다. `@SpringBootApplication`이 루트 패키지에 있으므로 하위 네 패키지가 기본 스캔 범위에 그대로 들어온다. 필요 없는데 넣으면 그 자체가 결함이라, 넣지 않고 **실제로 띄워서** 확인했다 — 두 서버 모두 `Started MockSupplier?Application`까지 갔고, 컴포넌트(컨트롤러·`?Catalog`·`FaultRegistry`)·엔티티·리포지토리가 전부 잡혔다. 엔티티 스캔이 빠졌다면 `?Catalog`가 뜨지 못해 기동 자체가 실패한다.
+
+### 전체 테스트 결과
+
+- 총 26 · 통과 26 · 실패 0 · 건너뜀 0 (근거: `build/test-results/test/*.xml` 6개 파일 합산, `./gradlew test --rerun-tasks`)
+- `./gradlew build` 성공. 두 모의 서버 모듈의 `test`는 여전히 `NO-SOURCE`이고 이번 라운드가 더한 테스트는 **0건**이다 (D-F2-7).
+- `docs/test-cases.md`는 갱신하지 않았다. F2 절이 담고 있는 사실(테스트 0건 · 저장소 26건 · 대체 검증 수단과 그 파일 경로)이 하나도 바뀌지 않았고, 그 절은 모듈 단위 경로만 가리켜 패키지 이동의 영향을 받지 않는다.
+
+### 검증 — 두 서버를 실제로 띄워서
+
+이동 **전** 코드를 9081·9082에, 이동 **후** 코드를 9091·9092에 동시에 띄우고 같은 요청을 양쪽에 보내 응답을 바이트로 대조했다. "필드 이름과 순서가 같은가"를 눈으로 훑는 대신 기계가 판정하게 하려는 것이다.
+
+| 확인 대상 | 방법 | 결과 |
+|---|---|---|
+| **순수 이동인가** | 51개 파일의 `package`·`import`·빈 줄을 뺀 본문을 이동 전과 대조 | **차이 0건** ✅ |
+| **응답 JSON 필드 이름·순서** | 이동 전/후 서버에 같은 요청 18종(정상 조회 4 · 요청 오류 6 · 경계 4 · 제어 상태 2 · 목록 2), 본문과 상태 코드를 바이트 비교 | **18/18 완전 일치** ✅ A는 401·400 상태까지, B는 전부 200 + `resultCode`까지 같다 |
+| **검산값 435,600** | A S-01 (`A-3201` · 09-10~09-13 · 성인 2) | `OCN-DBL` 110000/143000/143000 + 세금 11000/14300/14300 → **Σ 435,600** ✅ 재고 3/1/1도 그대로 |
+| **검산값 453,600 / 756,000** | B S-01 (`P-88410` · 같은 기간) | `R-201` **453,600**(재고 2/1/1) · `R-305` **756,000**(재고 3/1/1) ✅ |
+| **조식 값** | 같은 두 응답 | A `OCN-DBL` **true** · `STD-TWN` **false**, B `R-201`·`R-305` 둘 다 **true** ✅ 한 숙소 안에서 갈리는 성질 유지 |
+| 날짜 직렬화 | 같은 두 응답 | `"date": "2026-09-10"` 문자열 ✅ |
+| **`/h2-console`** | `curl -L` | A·B 모두 302 → `/h2-console/` 200, H2 로그인 화면 ✅ |
+| **시드 3행** | H2 Shell로 `SELECT … FROM A_ROOM ORDER BY ID` (`AUTO_SERVER` 접속) | `OCN-DBL`(TRUE) · `STD-TWN`(FALSE) · `STD-DBL`(FALSE) **3행** ✅ `GET /control/state`도 `hotelCount=2 · roomTypeCount=3` |
+| 고장 `error` | A·B `value=error` / `errorCode=429` | A 503 `SERVICE_UNAVAILABLE` · 429 `RATE_LIMIT_EXCEEDED`, B HTTP 200 + `E503` · `E429` ✅ |
+| 고장 `delay` | `delayMillis=1500` | A 1.516s · B 1.512s, 둘 다 상태 200 ✅ |
+| 고장 `no-response` | `curl --max-time 3` | A·B 모두 **curl exit 28**(타임아웃), 서버는 계속 살아 있음 ✅ |
+| 고장 `normal` 복귀 | `value=normal` | A·B 200 ✅ |
+| 고장 축 (`rate`·`endpoint`·`durationSeconds`) | A | `rate=0.0` → 200(적중 안 함) · `rate=1.5` → 400(거절) · `endpoint=availability` → 목록 200 / 재고·요금 503 · `durationSeconds=2` → 2.5초 뒤 `state`가 `NORMAL` ✅ |
+| 제어 API (카탈로그) | A·B | 객실 추가 → 조회 응답에 등장 → 삭제 → 사라짐, 숙소 추가 → 목록 등장 → 삭제, 없는 숙소·없는 객실 코드 조작은 거절(A 400 / B 200 + `E400`) ✅ 마지막 `state`가 시드 값으로 복귀 |
+| 잘못된 제어 파라미터 | `value=broken` | A 400 `INVALID_PARAMETER` · B 200 + `E400 INVALID_REQUEST` ✅ |
+| 실패 경로 로그 (3.5.11) | 서버 로그 | `Request rejected: kind=…` · `Fault applied: …` 모두 남는다 ✅ |
+| 수용 기준 3 (A만 내리기) | A만 종료 후 동시 호출 | A **curl exit 7**(연결 거부), 같은 시각 B는 `resultCode 0000` + `R-201` 453,600 ✅ |
+
+검증 뒤 네 프로세스를 모두 종료했고 `pgrep`(0건)·`lsof`(9081·9082·9091·9092 전부 LISTEN 없음)로 확인했다. `mock-supplier-a/data` · `mock-supplier-b/data`도 지웠다.
+
+### 이번 라운드에서 드러난 절차 결함 — 하마터면 이동 전 코드를 검증할 뻔했다
+
+이동 후 서버를 띄우고 검증을 한 바퀴 다 돌린 뒤에야, **그 서버가 뜨지 않았다**는 것을 알았다. 지난 라운드의 프로세스가 9091·9092를 잡고 있어 기동이 `Port 9091 was already in use`로 죽었는데, 포트에서는 멀쩡히 200이 돌아왔다. 응답을 준 것은 **이동 전 코드**였다. 그대로 넘어갔다면 "이동 전 vs 이동 후" 대조가 사실은 "이동 전 vs 이동 전"이었고 18/18 일치는 아무것도 증명하지 못한다.
+
+`curl`이 200을 준다는 사실은 **내가 띄운 서버가 떴다는 근거가 아니다.** 그래서 절차를 이렇게 고정한다.
+
+1. 기동 직후 **로그에서 `Started MockSupplier?Application`을 확인**한 뒤에만 검증에 들어간다. 포트 응답으로 대신하지 않는다.
+2. 종료는 `pgrep`으로 **프로세스가 사라진 것**과 `lsof`로 **포트가 비었다**는 것을 둘 다 본다. 어느 하나로 갈음하지 않는다.
+3. `no-response` 모드로 붙잡힌 요청 스레드는 600초를 잔다. 그 상태에서 SIGTERM 은 **리스너만 닫고 JVM 은 남긴다** — 포트는 비었는데 프로세스는 살아 있는, 지난 라운드에 "종료했다"고 잘못 보고한 바로 그 모양이다. 이때는 SIGKILL 이 필요하다.
+
+### 변경 파일
+
+파일 51개 중 **49개가 하위 패키지로 이동**했고(A 24 · B 25) 진입점 두 개는 루트에 남았다. 바뀐 줄은 `package` 49줄 · 새 `import` 58줄뿐이다.
+
+- `mock-supplier-a/src/main/java/com/stay/mock/a/{api,control,catalog,fault}/**` (이동 24개, `MockSupplierAApplication`은 루트 유지)
+- `mock-supplier-b/src/main/java/com/stay/mock/b/{api,control,catalog,fault}/**` (이동 25개, `MockSupplierBApplication`은 루트 유지)
+- `docs/features/mock-supplier-server/02-implementation.md` (이 문서)
+
+빌드 파일·`application.yaml`·`http/scenarios.http`·`k6/**`는 건드리지 않았다. 패키지 이름을 참조하는 설정이 한 곳도 없어 고칠 것이 없었다(`grep`으로 확인).
+
+### 설계 이탈 요청
+
+- **없음.**
+
+### 남은 이슈
+
+1. **로거 이름이 바뀐다.** 로거 이름은 클래스의 완전 수식 이름이라 `com.stay.mock.a.AExceptionHandler` → `com.stay.mock.a.api.AExceptionHandler`가 된다. 응답·동작에는 영향이 없지만, 로그를 클래스 이름으로 찾던 절차나 `logging.level.…`를 클래스 단위로 잡아 둔 설정이 생기면 함께 갱신해야 한다. 지금 저장소에는 그런 설정이 없다.
+2. **`01-design.md` 3.2·3.4에 패키지 구분이 없다.** 클래스 목록과 다이어그램이 평평하던 시절 그대로라, 어느 클래스가 어느 폴더인지 3.1의 산문으로만 알 수 있다. 이전 라운드에서 적은 낡은 자리(3.5.1 ② 조식 값, `ARoom` 서명, `FaultRegistry.decide` 반환형, 엔티티·리포지토리 누락)도 그대로다. **설계 담당이 갱신해야 한다.**
+3. **`AProperty.withRoom` · `withoutRoom`(B의 `BProperty`도 동일)에 호출자가 없다.** 카탈로그를 DB로 옮기며 `?Catalog`가 리포지토리를 직접 쓰게 되어 남은 자리다. 이번 범위가 순수 이동이라 손대지 않았다 — 지우는 것은 동작을 바꾸지 않지만 "이동만 한다"는 이번 라운드의 성질을 깨고, 그러면 위의 "본문 차이 0건" 검증도 깨진다. **다음 라운드에서 지울지 정해야 한다** (프로젝트 규칙 "Replace, Don't Deprecate" 대상).
+4. 이전 라운드들의 남은 이슈(중복 객실 코드 허용 · 조회의 트랜잭션 경계 · `docs/db-schema.html`에 H2 네 테이블을 넣을지)는 그대로 살아 있다.
+
+### 커밋 단위 제안
+
+| # | 범위 | 메시지 예 |
+|---|---|---|
+| 1 | A·B의 `src/main/java/**` 이동 51개 | `refactor: 모의 서버 모듈 안을 api·control·catalog·fault 네 패키지로 나눈다` |
+| 2 | `docs/features/mock-supplier-server/02-implementation.md` | `docs: F2 패키지 분리 구현 기록` |

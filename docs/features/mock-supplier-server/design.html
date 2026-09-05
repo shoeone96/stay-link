@@ -345,6 +345,7 @@
       <li><a href="#s7">D-F2-6 포트와 기동 방법<span class="hint">그림 없음</span></a></li>
       <li><a href="#s8">D-F2-7 테스트를 둘 것인가<span class="hint">그림 없음</span></a></li>
       <li><a href="#s9">D-F2-8 지연이 서버를 죽이지 않게<span class="hint">그림 8</span></a></li>
+      <li><a href="#s95">요청 하나가 응답이 되기까지<span class="hint">그림 9 · 시퀀스</span></a></li>
       <li><a href="#s10">결정 요약<span class="hint">전문은 md</span></a></li>
     </ol>
   </nav>
@@ -1113,13 +1114,154 @@
   </section>
 
   <!-- ===================== 10 ===================== -->
-  <section id="s10" class="fade">
+  <!-- ===================== 10 · 응답 흐름 시퀀스 ===================== -->
+  <section id="s95" class="fade">
     <div class="sec-head">
       <div class="sec-num">10</div>
+      <div><p class="sec-eyebrow">SEQUENCE · 2026-09-05 갱신</p><h2 class="sec">요청 하나가 응답이 되기까지<span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">앞의 결정 아홉 개가 한 요청 안에서 어떤 순서로 만나는지 한 장에 놓습니다. 순서 자체가 결정입니다 — <strong>고장 판정이 검증보다 먼저</strong>이고, <strong>카탈로그는 요청마다 DB에서 읽습니다.</strong></p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 09 · 응답 흐름">
+        <svg viewBox="0 0 1120 764" role="img" aria-label="재고·요금 조회 요청의 처리 순서. 컨트롤러가 FaultRegistry에 한 번만 물어 Decision을 받고, 고장이 아니면 SearchQuery가 요청을 검증하고, ACatalog가 요청마다 H2 파일 DB에서 읽어 온 뒤, 응답 record가 ARates로 요금과 재고를 계산해 200으로 내보낸다.">
+          <defs>
+            <marker id="sq1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <!-- lifeline headers -->
+          <rect x="6" y="8" width="150" height="56" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="6" y="8" width="150" height="56">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">자사 앱</div><div class="s">F3~F9</div></div>
+          </foreignObject>
+
+          <rect x="176" y="8" width="176" height="56" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="176" y="8" width="176" height="56">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">AController</div><div class="s">api</div></div>
+          </foreignObject>
+
+          <rect x="372" y="8" width="164" height="56" rx="13" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <foreignObject x="372" y="8" width="164" height="56">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">FaultRegistry</div><div class="s">fault</div></div>
+          </foreignObject>
+
+          <rect x="556" y="8" width="164" height="56" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="556" y="8" width="164" height="56">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SearchQuery</div><div class="s">api</div></div>
+          </foreignObject>
+
+          <rect x="740" y="8" width="164" height="56" rx="13" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="740" y="8" width="164" height="56">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">ACatalog</div><div class="s">catalog</div></div>
+          </foreignObject>
+
+          <rect x="924" y="8" width="190" height="56" rx="13" fill="#E7F9F1" stroke="#0A8F5B" stroke-width="1.4"/>
+          <foreignObject x="924" y="8" width="190" height="56">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">H2 파일 DB</div><div class="s">data/mock-a.mv.db</div></div>
+          </foreignObject>
+
+          <!-- lifelines -->
+          <line x1="81" y1="64" x2="81" y2="700" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="4 5"/>
+          <line x1="264" y1="64" x2="264" y2="700" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="4 5"/>
+          <line x1="454" y1="64" x2="454" y2="700" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="4 5"/>
+          <line x1="638" y1="64" x2="638" y2="700" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="4 5"/>
+          <line x1="822" y1="64" x2="822" y2="700" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="4 5"/>
+          <line x1="1019" y1="64" x2="1019" y2="700" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="4 5"/>
+
+          <!-- 1. 요청 -->
+          <line x1="81" y1="96" x2="258" y2="96" stroke="#4E5968" stroke-width="1.7" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="90" y="88" fill="#333D4B">GET /a/v1/availability</text>
+          <text class="svg-s" x="90" y="112" fill="#6B7684">X-Api-Key · hotelCodes · checkIn/Out · adults</text>
+
+          <!-- 2. decide -->
+          <line x1="264" y1="146" x2="448" y2="146" stroke="#F04452" stroke-width="1.7" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="274" y="138" fill="#C9303C">decide(AVAILABILITY)</text>
+          <line x1="448" y1="182" x2="270" y2="182" stroke="#F04452" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="274" y="176" fill="#C9303C">Decision(mode, state)</text>
+
+          <rect x="470" y="120" width="644" height="72" rx="13" fill="#FEEFEF" stroke="#F04452" stroke-width="1.1"/>
+          <foreignObject x="470" y="120" width="644" height="72">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>판정은 호출 1건당 정확히 한 번.</b> 만료 → scope → rate 순으로 뽑고, <b>판정에 쓴 상태를 함께 돌려준다</b> — 다시 물으면 그 사이 만료가 끼어 429가 503으로 나간다.</div></div>
+          </foreignObject>
+
+          <!-- alt: 고장 -->
+          <rect x="26" y="212" width="1088" height="148" rx="14" fill="none" stroke="#F04452" stroke-width="1.2" stroke-dasharray="7 5"/>
+          <rect x="26" y="212" width="150" height="26" rx="8" fill="#F04452"/>
+          <text class="svg-l" x="40" y="230" fill="#ffffff">alt · 고장 적중</text>
+
+          <line x1="264" y1="266" x2="87" y2="266" stroke="#F04452" stroke-width="1.7" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="96" y="258" fill="#C9303C">error → 503 / 429 / 500</text>
+          <text class="svg-s" x="96" y="282" fill="#6B7684">B는 HTTP 200 + E503 · data null</text>
+
+          <path d="M264 314 C 320 306, 320 340, 270 334" fill="none" stroke="#F04452" stroke-width="1.7" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="330" y="312" fill="#C9303C">delay → sleep(delayMillis) 후 아래로 계속</text>
+          <text class="svg-s" x="330" y="334" fill="#6B7684">실패가 아니라 늦게 오는 성공 · 기본 3,000ms</text>
+          <text class="svg-s" x="330" y="352" fill="#6B7684">no-response → 최대 600,000ms 붙잡고 응답 없음 (가상 스레드라 서버는 버틴다)</text>
+
+          <!-- 3. 검증 -->
+          <line x1="264" y1="398" x2="632" y2="398" stroke="#3182F6" stroke-width="1.7" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="274" y="390" fill="#1B64DA">parse(apiKey, codes, 날짜, 인원)</text>
+          <line x1="632" y1="432" x2="270" y2="432" stroke="#3182F6" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="274" y="426" fill="#1B64DA">SearchQuery</text>
+
+          <line x1="264" y1="466" x2="87" y2="466" stroke="#F04452" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="96" y="460" fill="#C9303C">실패 → 401 / 400 + error 본문</text>
+          <text class="svg-s" x="96" y="482" fill="#6B7684">log.warn(ErrorKind) — B는 사유를 본문에서 지우므로 로그가 유일한 자리</text>
+
+          <!-- 4. 카탈로그 -->
+          <line x1="264" y1="520" x2="816" y2="520" stroke="#15C47E" stroke-width="1.7" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="274" y="512" fill="#0A8F5B">findAll(hotelCodes)</text>
+
+          <line x1="822" y1="556" x2="1013" y2="556" stroke="#0A8F5B" stroke-width="1.7" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="832" y="548" fill="#0A8F5B">SELECT — 요청마다</text>
+          <line x1="1013" y1="590" x2="828" y2="590" stroke="#0A8F5B" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="832" y="584" fill="#0A8F5B">엔티티</text>
+
+          <line x1="816" y1="624" x2="270" y2="624" stroke="#15C47E" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="274" y="618" fill="#0A8F5B">AProperty · ARoom (시드 record)</text>
+
+          <!-- 5. 조립 -->
+          <path d="M264 656 C 322 648, 322 682, 270 676" fill="none" stroke="#3182F6" stroke-width="1.7" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="332" y="654" fill="#1B64DA">AAvailabilityResponse.of(...) → ARates</text>
+          <text class="svg-s" x="332" y="676" fill="#6B7684">금·토 ×13/10 · 세금 /10 · 주말 재고 min(1,base) · 품절일 0</text>
+
+          <!-- 6. 응답 -->
+          <line x1="264" y1="700" x2="87" y2="700" stroke="#15C47E" stroke-width="2" marker-end="url(#sq1)"/>
+          <text class="svg-l" x="96" y="694" fill="#0A8F5B">200 + JSON</text>
+
+          <foreignObject x="6" y="712" width="1108" height="48">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>캐시가 없다.</b> 외부 클라이언트가 <span style="font-family:var(--mono);font-size:.86em">AUTO_SERVER=TRUE</span>로 같은 파일에 붙어 행을 지우면, 다음 요청의 SELECT부터 사라진다 — 재기동이 필요 없다.</div></div>
+          </foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 고장 판정이 <b>맨 위</b>에 있다는 것. 무너진 서버는 요청을 읽어 보지 않으므로, 키가 틀려도 고장 중이면 401이 아니라 503이 나간다. 그리고 DB 화살표가 <b>요청 안에</b> 있다는 것 — 캐시가 없어서 밖에서 지운 것이 바로 보인다.</figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>단계</th><th>어디서</th><th>여기서 갈라지는 것</th><th>근거</th></tr></thead>
+        <tbody>
+          <tr><td>① 고장 판정</td><td><span class="term">fault</span></td><td>error → 즉시 실패 / delay → 늦은 성공 / no-response → 무응답 / normal → 통과</td><td>D-F2-3 · 3.5.8</td></tr>
+          <tr><td>② 요청 검증</td><td><span class="term">api</span></td><td>통과 → <span class="term">SearchQuery</span> / 실패 → A는 HTTP 상태, B는 200 + <span class="term">E4xx</span></td><td>D-F2-4 · 3.5.6</td></tr>
+          <tr><td>③ 카탈로그 조회</td><td><span class="term">catalog</span> → H2</td><td>없는 코드는 <strong>조용히 빠진다</strong> — 계약에 그 오류가 없다</td><td>D-F2-9 · 3.6</td></tr>
+          <tr><td>④ 응답 조립</td><td><span class="term">api</span> + <span class="term">catalog</span></td><td>인원 초과 객실 제외 · 주말 할증 · 품절일 우선</td><td>D-F2-5 · 3.5.4</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">순서가 곧 결정</span>①이 ②보다 먼저인 것은 <strong>무너진 서버는 요청을 읽어 보지 않기 때문</strong>입니다. ③이 요청 안에 있는 것은 <strong>조작자가 DB에서 지운 것이 바로 보여야 하기 때문</strong>입니다. 둘 다 순서를 바꾸면 도구의 쓸모가 사라집니다 — 전자는 인증이 고장보다 먼저 걸려 장애를 재현할 수 없게 되고, 후자는 캐시가 끼어 밖에서 지운 행이 응답에 남습니다.</div>
+  </section>
+
+  <section id="s10" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">11</div>
       <div><p class="sec-eyebrow">SUMMARY</p><h2 class="sec">결정 요약</h2></div>
     </div>
 
-    <p class="lead">여덟 개가 모두 닫혔습니다. 검토한 안·탈락 사유·구현 차단 여부의 전문은 <span class="term">01-design.md</span> 6장에 있습니다.</p>
+    <p class="lead">아홉 개가 모두 닫혔습니다. 검토한 안·탈락 사유·구현 차단 여부의 전문은 <span class="term">01-design.md</span> 6장에 있습니다.</p>
 
     <div class="tbl-wrap">
       <table>
@@ -1133,6 +1275,7 @@
           <tr><td>D-F2-6</td><td>수동 2터미널 · A 9091 / B 9092</td><td>A만 내리는 조작이 가장 간단해야 한다</td><td>아니오</td></tr>
           <tr><td>D-F2-7</td><td>0건 유지 — 모듈에 <span class="term">src/test</span> 없음</td><td>사용자 결정. 남는 위험은 S-01 검산 시나리오를 대본 맨 앞에 고정해 대신 막는다</td><td>아니오</td></tr>
           <tr><td>D-F2-8</td><td><span class="term">spring.threads.virtual.enabled: true</span></td><td>지연 모드가 모의 서버 자신의 스레드 풀을 말리지 않게</td><td>아니오</td></tr>
+          <tr><td>D-F2-9<br><span class="stchip ok">09-05 추가</span></td><td>카탈로그를 모듈별 <strong>H2 파일 DB</strong>에 — <span class="term">/h2-console</span> · 외부 JDBC</td><td>조작자가 직접 보고 지울 수 있어야 한다. 기존 MySQL 에 얹으면 "A만 내렸을 때 B는 정상"에 DB 의존이 끼어든다</td><td>예</td></tr>
         </tbody>
       </table>
     </div>

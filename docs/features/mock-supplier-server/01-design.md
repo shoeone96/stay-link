@@ -195,6 +195,8 @@ k6/                                저장소 루트
 | `ARoom.netRate` | `BRoom.grossRate` | 요금 규약 자체가 다르다 |
 | `Nights` · `FaultRegistry` · `FaultState` · `FaultMode` · `Endpoint` · `SearchQuery` · `InvalidRequestException` · `ErrorKind` | 같은 이름의 **별도 파일** | **의도한 중복** (D-F2-1). 두 파일이 갈라져도 각자 옳다 |
 
+**드리프트를 확인하는 방법** (2026-09-05 정정) — 원래는 "`package` 줄만 빼면 바이트 단위로 같다"로 확인했다. 패키지를 넷으로 나눈 뒤 `fault`의 클래스가 `api`의 `ErrorKind`를 던지면서 `import com.stay.mock.{a|b}.api…` 줄이 생겨 그 형태로는 더 이상 성립하지 않는다. 지금 확인하는 성질은 **`com.stay.mock.a` → `com.stay.mock.b` 치환 후 `diff`가 0줄**이다. 의도한 중복이 "갈라져도 각자 옳다"는 것이지 "아무 때나 갈라져 있다"는 뜻은 아니므로, 갈라진 자리는 근거가 있어야 한다(현재 갈라진 곳은 `ErrorKind`의 상태·문구뿐이며 3.2가 정한 차이다).
+
 ### 3.3 응답 record 정의 — JSON 키와 1:1
 
 **Java 필드명과 JSON 키를 전부 같게 둔다.** 따라서 `@JsonProperty`가 한 곳도 필요 없고, 필드 이름을 잘못 적으면 그 자체가 계약 위반으로 드러난다.
