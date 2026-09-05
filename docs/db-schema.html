@@ -412,7 +412,7 @@
     <div class="cov">
       <span class="badge"><span class="d"></span>stay-link · DB SCHEMA · SSOT</span>
       <h1 class="title">stay-link<br><span class="hl">DB 스키마</span></h1>
-      <p class="lede">테이블·컬럼·제약의 <b>단일 원본 문서</b>입니다. <span class="term">schema.sql</span>·엔티티가 바뀌면 같은 커밋에서 이 문서의 다이어그램·설명·변경 이력을 함께 갱신합니다. 현재 테이블은 F1 property-mapping의 2개입니다.</p>
+      <p class="lede">테이블·컬럼·제약의 <b>단일 원본 문서</b>입니다. <span class="term">schema.sql</span>·엔티티가 바뀌면 같은 커밋에서 이 문서의 다이어그램·설명·변경 이력을 함께 갱신합니다. 서비스 테이블은 F1 property-mapping의 2개이고, 그와 별개로 <b>검증 도구인 모의 공급사 서버의 H2 테이블 4개</b>를 마지막 절에 분리해 적습니다.</p>
       <div class="chips">
         <div class="chip"><span class="k">TABLES</span><span class="v">property · room</span></div>
         <div class="chip"><span class="k">DB</span><span class="v">MySQL 8.4 · schema.sql + ddl-auto validate</span></div>
@@ -428,6 +428,7 @@
       <li><a href="#s1">현재 스키마<span class="hint">property · room</span></a></li>
       <li><a href="#s3">제약과 관계의 의미</a></li>
       <li><a href="#s4">코드가 겹칠 때의 저장 예시<span class="hint">예시</span></a></li>
+      <li><a href="#s45">모의 공급사 서버 테이블<span class="hint">도구용 H2 · 서비스 아님</span></a></li>
       <li><a href="#s5">변경 이력</a></li>
     </ol>
   </nav>
@@ -498,9 +499,44 @@
     <div class="note"><span class="tag">정리</span>공급사 코드끼리 겹치는 문제는 <strong>property의 (supplier, supplier_property_code) UNIQUE</strong>에서 한 번 해결되고, room은 그 결과인 내부 id에만 매달린다. room에 supplier를 복제하면 유일성 범위는 같고 부모·자식 불일치 상태만 새로 생기므로 두지 않는다 (D-F1-9).</div>
   </section>
 
+  <section id="s45" class="fade">
+    <div class="sec-head">
+      <div class="sec-num" style="background:var(--g700);box-shadow:none">4</div>
+      <div><p class="sec-eyebrow" style="color:var(--g600)">TOOL · NOT SERVICE</p><h2 class="sec">모의 공급사 서버 테이블</h2></div>
+    </div>
+
+    <div class="note warn"><span class="tag">서비스 스키마가 아닙니다</span>아래 네 테이블은 <strong>검증 도구인 모의 공급사 서버(F2)의 H2 파일 DB</strong>에 있습니다. 위 <span class="term">property</span>·<span class="term">room</span>(서비스 MySQL)과 <strong>같은 DB가 아니고 연결도 없으며, 배포에도 들어가지 않습니다.</strong> 여기 적는 이유는 이 문서가 "저장소에 존재하는 테이블"의 단일 원본이기 때문입니다 — 존재를 숨기면 나중에 엔티티를 발견한 사람이 서비스 스키마로 오해합니다.</div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>모듈</th><th>DB 파일</th><th>테이블</th><th>조작 방법</th></tr></thead>
+        <tbody>
+          <tr><td>:mock-supplier-a<br>:9091</td><td><span class="term">mock-supplier-a/data/mock-a.mv.db</span></td><td><span class="term">a_property</span> · <span class="term">a_room</span></td><td><span class="term">/h2-console</span> · 외부 JDBC(<span class="term">AUTO_SERVER=TRUE</span>) · <span class="term">/control/**</span></td></tr>
+          <tr><td>:mock-supplier-b<br>:9092</td><td><span class="term">mock-supplier-b/data/mock-b.mv.db</span></td><td><span class="term">b_property</span> · <span class="term">b_room</span></td><td>같음</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A와 B는 <strong>서로 다른 파일</strong>입니다. 두 공급사를 잇는 공통 키가 없다는 계약을 저장소 수준에서도 지키기 위해서이고, 프로세스 하나만 내려도 다른 쪽이 멀쩡해야 하기 때문입니다(F2 수용 기준 3).</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>테이블</th><th>PK</th><th>컬럼</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td><span class="term">a_property</span></td><td><span class="term">hotel_code</span></td><td><span class="term">hotel_name</span></td><td>공급사 A가 파는 숙소</td></tr>
+          <tr><td><span class="term">a_room</span></td><td>(<span class="term">hotel_code</span>, <span class="term">room_type_code</span>)</td><td><span class="term">room_type_name</span> · <span class="term">max_occupancy</span> · <span class="term">net_rate</span> · <span class="term">base_inventory</span> · <span class="term">sold_out_day</span> · <span class="term">breakfast_included</span></td><td><span class="term">net_rate</span>는 <strong>세금 별도</strong>. <span class="term">sold_out_day</span>는 품절로 만들 매월 날짜(없으면 NULL)</td></tr>
+          <tr><td><span class="term">b_property</span></td><td><span class="term">property_id</span></td><td><span class="term">property_name</span></td><td>공급사 B가 파는 숙소</td></tr>
+          <tr><td><span class="term">b_room</span></td><td>(<span class="term">property_id</span>, <span class="term">room_id</span>)</td><td><span class="term">room_name</span> · <span class="term">max_occupancy</span> · <span class="term">gross_rate</span> · <span class="term">base_inventory</span> · <span class="term">breakfast_included</span></td><td><span class="term">gross_rate</span>는 <strong>세금 포함</strong>. B에는 품절일 컬럼이 없다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note"><span class="tag">서비스 테이블과 다른 점</span>스키마를 <span class="term">schema.sql</span>로 고정하지 않고 <span class="term">ddl-auto: update</span>에 맡깁니다. 도구라 마이그레이션 도구를 얹지 않고, <strong>초기화 방법이 "DB 파일 삭제"</strong>이기 때문입니다. 컬럼명이 공급사 계약의 JSON 키를 그대로 스네이크로 옮긴 것이라, A와 B가 같은 뜻의 컬럼에 <strong>다른 이름</strong>(<span class="term">hotel_code</span> ↔ <span class="term">property_id</span>)을 쓰는 것도 의도한 것입니다 — 그 차이를 흡수하는 것이 자사 앱의 일입니다.</div>
+  </section>
+
   <section id="s5" class="fade">
     <div class="sec-head">
-      <div class="sec-num">4</div>
+      <div class="sec-num">5</div>
       <div><p class="sec-eyebrow">HISTORY</p><h2 class="sec">변경 이력</h2></div>
     </div>
     <div class="tbl-wrap">
@@ -510,6 +546,7 @@
           <tr><td>2026-09-03</td><td>property · room_type 신설. UNIQUE 2개, FK 1개. room_type은 property_id 식별자 참조(별도 Aggregate)</td><td>F1 설계 D-F1-1~7 · PR #1</td></tr>
           <tr><td>2026-09-04</td><td>room_type UNIQUE에 supplier를 넣는 안을 검토 후 기각 — property_id가 이미 공급사를 결정</td><td>D-F1-9</td></tr>
           <tr><td>2026-09-04</td><td>room_type → room 으로 개명 (컬럼 supplier_room_code·room_name, 제약 uq_room_property_code·fk_room_property). 의미는 그대로 객실 유형</td><td>D-F1-10</td></tr>
+          <tr><td>2026-09-05</td><td><strong>도구용 H2 테이블 4개 등재</strong> — a_property·a_room(9091), b_property·b_room(9092). 모의 공급사 서버의 카탈로그를 메모리에서 파일 DB로 옮기며 생겼다. <strong>서비스 스키마와 분리된 절로 적었고 ER 다이어그램에는 넣지 않았다</strong> — 같은 DB가 아니고 배포에도 들어가지 않는다</td><td>F2 설계 D-F2-9 · 3.6</td></tr>
         </tbody>
       </table>
     </div>

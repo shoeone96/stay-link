@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모의 공급사 서버 동작 표</title>
+<!-- 폰트: Pretendard(본문) + JetBrains Mono(코드/라벨). 이 두 개만 사용한다. -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     색/폰트/그림자는 반드시 이 변수로만 참조한다 (임의 hex 금지).
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  /* scroll progress bar */
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  /* page sheet (흰 카드) */
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  /* .sheet.wide — 스키마/ER 같은 표 중심 문서용 넓은 시트 (2026-09-04 추가). SVG viewBox 는 1140 기준 */
+  .sheet.wide{max-width:1300px}
+
+  /* cover */
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  /* toc — 심플 인덱스 (유일한 목차 컴포넌트, 2026-08-02 재설계)
+     1열 세로 나열 = 읽는 순서 그대로. 카드·박스·그리드 금지 (구 2열 카드형·toc-deep 카드형 폐기).
+     하위 항목이 필요하면 li 안에 .ts 를 들여쓴 평문 링크로만 추가한다. */
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  /* sections */
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  /* stchip — 상태 칩: 목록·표 항목의 진행 상태 (ok=확정 / mid=뼈대 / open=미정) */
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  /* blockquote (인용) */
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  /* note / callout (.note 기본 · .key 파랑 · .warn 빨강) */
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  /* figure + SVG 다이어그램 컨테이너 */
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  /* foreignObject 자동 줄바꿈 박스 — 글자가 박스를 절대 넘지 않게 자동 줄바꿈+중앙정렬.
+     라벨 길이가 불확실하거나 한글이 많은 박스엔 .svg-t/.svg-s <text> 대신 이걸 쓴다 (폭 계산 불필요). */
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  /* .fo.left — 표 셀·설명 칸용 좌측 정렬 변형 (2026-09-04 추가). .d 는 본문 설명 텍스트 */
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  /* wide figure — 시트(860px) 폭을 넘는 다이어그램 (긴 시퀀스/타임라인 전용) */
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  /* code block (mac 윈도우 스타일) */
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  /* toggle — 접기/펼치기 (details/summary) */
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  /* 2-column 비교 카드 (.x 중립 · .o 강조) */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  /* table */
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  /* fn-card — 함수/API 시그니처 카드 (어두운 시그니처 바 + 명세 표) */
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  /* 참고문헌 리스트 */
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  /* checklist — 체크 항목 리스트. li 안에 <span class="box"></span> + 텍스트. 완료는 li.done
+     ⚠️ li 는 display:block + 박스는 position:absolute 다 (display:flex 금지).
+     li 안에는 <b>/<strong>/<span class="term"> 같은 인라인 요소가 섞이는데,
+     li 를 flex 로 두면 그 인라인 요소들이 각각 별도 flex item 이 되어
+     좁은 칸에 글자가 "세로로" 쌓이며 깨진다. 그래서 텍스트는 일반 인라인 흐름으로 둔다. */
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  /* carousel — 좌우 슬라이드 (분위기 사진 + 캡션). JS는 화살표 스크롤만.
+     사진이 없으면 .ph 가 플레이스홀더로 남는다 (img onerror 로 .empty 부여). */
+  .carousel{position:relative;margin:34px 0}
+  .carousel .track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+    scroll-behavior:smooth;padding:2px 2px 10px;-webkit-overflow-scrolling:touch}
+  .carousel .track::-webkit-scrollbar{height:6px}
+  .carousel .track::-webkit-scrollbar-thumb{background:var(--g300);border-radius:3px}
+  .carousel .track::-webkit-scrollbar-track{background:transparent}
+  .carousel .slide{flex:0 0 82%;scroll-snap-align:center;background:var(--white);
+    border:1px solid var(--g200);border-radius:20px;overflow:hidden;transition:.18s}
+  .carousel .slide:hover{border-color:var(--blue);box-shadow:var(--shadow-sm)}
+  .carousel .ph{position:relative;aspect-ratio:16/9;background:var(--blue-bg2);
+    display:grid;place-items:center;overflow:hidden}
+  .carousel .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .carousel .ph.empty{background:linear-gradient(135deg,var(--blue-bg2),var(--g100))}
+  .carousel .ph.empty::after{content:attr(data-empty);font-family:var(--mono);font-size:11.5px;
+    font-weight:500;color:var(--g400);letter-spacing:.02em;text-align:center;padding:0 20px;line-height:1.6}
+  .carousel .cap{padding:18px 20px 20px}
+  .carousel .cap .t{display:block;font-size:15.5px;font-weight:700;color:var(--g900);line-height:1.4;margin-bottom:6px}
+  .carousel .cap .d{display:block;font-size:14px;font-weight:500;color:var(--g600);line-height:1.6;word-break:keep-all}
+  .carousel .cap .d b{color:var(--g800);font-weight:700}
+  .carousel .cap .src{display:block;font-family:var(--mono);font-size:10px;color:var(--g400);
+    margin-top:9px;line-height:1.5;word-break:break-all}
+  .carousel .cap .src a{color:var(--g500);text-decoration:none}
+  .carousel .cap .src a:hover{color:var(--blue);text-decoration:underline}
+  .carousel .nav{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
+  .carousel .nav button{width:36px;height:36px;border-radius:12px;border:1px solid var(--g200);
+    background:var(--white);color:var(--g600);cursor:pointer;display:grid;place-items:center;
+    font-family:var(--mono);font-size:15px;font-weight:700;transition:.15s;padding:0}
+  .carousel .nav button:hover{border-color:var(--blue);color:var(--blue-deep);background:var(--blue-bg2)}
+  @media(max-width:720px){.carousel .slide{flex:0 0 88%}}
+
+  /* docnav — 문서 시리즈(여러 HTML 파일) 간 네비게이션 바. cover 와 toc 사이에 둔다 */
+  .docnav{display:flex;flex-wrap:wrap;gap:8px;padding:20px 56px;background:var(--white);
+    border-bottom:1px solid var(--g100)}
+  .docnav a{font-family:var(--mono);font-size:12.5px;font-weight:700;text-decoration:none;
+    padding:9px 14px;border-radius:100px;background:var(--g50);border:1px solid var(--g200);
+    color:var(--g600);transition:.18s}
+  .docnav a:hover{border-color:var(--blue);color:var(--blue-deep);transform:translateY(-1px)}
+  .docnav a.cur{background:var(--blue-bg);border-color:#cfe4ff;color:var(--blue-deep)}
+  .docnav a .n{color:var(--g400);margin-right:6px}
+  .docnav a.cur .n{color:var(--blue)}
+
+  /* book-nav — 책 시리즈 내비게이션 (breadcrumb + prev/next). 스니펫: components.md */
+  .book-nav-crumb{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:15px 56px;
+    background:var(--g50);border-bottom:1px solid var(--g100);
+    font-family:var(--mono);font-size:12px;font-weight:500;color:var(--g600)}
+  .book-nav-crumb a{color:var(--blue);text-decoration:none;font-weight:700}
+  .book-nav-crumb a:hover{text-decoration:underline}
+  .book-nav-crumb .sep{color:var(--g300)}
+  .book-nav-crumb b{color:var(--g800);font-weight:700}
+  .book-nav-foot{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;
+    padding:26px 56px;border-top:1px solid var(--g100);background:var(--g50)}
+  .book-nav-foot .prev,.book-nav-foot .next{display:block;border:1px solid var(--g200);border-radius:14px;
+    padding:13px 17px;text-decoration:none;background:var(--white);transition:.18s}
+  .book-nav-foot a.prev:hover,.book-nav-foot a.next:hover{border-color:var(--blue);box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+  .book-nav-foot .dir{display:block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    color:var(--g500);letter-spacing:.04em;margin-bottom:4px}
+  .book-nav-foot .t{display:block;font-size:13.5px;font-weight:700;color:var(--g900);line-height:1.4}
+  .book-nav-foot .next{text-align:right}
+  .book-nav-foot .toc-link{font-family:var(--mono);font-size:12px;font-weight:700;text-decoration:none;
+    color:var(--blue-deep);background:var(--blue-bg);border:1px solid #cfe4ff;border-radius:100px;
+    padding:10px 18px;transition:.18s}
+  .book-nav-foot .toc-link:hover{border-color:var(--blue)}
+  .book-nav-foot .off{opacity:.6;background:var(--g100);cursor:default}
+  .book-nav-foot .off .t{color:var(--g500)}
+
+  /* book-toc — 책 목차 (허브 전용: 장 행 + 상태 배지). 스니펫: components.md */
+  .bk-part{margin:28px 0}
+  .bk-part-h{display:flex;align-items:baseline;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+  .bk-part-h .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.05em}
+  .bk-part-h .t{font-size:17px;font-weight:800;color:var(--g900)}
+  .bk-list{list-style:none;margin:0;padding:0;border:1px solid var(--g200);border-radius:16px;
+    overflow:hidden;background:var(--white)}
+  .bk-list>li{border-top:1px solid var(--g100)}
+  .bk-list>li:first-child{border-top:none}
+  .bk-list>li>a,.bk-list>li>.row{display:flex;align-items:center;gap:14px;padding:13px 18px;
+    text-decoration:none;transition:background .15s}
+  .bk-list>li>a:hover{background:var(--blue-bg2)}
+  .bk-list .no{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--g400);flex:none;width:32px}
+  .bk-list .tt{font-size:14.5px;font-weight:700;color:var(--g900);line-height:1.45;min-width:0}
+  .bk-list .tt small{display:block;font-size:12.5px;font-weight:500;color:var(--g500)}
+  .bk-list .bdg{margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;font-weight:700;
+    padding:4px 10px;border-radius:100px}
+  .bk-list .bdg.done{background:var(--blue-bg);color:var(--blue-deep)}
+  .bk-list .bdg.part{background:var(--g100);color:var(--g600)}
+  .bk-list .bdg.live{background:var(--green-bg);color:var(--green-deep)}
+  .bk-list .bdg.slot{background:none;border:1px dashed var(--g400);color:var(--g500)}
+  .bk-list>li.slot .tt{color:var(--g500);font-weight:600}
+  .bk-list>li.slot .tt small{color:var(--g400)}
+
+  /* docfab — 플로팅 퀵내비 (섹션 점프 + 허브 복귀). 스니펫: components.md */
+  .docfab{position:fixed;right:22px;bottom:22px;z-index:60;font-family:var(--sans)}
+  .docfab>button{width:48px;height:48px;border-radius:16px;border:1px solid var(--g200);
+    background:var(--white);box-shadow:var(--shadow);cursor:pointer;display:grid;place-items:center;
+    color:var(--g600);transition:.18s;padding:0}
+  .docfab>button:hover{color:var(--blue-deep);border-color:var(--blue)}
+  .docfab>button svg{width:20px;height:20px}
+  .docfab .panel{position:absolute;right:0;bottom:58px;width:min(320px,84vw);max-height:min(430px,68vh);
+    overflow:auto;background:var(--white);border:1px solid var(--g200);border-radius:18px;
+    box-shadow:var(--shadow);padding:10px;display:none}
+  .docfab.open .panel{display:block}
+  .docfab .panel .hd{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--g500);
+    letter-spacing:.06em;padding:8px 10px 4px}
+  .docfab .panel a{display:block;padding:8px 10px;border-radius:10px;font-size:13.5px;font-weight:600;
+    color:var(--g800);text-decoration:none;line-height:1.4}
+  .docfab .panel a:hover{background:var(--blue-bg2);color:var(--blue-deep)}
+  .docfab .panel a.sub{padding-left:24px;font-size:12.5px;font-weight:500;color:var(--g600)}
+  .docfab .panel .hub{margin-top:6px;border-top:1px solid var(--g100);padding-top:8px}
+  .docfab .panel a.hubl{color:var(--blue-deep);font-weight:700}
+  @media(max-width:720px){.docfab{right:14px;bottom:14px}}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer,.docnav{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+    .book-nav-crumb{padding:13px 24px}
+    .book-nav-foot{padding:20px 24px;grid-template-columns:1fr;gap:10px}
+    .book-nav-foot .next{text-align:left}
+    .book-nav-foot .toc-link{justify-self:start}
+    .bk-list .bdg{display:none}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet wide">
+
+  <!-- ===================== COVER ===================== -->
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>F2 · mock-supplier-server · 실측 검증</span>
+      <h1 class="title">모의 공급사 서버는<br><span class="hl">의도한 대로만 동작하는가</span></h1>
+      <p class="lede">두 서버를 실제로 띄우고 <b>25개 항목을 호출해</b> 확인한 동작 표입니다. 응답을 흔드는 축은 <b>요청 파라미터 · 조회한 날짜 · 조작자가 넣은 상태</b> 셋뿐이고, 무작위가 개입하는 곳은 <b>조작자가 rate를 직접 낮춘 경우</b> 한 군데입니다. 카탈로그는 <b>H2 파일 DB</b>에 있어 직접 조회·삭제할 수 있습니다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">SERVERS</span><span class="v">mock-supplier-a :9091 · mock-supplier-b :9092</span></div>
+        <div class="chip"><span class="k">MEASURED</span><span class="v">2026-09-05 KST</span></div>
+        <div class="chip"><span class="k">VERDICT</span><span class="v">의도된 동작 — 결정적</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== TOC ===================== -->
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">결론 — 무엇이 응답을 바꾸는가<span class="hint">판정</span></a></li>
+      <li><a href="#s2">엔드포인트<span class="hint">A · B</span></a></li>
+      <li><a href="#s3">시드 카탈로그<span class="hint">고정값</span></a></li>
+      <li><a href="#s35">카탈로그 DB — 직접 보고 지우기<span class="hint">H2 파일</span></a></li>
+      <li><a href="#s4">요금·재고 파생 규칙<span class="hint">순수 함수</span></a></li>
+      <li><a href="#s5">고장 제어 API<span class="hint">/control</span></a></li>
+      <li><a href="#s6">고장 모드별 응답<span class="hint">4모드</span></a></li>
+      <li><a href="#s7">실패 응답 표<span class="hint">A vs B</span></a></li>
+      <li><a href="#s8">실측 기록 25건<span class="hint">전부 일치</span></a></li>
+      <li><a href="#s9">의도적이지만 발이 걸리는 곳<span class="hint">주의</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- ===================== 1 ===================== -->
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">VERDICT</p><h2 class="sec">결론 — 무엇이 응답을 바꾸는가</h2></div>
+    </div>
+
+    <p class="lead">응답을 흔들 수 있는 축은 넷뿐입니다. 셋은 완전히 결정적이고, 나머지 하나는 조작자가 명시적으로 켰을 때만 무작위가 됩니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>축</th><th>무엇이 정하나</th><th>결정적인가</th><th>실측</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>요청 파라미터</td>
+            <td><span class="term">hotelCodes</span>/<span class="term">propertyIds</span> · <span class="term">checkIn</span>/<span class="term">checkOut</span> · <span class="term">adults</span>+<span class="term">children</span></td>
+            <td>예 — 같은 입력이면 같은 출력</td>
+            <td>같은 요청 20회 반복 → 응답 해시 <strong>1종</strong> (A·B 모두)</td>
+          </tr>
+          <tr>
+            <td>조회한 날짜</td>
+            <td>그 날짜가 금·토인지(할증), 매월 며칠인지(품절일)</td>
+            <td>예 — 벽시계가 아니라 <strong>요청한 날짜</strong>만 본다</td>
+            <td>09-11(금)·09-12(토)만 할증, 10-02만 재고 0</td>
+          </tr>
+          <tr>
+            <td>조작자가 넣은 상태</td>
+            <td><span class="term">POST /control/mode</span> 로 켠 고장, 카탈로그 DB의 내용(<span class="term">/control/**</span> 또는 <strong>직접 SQL</strong>로 바꾼다)</td>
+            <td>예 — <strong>건드린 적이 없으면 시드 그대로다</strong></td>
+            <td>고장 미설정 상태로 200회 호출 → 비200 응답 <strong>0건</strong></td>
+          </tr>
+          <tr>
+            <td><span class="term">rate</span> (확률)</td>
+            <td>조작자가 <span class="term">rate&lt;1.0</span> 을 직접 넘겼을 때만 <span class="term">ThreadLocalRandom</span></td>
+            <td><strong>아니오 — 유일한 무작위 지점</strong> (기본값 <span class="term">1.0</span> = 전부 발동)</td>
+            <td><span class="term">rate=0.3</span> 200회 → 503이 54회(27%)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">한 줄 답</span>모의 서버는 <strong>스스로 흔들리지 않습니다.</strong> 시드·요금·재고는 순수 함수로 계산되고, 지연·오류·무응답은 <strong>제어 API로 켜기 전까지 존재하지 않는 상태</strong>입니다. 자사 앱이 보는 공급사 동작은 전부 재현 가능합니다.</div>
+  </section>
+
+  <!-- ===================== 2 ===================== -->
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">ENDPOINTS</p><h2 class="sec">엔드포인트</h2></div>
+    </div>
+
+    <p class="lead">뜨는 프로세스는 <strong>둘뿐입니다 — A 하나(:9091) · B 하나(:9092).</strong> 아래 표의 행은 서버가 아니라 <em>그 한 프로세스가 함께 서빙하는 경로</em>입니다. 두 서버는 서로 다른 계약을 흉내 내어, A는 HTTP 상태로 실패를 알리고 B는 언제나 200에 봉투 코드로 알립니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>프로세스</th><th>그 프로세스가 서빙하는 경로</th><th>인증</th><th>성공 응답의 모양</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3">프로세스 1<br>mock-supplier-a<br>:9091</td><td><span class="term">GET /a/v1/hotels</span></td><td><span class="term">X-Api-Key: test-key</span></td><td><span class="term">{ items:[{ hotelCode, hotelName, roomTypes[] }] }</span> — 요금·재고 없음</td></tr>
+          <tr><td><span class="term">GET /a/v1/availability</span></td><td><span class="term">X-Api-Key: test-key</span></td><td>평평한 <span class="term">items[]</span> (항목에 <span class="term">breakfastIncluded</span>·<span class="term">currency</span>), 항목마다 <strong>날짜별</strong> <span class="term">dailyRates[]</span> (재고·1박요금·세금)</td></tr>
+          <tr><td><span class="term">/control/**</span> (6개)</td><td><strong>없음</strong> — 계약 밖의 조작자용</td><td>고장 주입 · 카탈로그 조작 · 현재 상태 조회</td></tr>
+          <tr><td rowspan="3">프로세스 2<br>mock-supplier-b<br>:9092</td><td><span class="term">GET /b/api/properties</span></td><td><span class="term">X-Api-Key: test-key</span></td><td><span class="term">{ resultCode:"0000", resultMessage, data:{ items[] } }</span> 봉투</td></tr>
+          <tr><td><span class="term">GET /b/api/search</span></td><td><span class="term">X-Api-Key: test-key</span></td><td>봉투 안 <span class="term">items[]</span> (항목에 <span class="term">breakfastIncluded</span>·<span class="term">taxIncluded</span>), <strong>기간 총액</strong> <span class="term">totalPrice</span> + 날짜별 <span class="term">inventory[]</span> (재고만)</td></tr>
+          <tr><td><span class="term">/control/**</span> (6개)</td><td><strong>없음</strong> — 계약 밖의 조작자용</td><td>고장 주입 · 카탈로그 조작 · 현재 상태 조회</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>조회 파라미터</th><th>A</th><th>B</th><th>동작</th></tr></thead>
+        <tbody>
+          <tr><td>숙소 코드</td><td><span class="term">hotelCodes</span> (쉼표, 최대 50)</td><td><span class="term">propertyIds</span> (쉼표, 최대 50)</td><td>시드에 없는 코드는 <strong>조용히 빠진다</strong> — 오류가 아니다</td></tr>
+          <tr><td>기간</td><td><span class="term">checkIn</span> · <span class="term">checkOut</span></td><td><span class="term">checkIn</span> · <span class="term">checkOut</span></td><td><strong>체크아웃일은 숙박일이 아니다</strong> — 09-10~09-13은 3박</td></tr>
+          <tr><td>인원</td><td><span class="term">adults</span> + <span class="term">children</span></td><td><span class="term">adults</span> + <span class="term">children</span></td><td>합계가 <span class="term">maxOccupancy</span> 를 넘는 객실은 응답에서 제외</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 3 ===================== -->
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">SEED</p><h2 class="sec">시드 카탈로그</h2></div>
+    </div>
+
+    <p class="lead">기동할 때마다 이 값으로 시작합니다. 코드에 든 상수라 DB도 파일도 보지 않습니다.</p>
+
+    <h3>공급사 A — 숙소 2 · 객실 타입 3</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>hotelCode</th><th>roomTypeCode</th><th>정원</th><th>netRate(세금 별도) · 기본재고 · 조식 · 품절일</th></tr></thead>
+        <tbody>
+          <tr><td>A-3201<br>Haeundae Blue Hotel</td><td><span class="term">OCN-DBL</span> Ocean Double</td><td>2</td><td>110,000 · 재고 3 · <strong>조식 포함</strong> · 품절일 없음</td></tr>
+          <tr><td>A-3201</td><td><span class="term">STD-TWN</span> Standard Twin</td><td>2</td><td>90,000 · 재고 5 · 조식 미포함 · 품절일 없음</td></tr>
+          <tr><td>A-3305<br>Gangnam City Stay</td><td><span class="term">STD-DBL</span> Standard Double</td><td>3</td><td>130,000 · 재고 2 · 조식 미포함 · <strong>매월 2일 품절</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>공급사 B — 숙소 1 · 객실 2</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>propertyId</th><th>roomId</th><th>정원</th><th>grossRate(세금 포함) · 기본재고 · 조식</th></tr></thead>
+        <tbody>
+          <tr><td>P-88410<br>Haeundae Blue Hotel</td><td><span class="term">R-201</span> Ocean Double Room</td><td>2</td><td>126,000 · 재고 2 · 조식 포함</td></tr>
+          <tr><td>P-88410</td><td><span class="term">R-305</span> Family Suite</td><td>4</td><td>210,000 · 재고 3 · 조식 포함</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>조식(<span class="term">breakfastIncluded</span>)은 어디서 오나</h3>
+    <p><strong>재고·요금 응답에는 A·B 모두 이 필드가 있고, 양쪽 다 시드 값입니다</strong> (2026-09-05 수정 — 그전에는 A만 상수 <span class="term">false</span>였습니다).</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>어디에</th><th>A</th><th>B</th><th>실측</th></tr></thead>
+        <tbody>
+          <tr><td>목록 API<br><span class="term">hotels</span> · <span class="term">properties</span></td><td>필드 없음</td><td>필드 없음</td><td>목록 응답에 <span class="term">breakfast</span> 문자열 <strong>0건</strong></td></tr>
+          <tr><td>재고·요금 API<br><span class="term">availability</span> · <span class="term">search</span></td><td><strong>객실마다 시드 값</strong> — <span class="term">OCN-DBL</span> <span class="term">true</span> / <span class="term">STD-TWN</span>·<span class="term">STD-DBL</span> <span class="term">false</span></td><td><strong>객실마다 시드 값</strong> — <span class="term">R-201</span>·<span class="term">R-305</span> 둘 다 <span class="term">true</span></td><td><span class="term">A-3201</span> 한 응답에 <span class="term">true</span>·<span class="term">false</span>가 같이 나옴</td></tr>
+          <tr><td>제어로 추가한 객실<br><span class="term">POST /control/rooms</span></td><td colspan="2"><span class="term">breakfastIncluded</span> 파라미터로 지정. <strong>생략하면 <span class="term">false</span></strong></td><td>A <span class="term">NEW-BF</span>(지정) → <span class="term">true</span> / B <span class="term">R-900</span>(생략) → <span class="term">false</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><span class="tag">왜 고쳤나</span>계약은 A와 B의 조식 필드를 <strong>같은 문장으로</strong> 정의하고, 상수인 필드는 상수라고 적습니다 — B의 <span class="term">taxIncluded</span>에는 "항상 <span class="term">true</span>"가 명시돼 있는데 조식에는 그런 문장이 없습니다. <strong>A만 값을 하나로 고정할 근거가 계약에 없었고</strong>, 그 상태로는 A로 조식 유무 분기를 만들 수 없어 응답 필드의 절반을 도구가 스스로 잘라낸 셈이었습니다. 지금은 <span class="term">A-3201</span> 한 숙소 안에서 갈려, 재고·요금 조회 한 번에 두 값이 같이 나옵니다.</div>
+
+    <div class="note"><span class="tag">참고</span>B의 <span class="term">P-88410</span> 은 A의 <span class="term">A-3201</span> 과 같은 숙소지만, 둘을 잇는 공통 키는 어디에도 없습니다. 실제 공급사가 알려주지 않는 것을 알려주지 않는 것이 <strong>정상 동작</strong>이며, 매핑은 자사 앱의 몫입니다.</div>
+  </section>
+
+  <!-- ===================== 3.5 ===================== -->
+  <section id="s35" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">STORAGE</p><h2 class="sec">카탈로그 DB — 직접 보고 지우기</h2></div>
+    </div>
+
+    <p class="lead">시드는 이제 메모리가 아니라 <strong>모듈마다 자기 H2 파일 DB</strong>에 있습니다. 자사 앱의 MySQL과 무관하고, A와 B도 서로 다른 파일입니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>모듈</th><th>DB 파일</th><th>테이블</th><th>접속</th></tr></thead>
+        <tbody>
+          <tr><td>A :9091</td><td><span class="term">mock-supplier-a/data/mock-a.mv.db</span></td><td><span class="term">a_property</span> · <span class="term">a_room</span></td><td>계정 <span class="term">sa</span> · 비밀번호 없음<br>URL은 <strong>어디서 붙느냐에 따라 다르다</strong> — 아래 표</td></tr>
+          <tr><td>B :9092</td><td><span class="term">mock-supplier-b/data/mock-b.mv.db</span></td><td><span class="term">b_property</span> · <span class="term">b_room</span></td><td>같음</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>조작 경로 셋 — 웹 콘솔은 그중 하나일 뿐</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>경로</th><th>어떻게</th><th>검증하는가</th><th>쓰는 때</th></tr></thead>
+        <tbody>
+          <tr><td>외부 JDBC 클라이언트</td><td>DataGrip·DBeaver에서 <strong>절대 경로</strong>로 접속<br><span class="term">jdbc:h2:file:&lt;저장소&gt;/mock-supplier-a/data/mock-a;AUTO_SERVER=TRUE</span></td><td><strong>안 한다</strong></td><td>사람이 상태를 보고 손으로 고칠 때</td></tr>
+          <tr><td>CLI</td><td><span class="term">java -cp h2-*.jar org.h2.tools.Shell -url "jdbc:h2:file:&lt;저장소&gt;/mock-supplier-a/data/mock-a;AUTO_SERVER=TRUE" -user sa -password ""</span><br>모듈 폴더 안에서 실행할 때만 <span class="term">./data/mock-a</span> 로 줄일 수 있다</td><td><strong>안 한다</strong></td><td>스크립트로 상태를 밀어 넣을 때</td></tr>
+          <tr><td>웹 콘솔</td><td><span class="term">localhost:9091/h2-console</span> → URL 칸에 <span class="term">jdbc:h2:file:./data/mock-a;AUTO_SERVER=TRUE</span><br>여기서만 <strong>상대 경로가 맞다</strong> — 서버 프로세스의 작업 폴더 기준이기 때문</td><td><strong>안 한다</strong></td><td>브라우저만 있을 때</td></tr>
+          <tr><td><span class="term">/control/**</span> API</td><td><span class="term">POST</span>·<span class="term">DELETE</span></td><td>한다 — 없는 코드는 400</td><td>대본·k6가 자동으로 조작할 때</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn"><span class="tag">경로를 틀리기 쉽습니다</span>URL의 <span class="term">file:</span> 뒤 경로는 <strong>접속하는 쪽의 작업 폴더 기준</strong>입니다. 웹 콘솔은 서버 프로세스가 여는 것이라 <span class="term">./data/mock-a</span> 가 맞지만, <strong>밖에서 붙는 클라이언트는 절대 경로를 써야 합니다.</strong> 상대 경로로 붙으면 없는 DB를 새로 만들어 <strong>빈 테이블이 보입니다</strong> — 접속은 되는데 데이터가 없어서 "지웠나?" 하고 헤매기 딱 좋습니다.</div>
+
+    <div class="note key"><span class="tag">핵심</span><span class="term">AUTO_SERVER=TRUE</span> 라서 <strong>모의 서버가 떠 있는 채로</strong> 외부 클라이언트가 같은 파일에 붙습니다. 그리고 조회 API는 <strong>요청마다 DB를 읽습니다(캐시 없음)</strong> — 그래서 밖에서 지운 행이 <strong>재기동 없이 다음 응답에 바로</strong> 반영됩니다. 둘 중 하나라도 없으면 "띄워 놓고 상태를 고친다"가 성립하지 않습니다.</div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>동작</th><th>결과</th><th>실측</th></tr></thead>
+        <tbody>
+          <tr><td>서버 뜬 채로 <span class="term">DELETE FROM a_room WHERE room_type_code='STD-TWN'</span></td><td>다음 조회부터 그 객실이 사라진다</td><td>재기동 없이 응답에 <span class="term">OCN-DBL</span>만 남음</td></tr>
+          <tr><td>서버 뜬 채로 <span class="term">INSERT INTO a_room …</span></td><td>다음 조회부터 나타난다</td><td><span class="term">SQL-ONLY</span> 77,000이 즉시 등장</td></tr>
+          <tr><td>제어 API가 막는 값을 SQL로 주입 (<span class="term">net_rate=-5000</span>)</td><td><strong>그대로 들어간다</strong></td><td>응답 <span class="term">nightlyRate: -5000</span> — 제어 API로는 못 만드는 상태</td></tr>
+          <tr><td>재기동</td><td>조작한 상태가 <strong>유지된다</strong></td><td>파일 DB라 남는다</td></tr>
+          <tr><td><span class="term">data/</span> 폴더 삭제 후 재기동</td><td><strong>시드로 복귀</strong></td><td>3행(<span class="term">OCN-DBL</span>·<span class="term">STD-TWN</span>·<span class="term">STD-DBL</span>) 재생성 확인</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note"><span class="tag">DB에 없는 것</span><strong>고장 상태(<span class="term">mode</span>·<span class="term">rate</span>)는 DB에 두지 않습니다.</strong> 호출 1건마다 판정하는 값이라 초당 수만 번 읽히고, 프로세스를 내렸다 올리면 정상으로 돌아가는 편이 대본에 유리합니다. 확인은 <span class="term">GET /control/state</span>로 합니다. DB에 있는 것은 <strong>조작자가 눈으로 보고 지울 대상인 카탈로그뿐</strong>입니다. DB 파일은 <span class="term">.gitignore</span> 대상이라 조작한 상태가 커밋되지 않습니다.</div>
+  </section>
+
+  <!-- ===================== 4 ===================== -->
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">DERIVATION</p><h2 class="sec">요금·재고 파생 규칙</h2></div>
+    </div>
+
+    <p class="lead">시드 값에 규칙 넷을 적용해 응답을 만듭니다. 전부 순수 함수라 손으로 검산할 수 있습니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>규칙</th><th>조건</th><th>계산</th><th>적용 대상</th></tr></thead>
+        <tbody>
+          <tr><td>주말 할증</td><td>숙박일이 <strong>금요일 또는 토요일</strong></td><td><span class="term">rate × 13 / 10</span> (정수 나눗셈 = 원 단위 절사)</td><td>A·B 공통</td></tr>
+          <tr><td>세금</td><td>항상</td><td><span class="term">nightlyRate / 10</span></td><td>A만 — B는 요금에 이미 포함(<span class="term">taxIncluded:true</span>)</td></tr>
+          <tr><td>주말 재고 압박</td><td>숙박일이 금·토</td><td><span class="term">min(1, 기본재고)</span></td><td>A·B 공통</td></tr>
+          <tr><td>품절일</td><td>날짜의 일(day)이 <span class="term">soldOutDay</span> 와 같음</td><td>재고 <strong>0</strong> — <strong>할증보다 우선</strong>(요금은 할증된 채 재고만 0)</td><td>A의 <span class="term">STD-DBL</span> 만</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>검산 — 2026-09-10(목) ~ 09-13, 3박(목·금·토)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>객실</th><th>09-10 목</th><th>09-11 금</th><th>09-12 토 → 합계</th></tr></thead>
+        <tbody>
+          <tr><td>A <span class="term">OCN-DBL</span></td><td>110,000 + 세금 11,000<br>재고 3</td><td>143,000 + 14,300<br>재고 1</td><td>143,000 + 14,300 · 재고 1<br><strong>Σ 435,600</strong></td></tr>
+          <tr><td>A <span class="term">STD-TWN</span></td><td>90,000 + 9,000<br>재고 5</td><td>117,000 + 11,700<br>재고 1</td><td>117,000 + 11,700 · 재고 1<br><strong>Σ 356,400</strong></td></tr>
+          <tr><td>B <span class="term">R-201</span></td><td>126,000 · 재고 2</td><td>163,800 · 재고 1</td><td>163,800 · 재고 1<br><strong>totalPrice 453,600</strong></td></tr>
+          <tr><td>B <span class="term">R-305</span></td><td>210,000 · 재고 3</td><td>273,000 · 재고 1</td><td>273,000 · 재고 1<br><strong>totalPrice 756,000</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note"><span class="tag">품절일 검산</span><span class="term">A-3305</span> · 2026-10-01~10-03 조회 → 10-01은 <strong>재고 2 · 130,000</strong>, 10-02(금)는 <strong>재고 0 · 169,000</strong>. 금요일 할증은 그대로 붙고 재고만 0이 되어, 규칙의 우선순위가 응답에 그대로 드러납니다.</div>
+  </section>
+
+  <!-- ===================== 5 ===================== -->
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">CONTROL</p><h2 class="sec">고장 제어 API</h2></div>
+    </div>
+
+    <p class="lead">고장은 여기를 호출해야만 생깁니다. 네 축(<span class="term">value</span>·<span class="term">rate</span>·<span class="term">endpoint</span>·<span class="term">durationSeconds</span>)은 서로 직교해 어떤 조합도 만들 수 있습니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>파라미터</th><th>기본값</th><th>허용 값</th><th>뜻</th></tr></thead>
+        <tbody>
+          <tr><td><span class="term">value</span> (필수)</td><td>—</td><td><span class="term">normal</span> · <span class="term">error</span> · <span class="term">delay</span> · <span class="term">no-response</span></td><td>재현할 고장의 종류</td></tr>
+          <tr><td><span class="term">rate</span></td><td><strong>1.0</strong></td><td>0.0 ~ 1.0 (벗어나면 거절)</td><td>호출 1건당 발동 확률. <strong>1.0이면 무작위 없음</strong></td></tr>
+          <tr><td><span class="term">errorCode</span></td><td>503</td><td>429 · 500 · 503 (그 밖의 값은 503으로)</td><td><span class="term">error</span> 모드가 낼 실패 코드</td></tr>
+          <tr><td><span class="term">delayMillis</span></td><td>3000</td><td>0 이상 (음수는 거절)</td><td><span class="term">delay</span> 모드가 붙잡을 시간</td></tr>
+          <tr><td><span class="term">durationSeconds</span></td><td><strong>0 = 무기한</strong></td><td>정수</td><td>지나면 <strong>자동으로 정상 복귀</strong></td></tr>
+          <tr><td><span class="term">endpoint</span></td><td><span class="term">all</span></td><td><span class="term">all</span> · <span class="term">list</span> · <span class="term">availability</span></td><td>고장을 걸 범위. 목록만 정상 / 재고·요금만 고장이 가능</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>제어 엔드포인트</th><th>파라미터</th><th>효과</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td><span class="term">POST /control/mode</span></td><td>위 표</td><td>고장 상태를 통째로 교체</td><td>바뀐 상태를 그대로 응답으로 돌려준다</td></tr>
+          <tr><td><span class="term">GET /control/state</span></td><td>—</td><td>현재 고장 + 카탈로그 개수</td><td>만료된 고장은 읽는 순간 <span class="term">NORMAL</span> 로 되돌아간다</td></tr>
+          <tr><td><span class="term">POST /control/properties</span></td><td>숙소 코드 · 이름</td><td>숙소 추가(객실 0개)</td><td>목록 API에 즉시 등장</td></tr>
+          <tr><td><span class="term">POST /control/rooms</span></td><td>숙소 코드 · 객실 코드 · 이름 · 정원 · 요금 · 재고</td><td>객실 추가</td><td><strong>미매핑 객실 코드를 만드는 유일한 경로</strong></td></tr>
+          <tr><td><span class="term">DELETE /control/properties·rooms</span></td><td>코드</td><td>삭제</td><td>없는 숙소를 고치려 하면 <strong>거절</strong> (A 400 / B 200+E400)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 6 ===================== -->
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">7</div>
+      <div><p class="sec-eyebrow">FAULT MODES</p><h2 class="sec">고장 모드별 응답</h2></div>
+    </div>
+
+    <p class="lead">판정은 호출 1건당 정확히 한 번, 만료 → 범위 → 확률 순서로 이뤄집니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>모드</th><th>A의 응답</th><th>B의 응답</th><th>실측</th></tr></thead>
+        <tbody>
+          <tr><td><span class="term">normal</span></td><td>정상 200</td><td>정상 <span class="term">0000</span></td><td>200회 호출 중 비200 <strong>0건</strong></td></tr>
+          <tr><td><span class="term">error</span></td><td>HTTP <strong>503/429/500</strong> + <span class="term">{error, message}</span></td><td>HTTP <strong>200</strong> + <span class="term">E503/E429/E500</span> · <span class="term">data:null</span></td><td>A 503 <span class="term">SERVICE_UNAVAILABLE</span> · 429 <span class="term">RATE_LIMIT_EXCEEDED</span> / B 200 + <span class="term">E500</span></td></tr>
+          <tr><td><span class="term">delay</span></td><td>지정 시간 붙잡았다가 <strong>정상 200을 늦게</strong> 준다</td><td>같음 — 실패가 아니라 늦게 오는 성공</td><td><span class="term">delayMillis=1500</span> → 1.505초 · 상태 200</td></tr>
+          <tr><td><span class="term">no-response</span></td><td>응답하지 않고 <strong>최대 600초</strong> 붙잡는다</td><td>같음 — 상한이 있어야 스레드가 돌아온다</td><td><span class="term">curl --max-time 2</span> → exit 28(타임아웃), 서버는 생존</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>직교 축</th><th>설정</th><th>기대</th><th>실측</th></tr></thead>
+        <tbody>
+          <tr><td>범위</td><td><span class="term">value=error&amp;endpoint=availability</span></td><td>목록은 정상, 재고·요금만 고장</td><td>목록 <strong>200</strong> · 재고요금 <strong>503</strong></td></tr>
+          <tr><td>확률</td><td><span class="term">value=error&amp;rate=0.3</span></td><td>대략 30%가 실패</td><td>200회 중 <strong>54회(27%)</strong> 503</td></tr>
+          <tr><td>기한</td><td><span class="term">value=error&amp;durationSeconds=3</span></td><td>3초 뒤 스스로 정상 복귀</td><td>즉시 503 → 4초 뒤 <strong>200</strong>, <span class="term">state</span> 가 <span class="term">NORMAL</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 7 ===================== -->
+  <section id="s7" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">8</div>
+      <div><p class="sec-eyebrow">FAILURES</p><h2 class="sec">실패 응답 표</h2></div>
+    </div>
+
+    <p class="lead">같은 잘못을 두 서버가 다른 방식으로 알립니다. 자사 앱의 실패 정규화를 시험하는 것이 이 차이의 목적입니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>상황</th><th>A</th><th>B</th><th>확인</th></tr></thead>
+        <tbody>
+          <tr><td>키 없음/틀림</td><td><strong>401</strong> <span class="term">UNAUTHORIZED</span></td><td><strong>200</strong> + <span class="term">E401 UNAUTHORIZED</span></td><td>실측 일치</td></tr>
+          <tr><td>체크아웃 ≤ 체크인</td><td><strong>400</strong> <span class="term">INVALID_DATE_RANGE</span></td><td>200 + <span class="term">E400 INVALID_REQUEST</span></td><td>실측 일치</td></tr>
+          <tr><td>날짜 형식 오류 · 코드 누락 · 음수 인원</td><td>400 <span class="term">INVALID_PARAMETER</span></td><td>200 + <span class="term">E400</span></td><td>B는 사유를 알려주지 않는다</td></tr>
+          <tr><td>숙소 코드 50개 초과</td><td>400 <span class="term">TOO_MANY_HOTEL_CODES</span></td><td>200 + <span class="term">E400</span></td><td>셋을 <span class="term">E400</span> 하나로 뭉갠다</td></tr>
+          <tr><td>시드에 없는 코드</td><td>200 + <span class="term">items:[]</span></td><td>200 + <span class="term">0000</span> · 빈 <span class="term">items</span></td><td><strong>오류가 아니다</strong> — 실측 일치</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 8 ===================== -->
+  <section id="s8" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">9</div>
+      <div><p class="sec-eyebrow">EVIDENCE</p><h2 class="sec">실측 기록 25건</h2></div>
+    </div>
+
+    <p class="lead">2026-09-05, 두 서버를 <span class="term">bootJar</span> 로 띄우고(JDK 25) 직접 호출한 결과입니다. 전부 기대와 일치했습니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>확인한 것</th><th>결과</th><th>판정</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>같은 요청 20회 반복 (A·B)</td><td>응답 해시 각각 <strong>1종</strong></td><td>결정적</td></tr>
+          <tr><td>2</td><td>A 3박 재고·요금</td><td>110,000/143,000/143,000 · 재고 3/1/1 · <strong>Σ 435,600</strong></td><td>검산표 일치</td></tr>
+          <tr><td>3</td><td>A 품절일 우선순위</td><td>10-02 <strong>재고 0 · 169,000</strong></td><td>할증 유지·재고만 0</td></tr>
+          <tr><td>4</td><td>B 기간 총액</td><td><span class="term">R-201</span> 453,600 · <span class="term">R-305</span> 756,000</td><td>일치</td></tr>
+          <tr><td>5</td><td>고장 미설정 200회 호출</td><td>비200 응답 <strong>0건</strong></td><td>스스로 고장 나지 않음</td></tr>
+          <tr><td>6</td><td>날짜 직렬화</td><td><span class="term">"date":"2026-09-10"</span> 문자열</td><td>타임스탬프 아님</td></tr>
+          <tr><td>7</td><td>인증 실패</td><td>A <strong>401</strong> / B <strong>200 + E401</strong></td><td>계약대로</td></tr>
+          <tr><td>8</td><td>날짜 역전</td><td>A 400 <span class="term">INVALID_DATE_RANGE</span></td><td>일치</td></tr>
+          <tr><td>9</td><td>시드에 없는 코드</td><td>A <span class="term">items:[]</span> / B <span class="term">0000</span> + 빈 목록</td><td>오류 아님</td></tr>
+          <tr><td>10</td><td><span class="term">error</span> 503 · 429 (A)</td><td><span class="term">SERVICE_UNAVAILABLE</span> · <span class="term">RATE_LIMIT_EXCEEDED</span></td><td>상태·본문 일치</td></tr>
+          <tr><td>11</td><td><span class="term">error</span> 500 (B)</td><td><strong>HTTP 200</strong> + <span class="term">E500 INTERNAL_ERROR</span></td><td>"항상 200" 유지</td></tr>
+          <tr><td>12</td><td><span class="term">delay 1500ms</span></td><td>응답시간 <strong>1.505s</strong> · 상태 200</td><td>늦게 오는 성공</td></tr>
+          <tr><td>13</td><td><span class="term">endpoint=availability</span></td><td>목록 200 · 재고요금 503</td><td>범위 분리 동작</td></tr>
+          <tr><td>14</td><td><span class="term">rate=0.3</span> 200회</td><td>503 <strong>54회 (27%)</strong></td><td>확률 축 동작</td></tr>
+          <tr><td>15</td><td><span class="term">durationSeconds=3</span></td><td>즉시 503 → 4초 뒤 200 · <span class="term">NORMAL</span></td><td>자동 복귀</td></tr>
+          <tr><td>16</td><td>카탈로그 조작</td><td>객실 추가 → 응답에 200,000으로 등장 → 삭제 후 원복(2숙소/3객실). 없는 숙소에 추가 → <strong>400</strong></td><td>즉시 반영·거절</td></tr>
+          <tr><td>17</td><td>조식이 시드 값인가</td><td><span class="term">A-3201</span> 한 응답에 <span class="term">OCN-DBL true</span> · <span class="term">STD-TWN false</span></td><td>A로도 분기 가능</td></tr>
+          <tr><td>18</td><td>조식 제어 파라미터</td><td>지정 → <span class="term">true</span> / 생략 → <span class="term">false</span> (A·B)</td><td>동작</td></tr>
+          <tr><td>19</td><td><strong>서버 뜬 채로 외부 <span class="term">DELETE</span></strong></td><td>재기동 없이 다음 응답에서 <span class="term">STD-TWN</span> 사라짐</td><td>캐시 없음 확인</td></tr>
+          <tr><td>20</td><td><strong>서버 뜬 채로 외부 <span class="term">INSERT</span></strong></td><td><span class="term">SQL-ONLY</span> 77,000이 즉시 응답에 등장</td><td>동작</td></tr>
+          <tr><td>21</td><td>SQL로 계약 밖 값 주입</td><td><span class="term">net_rate=-5000</span> → 응답 <span class="term">nightlyRate: -5000</span></td><td>검증 없음(의도)</td></tr>
+          <tr><td>22</td><td><span class="term">data/</span> 삭제 후 재기동</td><td>시드 3행 복귀</td><td>초기화 = 파일 삭제</td></tr>
+          <tr><td>23</td><td>없는 객실 코드 삭제</td><td>A <strong>400</strong> <span class="term">INVALID_PARAMETER</span> / B <strong>200 + E400</strong></td><td>오타가 통과하지 않음</td></tr>
+          <tr><td>24</td><td><span class="term">Decision</span> — 상태 1회 읽기</td><td><span class="term">errorCode=429</span> → <strong>429</strong>, <span class="term">delayMillis=1500</span> → <strong>1.516s</strong></td><td>이중 읽기 창 제거</td></tr>
+          <tr><td>25</td><td><span class="term">/h2-console</span></td><td>A·B 모두 응답(302 → 로그인 화면)</td><td>동작</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 9 ===================== -->
+  <section id="s9" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">10</div>
+      <div><p class="sec-eyebrow">CAVEATS</p><h2 class="sec">의도적이지만 발이 걸리는 곳</h2></div>
+    </div>
+
+    <p class="lead">버그는 아닙니다. 다만 모르고 쓰면 원인을 엉뚱한 데서 찾게 되는 다섯 가지입니다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>지점</th><th>동작</th><th>왜 이렇게</th><th>대처</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>고장 상태는 전역·무기한</td>
+            <td><span class="term">durationSeconds</span> 기본값이 0이라 한 번 켜면 <strong>끄기 전까지 계속</strong> 걸려 있다</td>
+            <td>수동 조작 중에 저절로 풀리면 관찰이 끊긴다</td>
+            <td>대본 끝에 <span class="term">value=normal</span> 을 넣거나 처음부터 <span class="term">durationSeconds</span> 를 준다</td>
+          </tr>
+          <tr>
+            <td>고장 판정이 인증보다 먼저</td>
+            <td>키가 틀려도 고장 중이면 401이 아니라 503이 나간다</td>
+            <td>무너진 서버는 요청을 읽어 보지 않는다 — 의도된 순서</td>
+            <td>인증 케이스는 고장이 꺼진 상태에서 확인한다</td>
+          </tr>
+          <tr>
+            <td><span class="term">rate&lt;1.0</span> 은 재현 불가</td>
+            <td>같은 호출이 어떤 때는 성공, 어떤 때는 실패 (시드 고정 없음)</td>
+            <td>부분 장애를 흉내 내려면 무작위가 필요하다</td>
+            <td>결정적 회귀 확인에는 <strong><span class="term">rate</span> 를 건드리지 않는다</strong> (기본 1.0)</td>
+          </tr>
+          <tr>
+            <td>카탈로그는 <strong>재기동해도 남는다</strong></td>
+            <td>H2 파일 DB라 조작한 상태가 유지된다. 예전처럼 껐다 켠다고 시드로 돌아가지 않는다</td>
+            <td>지운 상태 위에서 이어서 실험할 수 있어야 한다</td>
+            <td>초기화는 <span class="term">data/</span> 폴더 삭제 후 재기동. 실측으로 시드 3행 복귀 확인</td>
+          </tr>
+          <tr>
+            <td>직접 SQL은 <strong>아무것도 검증하지 않는다</strong></td>
+            <td>제어 API가 막는 값도 그대로 들어간다 — 음수 요금, 계약에 없는 코드</td>
+            <td>일부러 이상한 상태를 만들어 자사 앱 반응을 보는 것이 이 경로의 쓸모다</td>
+            <td>실측: <span class="term">net_rate=-5000</span> 주입 → 응답에 <span class="term">nightlyRate: -5000</span>. 자동 대본에는 제어 API를 쓴다</td>
+          </tr>
+          <tr>
+            <td><span class="term">no-response</span> 는 600초까지 남는다</td>
+            <td>정상으로 되돌려도 <strong>이미 붙잡힌 요청</strong>은 상한까지 매달려 있다</td>
+            <td>상한이 없으면 서버를 내리기 전까지 스레드가 돌아오지 않는다</td>
+            <td>가상 스레드라 부담은 없지만, 이어지는 대본에서 이전 요청이 살아 있을 수 있다</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn"><span class="tag">한 가지만 기억한다면</span>이 서버가 이상하게 굴면 <strong>먼저 <span class="term">GET /control/state</span> 를 보세요.</strong> <span class="term">mode</span> 가 <span class="term">NORMAL</span> 이 아니면 누군가(대개 직전 대본이) 켜 둔 것이고, <span class="term">NORMAL</span> 인데 응답이 예상과 다르면 원인은 셋 중 하나입니다 — <strong>요청 파라미터 · 조회한 날짜 · DB에 실제로 들어 있는 행.</strong> 마지막 것은 <span class="term">SELECT * FROM a_room</span> 한 번이면 끝납니다. 그 밖에 응답을 바꿀 수 있는 것은 없습니다.</div>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    모의 공급사 서버 동작 표 · F2 mock-supplier-server<br>
+    2026-09-05 KST 실측 (mock-supplier-a :9091 · mock-supplier-b :9092) · 근거: 저장소 소스 + 직접 호출 결과
+  </footer>
+
+</div>
+
+<script>
+  /* scroll progress bar */
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  /* fade-in on scroll */
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>

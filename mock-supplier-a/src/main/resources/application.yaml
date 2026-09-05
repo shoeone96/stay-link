@@ -1,0 +1,26 @@
+server:
+  port: 9091
+spring:
+  application:
+    name: mock-supplier-a
+  # 지연·무응답 모드가 요청 스레드를 붙잡는다. 플랫폼 스레드 풀이면 부하 중에 모의 서버 자신이 먼저
+  # 마르고, 공급사가 느린 게 아니라 관찰 도구가 죽는 현상을 보게 된다.
+  threads:
+    virtual:
+      enabled: true
+  # A 전용 H2 파일 DB (D-F2-9). 자사 앱의 MySQL과 무관하고 B와도 다른 파일이다.
+  # 파일이라 재기동해도 조작한 상태가 남고, 초기화는 이 파일을 지우는 것 하나다.
+  datasource:
+    url: jdbc:h2:file:./data/mock-a;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update    # 도구다. 마이그레이션 도구를 얹지 않는다
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+mock:
+  api-key: test-key
