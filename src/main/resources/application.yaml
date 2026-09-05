@@ -10,3 +10,12 @@ spring:
   sql:
     init:
       mode: always
+
+# 공급사 호출 타임아웃 세 계층. connect < read < callBudget 을 어기면 기동이 중단된다.
+# 잠정값이다 — 공급사 계약에 응답 시간 기준이 없어 실측 전까지는 근거가 약하다 (D-F3a-3).
+stay-link:
+  http:
+    timeout:
+      connect: 2s      # ① 연결 수립까지
+      read: 3s         # ② 응답 조각 사이 최대 간격
+      call-budget: 5s  # ③ 요청 시작부터 응답 완료까지의 총량
