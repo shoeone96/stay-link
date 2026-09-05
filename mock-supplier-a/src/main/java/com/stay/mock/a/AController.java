@@ -54,11 +54,13 @@ public class AController {
 
     /**
      * 고장은 요청 내용과 무관하므로 검증보다 먼저 판정한다 — 무너진 서버는 요청을 읽어 보지 않는다.
+     *
+     * <p>레지스트리에는 한 번만 묻는다. 판정과 실행이 서로 다른 스냅샷 위에서 이뤄지지 않게 하려는 것이다.
      */
     private void applyFault(Endpoint target) {
-        FaultMode mode = faults.decide(target);
-        FaultState state = faults.current();
-        switch (mode) {
+        Decision decision = faults.decide(target);
+        FaultState state = decision.state();
+        switch (decision.mode()) {
             case ERROR -> throw new FaultException(state.errorCode());
             case DELAY -> hold(state.delayMillis());
             case NO_RESPONSE -> hold(NO_RESPONSE_HOLD_MILLIS);

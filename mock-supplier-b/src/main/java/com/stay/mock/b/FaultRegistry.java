@@ -30,16 +30,18 @@ public class FaultRegistry {
     }
 
     /**
-     * 판정 순서는 만료 → 범위 → 확률이며 호출 1건당 정확히 한 번이다.
+     * 판정 순서는 만료 → 범위 → 확률이며 호출 1건당 정확히 한 번이다. "한 번"은 상태를 한 번만 읽는다는
+     * 뜻이므로, 판정에 쓴 스냅샷을 결과와 함께 돌려준다 — 호출자가 상태를 다시 묻지 않아야 판정과 실행이
+     * 같은 값 위에서 이뤄진다 ({@link Decision}).
      */
-    public FaultMode decide(Endpoint target) {
+    public Decision decide(Endpoint target) {
         FaultState snapshot = current();
         if (!snapshot.covers(target)) {
-            return FaultMode.NORMAL;
+            return new Decision(FaultMode.NORMAL, snapshot);
         }
         if (ThreadLocalRandom.current().nextDouble() >= snapshot.rate()) {
-            return FaultMode.NORMAL;
+            return new Decision(FaultMode.NORMAL, snapshot);
         }
-        return snapshot.mode();
+        return new Decision(snapshot.mode(), snapshot);
     }
 }
