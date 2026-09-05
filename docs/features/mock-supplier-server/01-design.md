@@ -6,6 +6,18 @@ updated: 2026-09-05
 > 이 파일이 F2의 **SSOT**다. 구현은 이 파일만 읽고 진행할 수 있어야 한다.
 > `design.html`은 같은 내용을 눈으로 보기 위한 시각화이며 결정의 원본이 아니다.
 
+**설계 수정 이력**
+
+| 날짜 | 무엇을 | 왜 |
+|---|---|---|
+| 2026-09-05 | A의 `breakfastIncluded`를 **상수 `false` → 시드 값**으로. `ARoom`에 필드 추가, 시드에서 `OCN-DBL`만 `true`, `POST /control/rooms`에 파라미터 추가(A·B) | 계약은 A·B의 조식 필드를 **같은 문장으로** 정의하고, 상수인 필드는 상수라고 명시한다(B `taxIncluded` = "항상 `true`"). A만 값을 하나로 고정할 근거가 계약에 없었고, 그 상태로는 **A로 조식 유무 분기를 만들 수 없다** — 응답 필드의 절반을 도구가 스스로 잘라낸 셈이다. D-F2-2가 폐기안의 결함으로 지목한 "조식을 상수로 흉내 냈다"가 채택안에도 A쪽에 남아 있었다 |
+| 2026-09-05 | **카탈로그를 H2 파일 DB로** (3.6 신설, D-F2-9). 모듈마다 자기 파일 + `/h2-console` | 조작자가 카탈로그를 **직접 보고 지울 수 있어야 한다.** 상태를 아는 수단이 `GET /control/state`의 개수 두 개뿐이었다. 파일이라 재기동해도 남고, 초기화는 파일 삭제 하나다 |
+| 2026-09-05 | `FaultRegistry.decide`가 **`Decision(mode, state)`을 함께 반환**하도록 (3.5.8) | 리뷰 error 1·2. 컨트롤러가 상태를 두 번 읽어, 두 읽기 사이에 만료가 끼면 `errorCode=429`가 503으로 나가고 `delayMillis=5000`이 3000만 잤다. 3.5.8이 "판정은 호출 1건당 정확히 1회"라고 정한 자리다 |
+| 2026-09-05 | **조회 실패 경로 로그 규약** 신설 (3.5.11, `CLN-9`) | 리뷰 warn 5·6. B는 세 가지 요청 오류를 `E400` 하나로 뭉개므로 사유를 아는 자리가 로그뿐인데 그 로그가 없었다 |
+| 2026-09-05 | **없는 객실 코드 삭제도 거절** (3.5.9) | 리뷰 warn 7·8. 없는 숙소는 거절하면서 있는 숙소 + 없는 객실 코드는 조용히 200이었다. 손으로 코드를 치는 도구라 오타가 통과하면 안 된다 |
+| 2026-09-05 | **4.3의 `CLN-2` 면제 범위 문장 정정** | 리뷰 설계 반론. "손으로 호출하는 메서드는 전부 인자 3개 이하"가 같은 문서 3.4의 다이어그램(`parse` 인자 6개)과 어긋나 있었다. **면제선이 사실이 아닌 문장 위에 있었으므로 코드가 아니라 문장을 고친다** |
+| 2026-09-05 | **`docs/test-cases.md` 규약 정정** (5.1·7장) | 리뷰 warn 9. "행을 추가하지 않는다"고 정한 파일에 실측 표가 들어가 02와 같은 숫자가 두 벌로 살았다. 0건인 사실과 대체 수단만 남기고 **실측 수치는 02 한 곳으로** |
+
 ---
 
 ## 1. 요구사항 재해석·범위
@@ -31,7 +43,7 @@ updated: 2026-09-05
 - 고장 제어 — `mode` · `rate` · `durationSeconds` · `endpoint`(scope) 4축.
 - 카탈로그 런타임 추가·삭제 (숙소 / 객실 타입).
 - 요청의 숙소 코드·날짜·인원을 응답에 반영.
-- 시드는 자바 상수 (숙소 3개 · 객실 타입 5개), 품절 검증용으로 특정일 재고 0 포함.
+- 시드는 숙소 3개 · 객실 타입 5개, 품절 검증용으로 특정일 재고 0 포함. **모듈마다 자기 H2 파일 DB에 담고 `/h2-console`로 직접 조회·삭제할 수 있다** (3.6, D-F2-9).
 - 검증 대본 `http/scenarios.http`(모듈별) 와 k6 스크립트.
 
 ### 1.4 제외
@@ -49,8 +61,8 @@ updated: 2026-09-05
 
 이 모듈은 **검증 도구**이며 다음이 모두 없다.
 
-- 지켜야 할 **불변식**이 없다 — 시드는 상수이고 카탈로그 변경은 조작자가 의도적으로 넣는 값이다.
-- **영속성**이 없다 — DB도 리포지토리도 없고 상태는 프로세스 수명과 같다.
+- 지켜야 할 **불변식**이 없다 — 시드는 고정값이고 카탈로그 변경은 조작자가 의도적으로 넣는 값이다. 조작자가 넣은 값을 도메인 규칙으로 되받아치면 도구가 조작자와 싸운다.
+- **영속성은 있지만 도메인 영속성이 아니다** (2026-09-05 정정) — 3.6에서 카탈로그를 H2 파일 DB에 두므로 리포지토리는 생긴다. 그러나 그 리포지토리는 **조작자가 눈으로 보고 지우기 위한 창**이지 애그리게이트의 수명을 지키는 장치가 아니다. 엔티티에 행위가 없고 트랜잭션 경계도 요청 하나가 전부다.
 - **도메인 규칙**이 없다 — 요금·재고 파생은 우리가 만든 규칙이 아니라 계약을 흉내 내기 위한 산술이다.
 - 바깥으로 **교체할 구현체**가 없다 — 포트 인터페이스를 둘 대상이 없다.
 
@@ -94,7 +106,7 @@ Aggregate·Entity·VO·불변식·도메인 서비스를 두지 않는다. 대�
 
 ```
 AProperty(hotelCode,     hotelName,     roomTypes)
-ARoom    (roomTypeCode,  roomTypeName,  maxOccupancy, netRate,   baseInventory, soldOutDay)
+ARoom    (roomTypeCode,  roomTypeName,  maxOccupancy, netRate,   baseInventory, soldOutDay, breakfastIncluded)
 
 BProperty(propertyId,    propertyName,  rooms)
 BRoom    (roomId,        roomName,      maxOccupancy, grossRate, baseInventory, breakfastIncluded)
@@ -102,7 +114,7 @@ BRoom    (roomId,        roomName,      maxOccupancy, grossRate, baseInventory, 
 
 - **식별자 이름부터 다르다** — A는 `hotelCode`/`roomTypeCode`, B는 `propertyId`/`roomId`. 목록 필드도 `roomTypes` ↔ `rooms`다.
 - `netRate`는 **세금 별도**, `grossRate`는 **세금 포함**이다. 이름이 곧 규약이므로 주석으로 뜻을 지키지 않는다.
-- 시드 `ARoom`에 `breakfastIncluded`가 **없다** — A는 항상 조식 미포함이라 시드에 둘 값이 없다. **다만 A의 재고·요금 응답에는 계약대로 `breakfastIncluded` 필드가 있고 항상 `false`로 나간다** (3.5.4).
+- 시드 `ARoom`에도 `breakfastIncluded`가 **있다** (2026-09-05 수정). 계약의 A 필드 설명과 B 필드 설명은 글자 그대로 같고(`breakfastIncluded | boolean | 요금에 조식이 포함되는지`), 계약은 상수인 필드를 상수라고 적을 줄 안다 — B의 `taxIncluded`에는 "항상 `true`"가 명시돼 있다. **A만 상수 `false`로 둘 근거가 계약에 없었다.** 값이 없어서가 아니라 정하지 않았던 것이라, 시드가 값을 든다.
 - 시드 `BRoom`에 `soldOutDay`가 **없다** — 시드 B 객실에 품절일이 없고, 품절(재고 0)은 A `STD-DBL`로 재현한다. B에서 품절이 필요하면 카탈로그 제어로 `baseInventory=0` 객실을 추가하는 편이 자연스럽다.
 
 ---
@@ -145,7 +157,7 @@ k6/                                저장소 루트
 | `AControlController` | 제어 6개 (모드·상태·숙소 ±·객실 ±) |
 | `ACatalog` | 런타임 카탈로그. `ConcurrentHashMap<String, AProperty>` |
 | `AProperty` | `record (String hotelCode, String hotelName, List<ARoom> roomTypes)` |
-| `ARoom` | `record (String roomTypeCode, String roomTypeName, int maxOccupancy, int netRate, int baseInventory, Integer soldOutDay)` |
+| `ARoom` | `record (String roomTypeCode, String roomTypeName, int maxOccupancy, int netRate, int baseInventory, Integer soldOutDay, boolean breakfastIncluded)` |
 | `Nights` | **순수** — 숙박일 목록·주말 판정 |
 | `ARates` | **순수** — 1박 단가·세금·재고 파생 |
 | `SearchQuery` | `record` + `static parse(...)`. 요청 검증의 유일한 자리 |
@@ -238,7 +250,7 @@ classDiagram
         +state() FaultState
         +addProperty(String hotelCode, String hotelName) void
         +removeProperty(String hotelCode) void
-        +addRoom(String hotelCode, String roomTypeCode, String roomTypeName, int maxOccupancy, int netRate, int baseInventory) void
+        +addRoom(String hotelCode, String roomTypeCode, String roomTypeName, int maxOccupancy, int netRate, int baseInventory, boolean breakfastIncluded) void
         +removeRoom(String hotelCode, String roomTypeCode) void
     }
     class FaultRegistry {
@@ -276,6 +288,7 @@ classDiagram
         +int netRate
         +int baseInventory
         +Integer soldOutDay
+        +boolean breakfastIncluded
     }
     class SearchQuery {
         +List~String~ hotelCodes
@@ -374,7 +387,7 @@ classDiagram
       "roomTypeCode": "OCN-DBL",
       "roomTypeName": "Ocean Double",
       "maxOccupancy": 2,
-      "breakfastIncluded": false,
+      "breakfastIncluded": true,
       "currency": "KRW",
       "dailyRates": [
         { "date": "2026-09-10", "remainingRooms": 3, "nightlyRate": 110000, "taxAmount": 11000 },
@@ -501,7 +514,7 @@ HTTP/1.1 200 OK
 | `roomTypeName` | `roomName` | 시드 그대로 |
 | `roomTypes[]` (①에만) | `rooms[]` (①에만) | 시드의 객실 목록 |
 | `maxOccupancy` | `maxOccupancy` | 시드 그대로. 인원 필터에도 쓰인다 |
-| `breakfastIncluded` (②에만) | `breakfastIncluded` (②에만) | A는 **상수 `false`**(시드에 없음) / B는 시드 `BRoom.breakfastIncluded` |
+| `breakfastIncluded` (②에만) | `breakfastIncluded` (②에만) | **양쪽 다 시드 값** — `ARoom.breakfastIncluded` / `BRoom.breakfastIncluded` |
 | `currency` (②에만) | `currency` (②에만) | 양쪽 다 **상수 `"KRW"`** |
 | `dailyRates[].nightlyRate` + `dailyRates[].taxAmount` | `totalPrice` | **A → B 한 방향만 변환 가능.** A는 Σ(net+tax)로 gross 총액을 만들 수 있지만, B의 총액에서 날짜별 단가를 되돌릴 수는 없다 |
 | (없음 — 세금 별도) | `taxIncluded` | B만 가진다. **상수 `true`** |
@@ -527,7 +540,7 @@ BRates.remainingRooms(rm, dt)  →  isPeak(dt) ? min(1, rm.baseInventory) : rm.b
 
 - `floor`는 **원 단위 절사**다. 현재 시드 값은 모두 정확히 나누어떨어지지만 규칙은 명시한다.
 - **품절 우선** — 품절일이면 주말 여부와 무관하게 0이다.
-- 응답의 **상수 세 개**: A `breakfastIncluded = false`, 양쪽 `currency = "KRW"`, B `taxIncluded = true`.
+- 응답의 **상수 두 개**: 양쪽 `currency = "KRW"`, B `taxIncluded = true`. 앞의 것은 이 프로젝트가 KRW만 다루기 때문이고(계약 자체는 ISO 4217을 허용한다), 뒤의 것은 **계약이 "항상 `true`"라고 명시**했기 때문이다. `breakfastIncluded`는 상수가 아니다 — 양쪽 다 시드 값이다.
 
 **검산 표** (2026-09-10 체크인 / 2026-09-13 체크아웃 = 3박, 09-10 목 · 09-11 금 · 09-12 토):
 
@@ -546,11 +559,13 @@ BRates.remainingRooms(rm, dt)  →  isPeak(dt) ? min(1, rm.baseInventory) : rm.b
 
 | 모듈 | 숙소 | 객실 타입 | 최대 인원 | 기준가 | 기준 재고 | 비고 |
 |---|---|---|---|---|---|---|
-| A | `A-3201` Haeundae Blue Hotel | `OCN-DBL` Ocean Double | 2 | 110,000 (net) | 3 | |
-| A | `A-3201` Haeundae Blue Hotel | `STD-TWN` Standard Twin | 2 | 90,000 (net) | 5 | |
-| A | `A-3305` Gangnam City Stay | `STD-DBL` Standard Double | 3 | 130,000 (net) | 2 | **매월 2일 품절** |
+| A | `A-3201` Haeundae Blue Hotel | `OCN-DBL` Ocean Double | 2 | 110,000 (net) | 3 | **조식 포함** |
+| A | `A-3201` Haeundae Blue Hotel | `STD-TWN` Standard Twin | 2 | 90,000 (net) | 5 | 조식 미포함 |
+| A | `A-3305` Gangnam City Stay | `STD-DBL` Standard Double | 3 | 130,000 (net) | 2 | 조식 미포함 · **매월 2일 품절** |
 | B | `P-88410` Haeundae Blue Hotel | `R-201` Ocean Double Room | 2 | 126,000 (gross) | 2 | 조식 포함 |
 | B | `P-88410` Haeundae Blue Hotel | `R-305` Family Suite | 4 | 210,000 (gross) | 3 | 조식 포함 |
+
+조식은 **`A-3201` 한 숙소 안에서 갈린다** — `OCN-DBL`은 포함, `STD-TWN`은 미포함이라 재고·요금 조회 한 번에 `true`·`false`가 같이 나온다. 공급사 간 차이(계약 제약 5)뿐 아니라 **같은 응답 안의 차이**도 만들 수 있어야, 조식을 축으로 쓰는 뒷단 기능이 한쪽 값만 보고 통과하는 일이 없다.
 
 `A-3201`과 `P-88410`은 **같은 숙소를 두 공급사가 각자 코드로 파는 경우**다. 둘을 잇는 공통 키는 두지 않는다.
 
@@ -604,6 +619,16 @@ BRates.remainingRooms(rm, dt)  →  isPeak(dt) ? min(1, rm.baseInventory) : rm.b
 3. **`rate` 난수** — `ThreadLocalRandom.nextDouble() >= rate`면 정상 처리한다.
 4. **적중** — `mode`를 수행한다.
 
+**"1회"는 상태를 한 번만 읽는다는 뜻이다** (2026-09-05 정정). `FaultRegistry.decide`는 `FaultMode`만 돌려주고 호출자가 `current()`로 값을 다시 물으면, 두 읽기 사이에 만료·교체가 끼어 **판정에 쓴 스냅샷과 실행에 쓰는 값이 달라진다** — `errorCode=429`로 걸어 둔 고장이 503으로 나가고 `delayMillis=5000`이 기본값 3000만 자는 창이 생긴다. 그래서 `decide`가 **판정 결과와 그 판정에 쓴 `FaultState`를 한 값으로 함께** 돌려준다.
+
+```
+record Decision(FaultMode mode, FaultState state) {}
+
+FaultRegistry.decide(Endpoint target) → Decision
+```
+
+컨트롤러는 `Decision` 하나만 보고 분기하며 레지스트리에 두 번 묻지 않는다. 창을 좁히는 것이 아니라 **없앤다.**
+
 | mode | 적중 시 동작 |
 |---|---|
 | `error` | 즉시 실패 응답. A는 `errorCode` HTTP 상태 + `{error, message}`, B는 **HTTP 200** + `resultCode` + `data: null` |
@@ -629,10 +654,12 @@ BRates.remainingRooms(rm, dt)  →  isPeak(dt) ? min(1, rm.baseInventory) : rm.b
 | `GET /control/state` | 없음 | 현재 모드·만료 시각·카탈로그 요약. 대본이 자동 복귀를 눈으로 확인하는 수단 |
 | `POST /control/properties` | `hotelCode`,`hotelName` / `propertyId`,`propertyName` | 숙소 추가 — F6 목록 갱신 재료 |
 | `DELETE /control/properties` | `hotelCode` / `propertyId` | 숙소 삭제 |
-| `POST /control/rooms` | `hotelCode`,`roomTypeCode`,`roomTypeName`,`maxOccupancy`,`netRate`,`baseInventory` / `propertyId`,`roomId`,`roomName`,`maxOccupancy`,`grossRate`,`baseInventory` | 객실 타입 추가 — **미매핑 코드를 만드는 유일한 경로** |
+| `POST /control/rooms` | `hotelCode`,`roomTypeCode`,`roomTypeName`,`maxOccupancy`,`netRate`,`baseInventory`,`breakfastIncluded` / `propertyId`,`roomId`,`roomName`,`maxOccupancy`,`grossRate`,`baseInventory`,`breakfastIncluded` | 객실 타입 추가 — **미매핑 코드를 만드는 유일한 경로**. `breakfastIncluded`는 기본값 `false` (2026-09-05 추가 — 조식이 시드 값이 된 이상 제어로도 지정할 수 있어야 한다) |
 | `DELETE /control/rooms` | `hotelCode`,`roomTypeCode` / `propertyId`,`roomId` | 객실 타입 삭제 |
 
 제어 엔드포인트는 `X-Api-Key`를 검사하지 않는다. 조작자용이며 공급사 계약의 일부가 아니다.
+
+**없는 대상을 고치려는 조작은 전부 거절한다** (A는 400 `INVALID_PARAMETER`, B는 200 + `E400`). 숙소뿐 아니라 **객실 코드도 마찬가지다** (2026-09-05 정정 — 원래는 숙소만 거절하고 없는 객실 코드 삭제는 조용히 200이었다). 손으로 코드를 타이핑하는 도구라 오타가 통과하면, 카탈로그가 바뀌지 않은 이유를 대본에서 찾을 수 없다. 거절 대상은 네 가지다 — 없는 숙소에 객실 추가·삭제, 없는 숙소 삭제, **있는 숙소 + 없는 객실 코드 삭제.**
 
 #### 3.5.10 설정 (`application.yaml`)
 
@@ -645,9 +672,63 @@ spring:
   threads:
     virtual:
       enabled: true       # D-F2-8
+  datasource:             # D-F2-9 — 모듈 전용 H2 파일 DB
+    url: jdbc:h2:file:./data/mock-a;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update    # 도구다. 마이그레이션 도구를 얹지 않는다
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
 mock:
   api-key: test-key
 ```
+
+#### 3.5.11 로그 규약
+
+조회 API의 **실패 경로는 반드시 로그를 남긴다** (2026-09-05 추가, `CLN-9`). 원래는 제어 API만 `log.info`로 조작을 남기고 조회 실패는 무음이었다.
+
+| 자리 | 레벨 | 남기는 것 |
+|---|---|---|
+| 요청 오류 (`InvalidRequestException`) | `warn` | `ErrorKind` 이름 |
+| 타입 불일치 (`MethodArgumentTypeMismatchException`) | `warn` | **틀린 파라미터 이름** (`exception.getName()`) |
+| 고장 적중 (`FaultException`) | `info` | `errorCode` |
+
+**B에서 특히 중요하다.** B는 계약대로 날짜 형식·코드 개수·음수 인원 세 가지를 `E400 INVALID_REQUEST` 하나로 뭉개므로(3.5.6), 사유가 응답에서 지워진다. 도구가 로그에도 남기지 않으면 무엇이 틀렸는지 아는 방법이 모의 서버 소스를 읽는 것뿐이다.
+
+### 3.6 카탈로그 저장소 — H2 파일 DB (D-F2-9)
+
+**모듈마다 자기 H2 파일 DB를 하나씩 갖는다.** 자사 앱의 MySQL과 아무 관계가 없고, A와 B도 서로 다른 파일이다.
+
+| 모듈 | 파일 | 콘솔 | 테이블 |
+|---|---|---|---|
+| `:mock-supplier-a` | `mock-supplier-a/data/mock-a.mv.db` | `localhost:9091/h2-console` | `a_property` · `a_room` |
+| `:mock-supplier-b` | `mock-supplier-b/data/mock-b.mv.db` | `localhost:9092/h2-console` | `b_property` · `b_room` |
+
+**왜 메모리에서 옮기는가.** 조작자가 카탈로그를 **직접 보고 지울 수 있어야 한다.** 지금까지 상태를 아는 수단은 `GET /control/state`의 개수 두 개뿐이라, "무엇이 들어 있는지"를 보려면 조회 API를 대신 호출해야 했다. 테이블이면 `SELECT`로 바로 보이고 `DELETE`로 바로 지워진다. 재기동해도 남으므로 조작한 상태 위에서 이어서 실험할 수 있고, **파일을 지우면 시드로 되돌아간다** — 초기화 절차가 "파일 삭제" 하나다.
+
+**시드 주입** — 기동 시 `a_property`가 비어 있을 때만 3.5.5의 시드를 넣는다. 비어 있지 않으면 손대지 않는다. 조작자가 지운 것을 도구가 되살리면 조작이 무의미해진다.
+
+**고장 상태(`FaultRegistry`)는 DB에 두지 않는다.** 호출 1건마다 판정하는 값이라 초당 수만 번 읽히고(k6 기준선 40k rps), 프로세스를 내렸다 올리면 정상으로 돌아가는 편이 대본에 유리하다. 확인 수단은 `GET /control/state`가 이미 있다. **DB에 두는 것은 "조작자가 눈으로 확인하고 지울 대상"인 카탈로그뿐이다.**
+
+**캐시하지 않는다 — 조회 API는 요청마다 DB를 읽는다.** 이 변경의 목적이 "조작자가 직접 지우고 확인하는 것"이므로, 인메모리 사본을 두면 **외부에서 `DELETE` 한 행이 응답에 반영되지 않아** 목적 자체가 사라진다. 기존 `ConcurrentHashMap` copy-on-write는 캐시로 남기지 않고 없앤다. 숙소 3개짜리 도구라 읽기 비용은 문제가 되지 않는다.
+
+**조작 경로는 두 가지이고 둘 다 1급이다.**
+
+| 경로 | 쓰는 때 |
+|---|---|
+| `POST`·`DELETE /control/**` | 대본·k6가 자동으로 조작할 때. 없는 코드를 거절해 주는 안전장치가 있다 |
+| **DB에 직접 SQL** | 사람이 상태를 보고 손으로 고칠 때. `AUTO_SERVER=TRUE`라 **서버가 떠 있는 채로** 외부 클라이언트(DataGrip·DBeaver·`h2 shell`)가 같은 파일에 붙는다. 웹 콘솔은 그중 하나일 뿐 필수 경로가 아니다 |
+
+직접 SQL은 검증을 거치지 않으므로 계약에 없는 값(음수 요금 등)도 넣을 수 있다. **그것이 이 경로의 쓸모다** — 제어 API가 막는 상태를 일부러 만들어 자사 앱이 어떻게 반응하는지 볼 수 있다.
+
+**엔티티는 시드 record와 별개로 둔다.** `AProperty`/`ARoom`은 응답 조립이 이름을 바꾸지 않고 복사할 수 있게 계약 JSON 키와 필드명이 같아야 하고(D-F2-2), 엔티티는 테이블 규약(`@Id`, 컬럼명)을 따른다. 둘을 한 클래스로 겸하면 어느 한쪽 규약이 깨진다. 카탈로그는 리포지토리에서 읽어 시드 record로 바꿔 돌려준다.
+
+**1.5의 면제는 유지된다.** 리포지토리가 생겼지만 엔티티에 행위가 없고 불변식도 트랜잭션 경계도 없다. 이 DB는 도메인 영속성이 아니라 **조작자를 위한 창**이다.
 
 ---
 
@@ -677,9 +758,12 @@ mock:
 
 - **핸들러 시그니처는 손으로 호출하는 함수가 아니라 HTTP 계약의 선언이다.** 인자를 record로 묶으면 계약이 다른 파일로 숨는다.
 - `@RequestParam(defaultValue = ...)`가 **기본값 표를 시그니처 그 자리에 보이게** 한다. 3.5.8의 기본값 표와 코드가 어긋날 수 없다.
-- **손으로 호출하는 메서드는 전부 인자 3개 이하다** — `Nights.of`(2), `ARates.nightlyRate`(2), `A*Response.of`(3), `ACatalog.findAll`(1). 면제는 프레임워크가 호출하는 진입점에만 적용된다.
+- **면제 대상은 "HTTP 요청을 그대로 받는 자리" 전부다** — 프레임워크가 부르는 핸들러와, 핸들러가 받은 파라미터를 **그대로 넘겨받아 검증하는 `SearchQuery.parse`(7개)** 까지다. `parse`는 컨트롤러가 손으로 부르지만 인자 목록이 곧 핸들러 시그니처의 연장선이라, 요청 record로 묶으면 위의 두 근거가 그대로 무너진다(계약이 다른 파일로 숨는다).
+- **그 밖의 메서드는 전부 인자 3개 이하다** — `Nights.of`(2), `ARates.nightlyRate`(2), `A*Response.of`(3), `ACatalog.findAll`(1), `FaultRegistry.decide`(1).
 
-> 면제는 **규칙을 알고 적용 범위를 좁힌 것**이지 규칙을 몰라 넘긴 것이 아니다. 리뷰는 이 절을 근거로 핸들러 인자 수를 지적 대상에서 제외하고, **그 밖의 메서드에는 `CLN-2`를 그대로 적용한다.**
+> **2026-09-05 정정.** 이 절은 원래 "손으로 호출하는 메서드는 전부 인자 3개 이하이며 면제는 프레임워크 진입점에만 적용된다"고 적었다. 그러나 같은 문서 3.4의 클래스 다이어그램이 이미 `SearchQuery.parse`를 인자 6개(구현에서 설정 키가 더해져 7개)로 선언하고 있어, **면제의 경계선이 사실이 아닌 문장 위에 그어져 있었다.** 코드가 아니라 이 문장이 틀렸으므로 문장을 사실에 맞게 고친다.
+>
+> 면제는 **규칙을 알고 적용 범위를 좁힌 것**이지 규칙을 몰라 넘긴 것이 아니다. 리뷰는 이 절을 근거로 요청 수신 자리의 인자 수를 지적 대상에서 제외하고, **그 밖의 메서드에는 `CLN-2`를 그대로 적용한다.**
 
 ---
 
@@ -687,7 +771,9 @@ mock:
 
 ### 5.1 결정과 감수하는 위험
 
-**사용자 결정으로 모의 서버 두 모듈에 테스트를 두지 않는다** (D-F2-7 안 ①). `mock-supplier-a`·`mock-supplier-b`에 `src/test` 디렉터리를 만들지 않으며, `docs/test-cases.md`에도 이 feature의 행을 추가하지 않는다.
+**사용자 결정으로 모의 서버 두 모듈에 테스트를 두지 않는다** (D-F2-7 안 ①). `mock-supplier-a`·`mock-supplier-b`에 `src/test` 디렉터리를 만들지 않는다.
+
+`docs/test-cases.md`에는 **테스트 케이스 행 대신 "0건인 사실과 그 대신 무엇으로 막는가"만 한 절로 적는다**(2026-09-05 정정). 테스트 정리표를 펼친 사람이 F2 자리만 비어 있는 이유를 그 파일 안에서 알 수 있어야 하기 때문이다. **실측 수치는 적지 않는다** — 실측 기록의 자리는 `02-implementation.md` 하나뿐이며, 같은 숫자를 두 파일에 두면 한쪽만 고쳐져 어긋난다.
 
 이전 설계가 0건을 정당화하며 든 **"검증 도구라 단순하다"는 근거는 결과 1216줄로 이미 무너졌다. 그 논리를 다시 쓰지 않는다.** 이번 0건은 도구가 단순해서가 아니라 사용자가 그렇게 정했기 때문이며, 그러므로 **위험을 그대로 적어 둔다.**
 
@@ -744,6 +830,8 @@ mock:
 | **D-F2-7** | 테스트를 둘 것인가 | ① 0건 유지 ② 요금·날짜 파생만 ③ 계약 슬라이스 | **① 0건 유지** — 모의 서버 모듈에 `src/test`를 두지 않는다. 검증은 `.http`(S-01 검산 고정) + k6 | ② **사용자 결정** — 기술적 이득이 없어서가 아니라 모의 서버 모듈에 테스트를 두지 않기로 정했기 때문이다. 감수하는 위험은 5.1에 적었다 / ③ 도구에 슬라이스 컨텍스트를 붙이는 비용이 눈으로 보는 비용을 넘고, 응답 필드는 대본이 매 회 확인한다 | 아니오 |
 | **D-F2-8** | 지연 mode가 모의 서버 자신을 죽이지 않게 하려면 | ① 가상 스레드 활성화 ② 톰캣 스레드 수 상향 ③ 그대로 둔다 | **① 두 모듈 `application.yaml`에 `spring.threads.virtual.enabled: true`** | ② 숫자를 올려도 `rate`·부하가 조금만 커지면 같은 벽에 부딪히고, 얼마로 올려야 하는지의 근거가 없다 / ③ **`Thread.sleep`이 요청 스레드를 붙잡으므로, k6로 초당 수백 건을 쏘며 10%를 5초 지연시키면 톰캣 기본 풀(200)이 먼저 마른다 — 공급사가 느린 게 아니라 모의 서버가 죽는 것이라 관찰하려던 것과 다른 현상을 보게 된다.** Java 25라 별도 의존성이 필요 없다 | 아니오 |
 
+| **D-F2-9** | 카탈로그를 어디에 두는가 (2026-09-05 추가) | ① 모듈별 H2 **파일** DB + `/h2-console` ② 기존 MySQL에 `mock_a`·`mock_b` 스키마 ③ 인메모리 H2 + 콘솔 | **① 모듈별 H2 파일 DB** (3.6) — `data/mock-a.mv.db` · `data/mock-b.mv.db` | ② 모의 서버가 자사 앱 인프라에 묶인다. 컨테이너가 떠 있어야 도구가 뜨고, **"A만 내렸을 때 B는 정상"(수용 기준 3)에 DB 의존이 끼어들어** 무엇이 죽어서 실패한 것인지 흐려진다 / ③ 재기동하면 조작한 상태가 날아가 "지운 뒤 이어서 실험"이 안 된다. 파일이면 초기화가 **파일 삭제 하나**라 오히려 되돌리기가 쉽다 | 예 |
+
 ---
 
 ## 7. 참고 문서
@@ -756,4 +844,4 @@ mock:
 | `docs/ai-history.md` 55번 | 첫 시도를 폐기한 사유 |
 | `.claude/skills/coding-standard/SKILL.md` | `CLN-*` 규칙 원본. `LAY-*`·`DDD-*`는 1.5에 따라 미적용 |
 | `.claude/skills/test-standard/SKILL.md` | 이 feature에는 **적용 대상이 없다** — 테스트를 두지 않는다 (5장) |
-| `docs/test-cases.md` | 이 feature에서는 **행을 추가하지 않는다** |
+| `docs/test-cases.md` | 테스트 케이스 **행은 추가하지 않는다.** 0건인 사실과 대체 검증 수단만 한 절로 적고 **실측 수치는 두지 않는다** (5.1) |
