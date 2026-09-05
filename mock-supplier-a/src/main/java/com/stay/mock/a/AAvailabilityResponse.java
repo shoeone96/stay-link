@@ -12,8 +12,6 @@ import java.util.stream.Stream;
  */
 public record AAvailabilityResponse(List<Item> items) {
 
-    /** A는 조식을 팔지 않는다. 시드에 둘 값이 없어 응답에서만 상수로 나간다. */
-    private static final boolean BREAKFAST_INCLUDED = false;
     private static final String CURRENCY = "KRW";
 
     public static AAvailabilityResponse of(List<AProperty> properties, SearchQuery query, List<LocalDate> nights) {
@@ -35,7 +33,7 @@ public record AAvailabilityResponse(List<Item> items) {
     private static Item toItem(AProperty property, ARoom room, List<LocalDate> nights) {
         List<DailyRate> dailyRates = nights.stream().map(night -> toDailyRate(room, night)).toList();
         return new Item(property.hotelCode(), property.hotelName(), room.roomTypeCode(), room.roomTypeName(),
-                room.maxOccupancy(), BREAKFAST_INCLUDED, CURRENCY, dailyRates);
+                room.maxOccupancy(), room.breakfastIncluded(), CURRENCY, dailyRates);
     }
 
     private static DailyRate toDailyRate(ARoom room, LocalDate date) {

@@ -64,7 +64,7 @@ public class AControlController {
 
     /**
      * 앱은 매핑에 있는 숙소 코드만 보내므로, 이 엔드포인트가 미매핑 객실 타입 코드를 만드는 유일한 경로다.
-     * 추가한 객실에는 품절일을 두지 않는다.
+     * 추가한 객실에는 품절일을 두지 않는다. 조식이 시드 값이 된 이상 제어로도 지정할 수 있어야 한다.
      */
     @PostMapping("/rooms")
     public void addRoom(@RequestParam(name = "hotelCode") String hotelCode,
@@ -72,8 +72,10 @@ public class AControlController {
             @RequestParam(name = "roomTypeName") String roomTypeName,
             @RequestParam(name = "maxOccupancy") int maxOccupancy,
             @RequestParam(name = "netRate") int netRate,
-            @RequestParam(name = "baseInventory") int baseInventory) {
-        catalog.addRoom(hotelCode, new ARoom(roomTypeCode, roomTypeName, maxOccupancy, netRate, baseInventory, null));
+            @RequestParam(name = "baseInventory") int baseInventory,
+            @RequestParam(name = "breakfastIncluded", defaultValue = "false") boolean breakfastIncluded) {
+        catalog.addRoom(hotelCode,
+                new ARoom(roomTypeCode, roomTypeName, maxOccupancy, netRate, baseInventory, null, breakfastIncluded));
         log.info("Room type added: hotelCode={}, roomTypeCode={}", hotelCode, roomTypeCode);
     }
 

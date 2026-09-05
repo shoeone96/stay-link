@@ -64,7 +64,7 @@ public class BControlController {
 
     /**
      * 앱은 매핑에 있는 숙소 코드만 보내므로, 이 엔드포인트가 미매핑 객실 타입 코드를 만드는 유일한 경로다.
-     * 추가한 객실은 조식 미포함으로 둔다 — 시드 객실이 모두 포함이라 대비되는 값이 필요하다.
+     * 조식은 기본값 {@code false}다 — 시드 객실이 모두 포함이라 지정하지 않으면 대비되는 값이 생긴다.
      */
     @PostMapping("/rooms")
     public void addRoom(@RequestParam(name = "propertyId") String propertyId,
@@ -72,8 +72,10 @@ public class BControlController {
             @RequestParam(name = "roomName") String roomName,
             @RequestParam(name = "maxOccupancy") int maxOccupancy,
             @RequestParam(name = "grossRate") int grossRate,
-            @RequestParam(name = "baseInventory") int baseInventory) {
-        catalog.addRoom(propertyId, new BRoom(roomId, roomName, maxOccupancy, grossRate, baseInventory, false));
+            @RequestParam(name = "baseInventory") int baseInventory,
+            @RequestParam(name = "breakfastIncluded", defaultValue = "false") boolean breakfastIncluded) {
+        catalog.addRoom(propertyId,
+                new BRoom(roomId, roomName, maxOccupancy, grossRate, baseInventory, breakfastIncluded));
         log.info("Room added: propertyId={}, roomId={}", propertyId, roomId);
     }
 
