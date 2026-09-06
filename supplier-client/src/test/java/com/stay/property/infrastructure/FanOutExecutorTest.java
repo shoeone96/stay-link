@@ -8,11 +8,13 @@ import com.stay.property.domain.Supplier;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import reactor.core.publisher.Mono;
 
@@ -25,22 +27,31 @@ class FanOutExecutorTest {
     private static final Duration PER_CALL = Duration.ofSeconds(2);
     private static final Duration BUDGET = Duration.ofSeconds(5);
 
-    @Test
-    @DisplayName("동시 호출 상한이 1이면 두 건을 넣어도 동시 구독 수가 1을 넘지 않는다")
-    void runAll_withConcurrencyLimit_neverSubscribesBeyondLimit() {
-        // given
+    /**
+     * {@code k=1} 만 태우면 "상한"이 아니라 "직렬"을 확인하는 셈이라 {@code concatMap} 으로 바꿔도
+     * 통과한다. 상한 자체는 {@code k>1} 에서만 드러나므로 경계 양쪽을 함께 건다.
+     */
+    @ParameterizedTest(name = "호출 {0}건 · 상한 {1}")
+    @CsvSource({"2, 1", "3, 2"})
+    @DisplayName("동시 구독 수가 동시 호출 상한을 넘지 않는다")
+    void runAll_withConcurrencyLimit_neverSubscribesBeyondLimit(int callCount, int maxConcurrent) {
+        // given — 공급사는 둘뿐이라 3건째는 같은 공급사가 다시 들어온다(포트 계약 5)
         SubscriptionGauge gauge = new SubscriptionGauge();
-        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(1, PER_CALL, BUDGET));
+        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(maxConcurrent, PER_CALL, BUDGET));
         List<SupplierCall<String>> calls =
-                List.of(
-                        new SupplierCall<>(Supplier.A, gauge.watch(delayed("a"))),
-                        new SupplierCall<>(Supplier.B, gauge.watch(delayed("b"))));
+                IntStream.range(0, callCount)
+                        .mapToObj(
+                                index ->
+                                        new SupplierCall<>(
+                                                index % 2 == 0 ? Supplier.A : Supplier.B,
+                                                gauge.watch(delayed("v" + index))))
+                        .toList();
 
         // when
         executor.runAll(calls);
 
-        // then
-        assertThat(gauge.peak()).isEqualTo(1);
+        // then — 상한에 정확히 도달하고 넘지는 않는다
+        assertThat(gauge.peak()).isEqualTo(maxConcurrent);
     }
 
     @Test

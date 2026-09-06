@@ -13,7 +13,11 @@ import java.util.Objects;
  */
 public sealed interface Outcome<T> {
 
-    /** 이 결과가 어느 공급사 것인지는 결과 스스로 말한다 — 완료 순서에 기대면 안 되기 때문이다. */
+    /**
+     * 어느 공급사를 부른 결과인지. <b>이 값은 식별자가 아니다.</b> 같은 공급사가 호출 목록에 여러 번
+     * 들어올 수 있으므로(코드 묶음 분할) 결과를 공급사로 골라낼 수 없다. 식별은 위치로 한다 —
+     * {@link FanOutExecutor#runAll} 이 돌려주는 {@code i}번째 결과가 {@code i}번째 호출의 것이다.
+     */
     Supplier supplier();
 
     record Success<T>(Supplier supplier, T value) implements Outcome<T> {
@@ -24,6 +28,11 @@ public sealed interface Outcome<T> {
         }
     }
 
+    /**
+     * @param elapsed 호출이 실제로 나갔다 실패한 경우에는 그 호출 하나의 경과, 예산에 잘린 경우에는
+     *     <b>호출자가 기다린 전체 시간</b>이다. 후자는 동시 호출 상한 때문에 구독조차 되지 않았을 수
+     *     있어 그 호출만의 경과가 존재하지 않는다.
+     */
     record Failed<T>(Supplier supplier, Throwable cause, Duration elapsed) implements Outcome<T> {
 
         public Failed {
