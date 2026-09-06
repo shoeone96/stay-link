@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>stay-link module-split 모듈 구조</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  .code pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  .code pre .kw{color:#6BA4FF} .code pre .ty{color:#4FD8A8} .code pre .fn{color:#FFC56B}
+  .code pre .cm{color:#6B7684;font-style:italic} .code pre .st{color:#9FE3B8}
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<div class="sheet">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>stay-link · module-split · 확정 (2026-09-06)</span>
+      <h1 class="title">모듈 구조<br><span class="hl">이렇게 나눴습니다</span></h1>
+      <p class="lede">단일 모듈이던 <b>stay-link</b>를 <b>core · persistence · supplier-client · api-app</b> 4개로 쪼갰고, 이미 있던 <b>mock-supplier-a·b</b>는 그대로 둡니다. <b>batch-app</b>은 아직 안 만들었습니다 — F6이 실제 설계될 때 만듭니다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">동기</span><span class="v">API scale-out과 batch 실행 분리</span></div>
+        <div class="chip"><span class="k">core란</span><span class="v">domain＋application 통합 (카카오뱅크 실사례)</span></div>
+        <div class="chip"><span class="k">지금 상태</span><span class="v">chore/module-split, 빌드 통과 (6모듈)</span></div>
+        <div class="chip"><span class="k">결정의 원본</span><span class="v">docs/features/module-split/01-design.md</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">왜 나눴는가<span class="hint">배경</span></a></li>
+      <li><a href="#s2">모듈 구성·의존 방향<span class="hint">그림</span></a></li>
+      <li><a href="#s3">클래스가 어디로 갔는가<span class="hint">표</span></a></li>
+      <li><a href="#s4">아직 안 만든 것<span class="hint">batch-app</span></a></li>
+      <li><a href="#s5">결정 카드·참고문헌<span class="hint">요약</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">배경</p><h2 class="sec">왜 나눴는가</h2></div>
+    </div>
+    <p class="lead">F6(catalog-sync)이 API 서버 안에서 <span class="term">@Scheduled</span>로 돌면, API 서버를 scale-out할 때 인스턴스 수만큼 중복 실행됩니다.</p>
+    <p>공급사 목록 API를 replica 수만큼 여러 번 호출하게 되고, F4가 이미 실패 유형으로 다루는 "한도 초과"를 스스로 유발할 수 있습니다. 그래서 batch를 API 서버와 <strong>별도 배포 단위</strong>로 떼어 replica 1(또는 외부 스케줄러 트리거)로 고정하기로 했습니다.</p>
+    <div class="cols">
+      <div class="col x"><h4><span class="mk">기존</span>API 서버 안에서 스케줄</h4><p>같은 프로세스가 API 서빙과 batch를 같이 함. scale-out하면 batch도 같이 늘어나 중복 실행됨.</p></div>
+      <div class="col o"><h4><span class="mk">지금</span>별도 배포 단위(batch-app)</h4><p>API 서버(api-app)와 batch(batch-app)가 서로 다른 jar. batch는 replica 1로 고정, API는 자유롭게 scale-out.</p></div>
+    </div>
+    <p>이 목표를 이루려면 domain 코드를 API 앱과 batch 앱 <strong>둘 다</strong>가 공유해야 하고, 그러려면 물리적으로 별도 Gradle 모듈이어야 합니다 — 패키지 경계만으로는 "서로 다른 jar"가 안 됩니다.</p>
+    <div class="note key"><span class="tag">수정 (협의 결과 1)</span>처음엔 DB 구현체와 WebClient 어댑터를 <span class="term">infrastructure</span> 하나에 같이 뒀습니다(`coding-standard`의 LAY-5가 논리적으로 같은 레이어라고 적어놔서). 하지만 <strong>둘은 바뀌는 이유가 다릅니다</strong> — DB 스키마 변경과 공급사 API 변경은 서로 무관한 축입니다. 테스트 방식도 다르고(`@DataJpaTest`+H2 vs 공급사 mock), "신규 공급사 추가 시 고칠 지점 1개"라는 원래 목표에도 둘을 분리하는 쪽이 더 정확히 맞습니다. 그래서 <span class="term">persistence</span>(JPA)와 <span class="term">supplier-client</span>(WebClient, F3·F4·F5가 채울 자리)로 나눕니다.</div>
+
+    <h3>application(서비스)은 어디로 가나 — core로 domain과 통합</h3>
+    <p>api-app·batch-app 둘 다 있어야 하는 건 persistence·supplier-client뿐 아니라 <strong>서비스/유스케이스(트랜잭션 경계, 포트 오케스트레이션)</strong>도 마찬가지입니다. 처음엔 이걸 별도 <span class="term">application</span> 모듈로 더 쪼개려 했지만, 재검토 끝에 <strong>domain과 합쳐 하나의 <span class="term">core</span> 모듈</strong>로 가기로 했습니다.</p>
+    <div class="cols">
+      <div class="col x"><h4><span class="mk">기각</span>application을 별도 모듈로</h4><p>domain "Spring 의존 0"(LAY-2)은 지키지만, 이 프로젝트는 F0~F2를 domain·application이 이미 한 모듈(패키지 구분만)인 채로 완성했고 그 규칙은 컨벤션만으로 잘 지켜졌다 — 물리적 벽이 검증된 필요는 아니었다. persistence·supplier-client 둘 다 어차피 항상 같이 쓰이는 소비자(api-app·batch-app)를 생각하면 모듈을 더 쪼갤 값어치가 작다.</p></div>
+      <div class="col o"><h4><span class="mk">채택</span>domain＋application = core</h4><p>카카오뱅크 메시지 허브 사례와 정확히 같은 모양 — 포트 인터페이스＋비즈니스 로직을 코어 모듈 하나에 두고, 진입점(그쪽은 api/data-api/loader/consumer 4개, 우리는 api-app·batch-app 2개)이 코어에 의존. DB·외부 연동은 코어 바깥의 어댑터(persistence·supplier-client)로 분리.</p></div>
+    </div>
+    <div class="note"><span class="tag">참고문헌</span><a href="https://tech.kakaobank.com/posts/2311-hexagonal-architecture-in-messaging-hub/" target="_blank" rel="noopener" style="color:var(--blue-deep);font-weight:600">카카오뱅크 기술블로그 — 유일한 멀티모듈 헥사고날 아키텍처: 메시지 허브 적용기</a><br>"코어 모듈은 포트 양쪽의 인터페이스와 실제 비즈니스 로직을 하나의 모듈로 구성했습니다" — 원문 인용, `reference-verifier` 검증 통과(PASS).</div>
+    <div class="note warn"><span class="tag">이름을 domain이 아니라 core로 부르는 이유</span>이 모듈은 이제 두 레이어(domain＋application)를 담습니다 — 이름을 <span class="term">domain</span>으로 두면 순수 도메인 전용이라고 오해하기 쉬워, 카카오뱅크와 같은 이름 <span class="term">core</span>로 씁니다. LAY-2("domain 패키지는 Spring 의존 0")는 여전히 유효하지만 <strong>모듈 경계가 아니라 패키지 컨벤션</strong>(`com.stay.property.domain` vs `com.stay.property.application`)으로 지킵니다 — F0~F2와 같은 방식입니다.</div>
+  </section>
+
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">그림</p><h2 class="sec">모듈 구성·의존 방향</h2></div>
+    </div>
+    <p class="lead">지금 실제로 존재하는 것(파랑·초록)과 아직 없는 것(회색 점선)을 구분해서 그렸습니다.</p>
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 01 — MODULE GRAPH">
+        <svg viewBox="0 0 1120 660" role="img" aria-label="stay-link 모듈 의존 관계도. api-app과 batch-app이 persistence·supplier-client·core에 의존하고, persistence와 supplier-client는 core에 의존한다. core는 domain 패키지와 application 패키지를 함께 담는다. mock-supplier-a와 mock-supplier-b는 독립적이다.">
+          <defs>
+            <marker id="dep1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <!-- api-app -->
+          <rect x="40" y="40" width="260" height="100" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="40" y="40" width="260" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">api-app</div><div class="s">F7~F10 · scale-out 대상</div></div></foreignObject>
+
+          <!-- batch-app (미래) -->
+          <rect x="340" y="40" width="260" height="100" rx="18" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.4" stroke-dasharray="7 6"/>
+          <foreignObject x="340" y="40" width="260" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">batch-app</div><div class="s">미생성 · F6 설계 시 · replica 1</div></div></foreignObject>
+
+          <!-- 인프라 밴드(persistence + supplier-client) -->
+          <rect x="90" y="210" width="530" height="150" rx="20" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="6 5"/>
+          <text class="svg-s" x="355" y="200" text-anchor="middle" fill="#8B95A1">둘 다 core에 의존(어댑터) · api-app·batch-app이 둘 다 씀</text>
+
+          <rect x="110" y="235" width="230" height="100" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="110" y="235" width="230" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">persistence</div><div class="s">PropertyRepository 구현 (F1)</div></div></foreignObject>
+
+          <rect x="370" y="235" width="230" height="100" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="370" y="235" width="230" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">supplier-client</div><div class="s">SupplierClient 구현 (F3·F4·F5)</div></div></foreignObject>
+
+          <!-- core (domain + application) -->
+          <rect x="185" y="460" width="340" height="130" rx="18" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+          <foreignObject x="185" y="460" width="340" height="130"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">core</div><div class="s">com.stay.property.domain (순수) ＋<br>com.stay.property.application (@Transactional)</div></div></foreignObject>
+          <text class="svg-s" x="355" y="608" text-anchor="middle" fill="#0A8F5B">PropertyRepository·SupplierClient 포트 소유</text>
+
+          <!-- mock-supplier 클러스터 -->
+          <rect x="800" y="40" width="280" height="360" rx="18" fill="none" stroke="#B0B8C1" stroke-width="1.4" stroke-dasharray="7 6"/>
+          <text class="svg-s" x="940" y="25" text-anchor="middle" fill="#8B95A1">독립 실행 · 공유 코드 0</text>
+          <rect x="825" y="65" width="230" height="90" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="825" y="65" width="230" height="90"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">mock-supplier-a</div><div class="s">F2 · 기존 유지</div></div></foreignObject>
+          <rect x="825" y="200" width="230" height="90" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="825" y="200" width="230" height="90"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">mock-supplier-b</div><div class="s">F2 · 기존 유지</div></div></foreignObject>
+
+          <!-- 의존 화살표 -->
+          <line x1="170" y1="140" x2="215" y2="208" stroke="#6B7684" stroke-width="2" marker-end="url(#dep1)"/>
+          <line x1="470" y1="140" x2="495" y2="208" stroke="#B0B8C1" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#dep1)"/>
+          <line x1="170" y1="140" x2="330" y2="458" stroke="#6B7684" stroke-width="1.6" stroke-dasharray="3 4" marker-end="url(#dep1)"/>
+          <line x1="225" y1="335" x2="310" y2="458" stroke="#6B7684" stroke-width="2" marker-end="url(#dep1)"/>
+          <line x1="485" y1="335" x2="400" y2="458" stroke="#6B7684" stroke-width="2" marker-end="url(#dep1)"/>
+          <text class="svg-l" x="175" y="180" fill="#4E5968">의존</text>
+          <text class="svg-l" x="500" y="180" fill="#8B95A1">의존(예정)</text>
+          <text class="svg-l" x="130" y="400" fill="#4E5968">구현</text>
+          <text class="svg-l" x="440" y="400" fill="#4E5968">구현</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 1.</b> api-app·batch-app은 core·persistence·supplier-client 모두에 의존하고, persistence·supplier-client는 core가 소유한 포트(각각 <span class="term">PropertyRepository</span>·<span class="term">SupplierClient</span>)를 구현합니다. core 자신은 domain·application 두 패키지를 담을 뿐 아무것도 의존하지 않습니다. batch-app은 아직 없어 점선입니다.</figcaption>
+    </figure>
+  </section>
+
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">이동 내역</p><h2 class="sec">클래스가 어디로 갔는가</h2></div>
+    </div>
+    <p class="lead">기존 <span class="term">src/main/java/com/stay/...</span> 하나였던 걸 이 기준으로 나눴습니다.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>클래스·파일</th><th>패키지(core 내부)</th><th>새 모듈</th><th>이유</th></tr></thead>
+        <tbody>
+          <tr><td>Property</td><td>com.stay.property.domain</td><td>core</td><td rowspan="6" style="vertical-align:middle">순수 도메인 모델. 모듈은 core로 합쳤지만 패키지는 그대로 domain — LAY-2(Spring 의존 0)는 패키지 컨벤션으로 지킴</td></tr>
+          <tr><td>Room</td><td>com.stay.property.domain</td><td>core</td></tr>
+          <tr><td>Supplier</td><td>com.stay.property.domain</td><td>core</td></tr>
+          <tr><td>InvalidMappingException</td><td>com.stay.property.domain</td><td>core</td></tr>
+          <tr><td>PropertyRepository</td><td>com.stay.property.domain</td><td>core</td></tr>
+          <tr><td>RoomRepository</td><td>com.stay.property.domain</td><td>core</td></tr>
+          <tr><td>ErrorCode</td><td>com.stay.common.error</td><td>core</td><td rowspan="4" style="vertical-align:middle">순수 자바 — 별도 모듈 근거(반복 3회) 없어 core에 동거 (LAY-6)</td></tr>
+          <tr><td>BusinessException</td><td>com.stay.common.error</td><td>core</td></tr>
+          <tr><td>CommonErrorCode</td><td>com.stay.common.error</td><td>core</td></tr>
+          <tr><td>BadRequestException</td><td>com.stay.common.error</td><td>core</td></tr>
+          <tr><td>(앞으로 생길 서비스, 예: CatalogSyncService)</td><td>com.stay.property.application <span class="stchip mid">신규</span></td><td>core</td><td>아직 코드 없음 — 여기서 <span class="term">@Transactional</span>·포트 오케스트레이션 담당. api-app·batch-app이 공유</td></tr>
+          <tr><td>SupplierClient (포트, 아직 없음)</td><td>com.stay.property.application <span class="stchip mid">신규</span></td><td>core</td><td>DDD-7과 달리 Aggregate 소유가 아니라 유스케이스가 부르는 포트라 application이 소유 (LAY-5)</td></tr>
+          <tr><td>PropertyJpaRepository</td><td>com.stay.property.infrastructure</td><td>persistence</td><td rowspan="2" style="vertical-align:middle">Spring Data 구현체 (LAY-5). WebClient 어댑터와 바뀌는 이유가 달라 분리</td></tr>
+          <tr><td>RoomJpaRepository</td><td>com.stay.property.infrastructure</td><td>persistence</td></tr>
+          <tr><td>(F3·F4·F5가 채울 자리)</td><td>com.stay.property.infrastructure</td><td>supplier-client</td><td>아직 코드 없음 — F3a(webclient-config)가 병합되면 core의 <span class="term">SupplierClient</span> 포트를 구현하며 여기로 이동</td></tr>
+          <tr><td>ApiResponse</td><td>com.stay.common.web</td><td>api-app</td><td rowspan="2" style="vertical-align:middle">REST 응답 계층 — batch-app엔 필요 없음</td></tr>
+          <tr><td>GlobalExceptionHandler</td><td>com.stay.common.web</td><td>api-app</td></tr>
+          <tr><td>StayLinkApplication</td><td>(루트)</td><td>api-app</td><td rowspan="3" style="vertical-align:middle">실행 가능한 앱의 진입점·설정</td></tr>
+          <tr><td>application.yaml</td><td>(루트)</td><td>api-app</td></tr>
+          <tr><td>schema.sql</td><td>(루트)</td><td>api-app</td></tr>
+          <tr><td>mock-supplier-a</td><td>(그대로)</td><td>변경 없음</td><td rowspan="2" style="vertical-align:middle">F2에서 이미 독립 모듈로 확정, 이번 변경과 무관</td></tr>
+          <tr><td>mock-supplier-b</td><td>(그대로)</td><td>변경 없음</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>실제 파일 트리 (지금 상태)</h3>
+    <p>모듈마다 지금 실제로 있는 파일과, 아직 없지만 곧 채워질 자리를 함께 적었습니다(<span class="term">(예정)</span> 표시).</p>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFB836"></span><span class="dot" style="background:#15C47E"></span><span class="fn">core/</span></div>
+<pre>core
+├── build.gradle.kts                (spring-context·spring-tx 추가 — application 패키지용)
+└── src
+    ├── main/java/com/stay
+    │   ├── common/error/            (순수 자바 예외 4개)
+    │   │   ├── ErrorCode.java
+    │   │   ├── BusinessException.java
+    │   │   ├── CommonErrorCode.java
+    │   │   └── BadRequestException.java
+    │   └── property
+    │       ├── domain/              (Spring 의존 0 — 패키지 컨벤션으로 지킴)
+    │       │   ├── Property.java · Room.java · Supplier.java
+    │       │   ├── PropertyRepository.java · RoomRepository.java   (포트)
+    │       │   └── InvalidMappingException.java
+    │       └── application/         (예정 — @Transactional 서비스)
+    │           ├── CatalogSyncService.java        (예정, F6)
+    │           └── SupplierClient.java             (예정, 포트 — F3a)
+    └── test/java/com/stay/property/domain
+        ├── PropertyTest.java · RoomTest.java   (순수 JUnit, Spring 없음)</pre>
+    </div>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFB836"></span><span class="dot" style="background:#15C47E"></span><span class="fn">persistence/</span></div>
+<pre>persistence
+├── build.gradle.kts                 implementation(project(":core"))
+└── src
+    ├── main/java/com/stay/property/infrastructure
+    │   ├── PropertyJpaRepository.java   (core의 PropertyRepository 구현)
+    │   └── RoomJpaRepository.java       (core의 RoomRepository 구현)
+    └── test/java/com/stay
+        ├── PersistenceTestConfig.java              (@DataJpaTest 부트스트랩용)
+        └── property/infrastructure
+            ├── PropertyJpaRepositoryTest.java   (@DataJpaTest + H2)
+            └── RoomJpaRepositoryTest.java</pre>
+    </div>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFB836"></span><span class="dot" style="background:#15C47E"></span><span class="fn">supplier-client/</span></div>
+<pre>supplier-client
+├── build.gradle.kts        spring-boot-starter-webflux만 (아직 core 의존 없음 — 쓰는 코드가 없어서)
+└── src                     (예정 — F3a webclient-config 병합 시 채워짐)
+    └── main/java/com/stay/property/infrastructure
+        └── SupplierAWebClient.java   (예정 — core의 SupplierClient 포트 구현)
+        └── SupplierBWebClient.java   (예정)</pre>
+    </div>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFB836"></span><span class="dot" style="background:#15C47E"></span><span class="fn">api-app/</span></div>
+<pre>api-app
+├── build.gradle.kts        implementation(":core") + runtimeOnly(":persistence",":supplier-client")
+└── src
+    ├── main
+    │   ├── java/com/stay
+    │   │   ├── StayLinkApplication.java     (메인 · component scan)
+    │   │   ├── common/web/
+    │   │   │   ├── ApiResponse.java
+    │   │   │   └── GlobalExceptionHandler.java
+    │   │   └── property/presentation/        (예정 — F7 stay-search-api 컨트롤러)
+    │   └── resources/
+    │       ├── application.yaml         (MySQL docker-compose)
+    │       └── schema.sql
+    └── test/
+        ├── java/com/stay/StayLinkApplicationTests.java
+        ├── java/com/stay/common/web/ApiResponseE2ETest.java
+        └── resources/application.yaml</pre>
+    </div>
+
+    <div class="note"><span class="tag">batch-app (F6에서 생성, 아직 없음)</span>같은 모양으로 <span class="term">implementation(":core")</span> + <span class="term">runtimeOnly(":persistence",":supplier-client")</span>. 다른 점은 <span class="term">com.stay.property.presentation</span>·<span class="term">common.web.*</span>이 없고 대신 Spring Batch Job/Step 설정(<span class="term">CatalogSyncJobConfig</span> 등)이 들어간다는 것뿐입니다 — core 서비스는 api-app과 똑같이 씁니다.</div>
+  </section>
+
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">유보</p><h2 class="sec">아직 안 만든 것 — batch-app</h2></div>
+    </div>
+    <p class="lead">지금 <span class="term">settings.gradle.kts</span>에는 batch-app이 없습니다.</p>
+    <div class="note key"><span class="tag">이유</span>F6(catalog-sync)이 아직 설계되지 않아 batch-app에 담을 코드가 없습니다. 빈 모듈을 미리 만드는 건 투기적이라, F6을 실제로 설계·구현하는 시점에 만들기로 했습니다.</div>
+    <p>F6 설계가 끝나면 이 자리에 <span class="term">batch-app</span> 모듈이 생기고, 그림 1의 점선이 실선으로 바뀝니다.</p>
+  </section>
+
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">요약</p><h2 class="sec">결정 카드·참고문헌</h2></div>
+    </div>
+    <p class="lead">전문은 <span class="term">docs/features/module-split/01-design.md</span> 6·7장에 있습니다. 여기는 요약 표만 싣습니다.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>결정</th><th>근거 한 줄</th></tr></thead>
+        <tbody>
+          <tr><td>D-MS-1</td><td>domain+application만 통합(core), persistence·supplier-client는 분리</td><td>소비자가 항상 셋을 같이 받아 전부 분리는 값어치 낮음 / persistence는 JPA 테스트 셋업이 여전히 달라 분리 유지</td></tr>
+          <tr><td>D-MS-2</td><td>batch-app은 F6 설계 시 생성</td><td>담을 코드 없는 빈 모듈은 투기적</td></tr>
+          <tr><td>D-MS-3</td><td>모듈명 domain→core로 개명</td><td>두 레이어(domain+application)를 담아 domain이라는 이름은 오해 소지</td></tr>
+          <tr><td>D-MS-4</td><td>SupplierClient 포트는 application 패키지 소유</td><td>Aggregate 불변식이 아니라 유스케이스 오케스트레이션(LAY-5)</td></tr>
+          <tr><td>D-MS-5</td><td>api-app→persistence·supplier-client는 runtimeOnly</td><td>구체 어댑터 클래스 오import를 컴파일 에러로 막음</td></tr>
+          <tr><td>D-MS-6</td><td>api-app 자체의 data-jpa·webflux·mysql 의존 제거</td><td>persistence·supplier-client의 implementation이 런타임 전이로 이미 공급(실측 확인)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><b>참고문헌</b> (전부 <span class="term">reference-verifier</span> PASS 검증):</p>
+    <ul style="padding-left:22px;color:var(--g700);font-size:15px;line-height:1.9">
+      <li><a href="https://tech.kakaobank.com/posts/2311-hexagonal-architecture-in-messaging-hub/" target="_blank" rel="noopener" style="color:var(--blue-deep);font-weight:600">카카오뱅크 — 유일한 멀티모듈 헥사고날 아키텍처: 메시지 허브 적용기</a> — D-MS-1의 핵심 근거(코어 모듈 1개를 여러 진입점이 공유하는 실제 프로덕션 구조)</li>
+      <li><a href="https://alistair.cockburn.us/hexagonal-architecture/" target="_blank" rel="noopener" style="color:var(--blue-deep);font-weight:600">Alistair Cockburn — Hexagonal Architecture (원문)</a></li>
+      <li><a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/hexagonal-architecture.html" target="_blank" rel="noopener" style="color:var(--blue-deep);font-weight:600">AWS Prescriptive Guidance — Hexagonal architecture pattern</a></li>
+      <li><a href="https://docs.gradle.org/current/userguide/best_practices_structuring_builds.html" target="_blank" rel="noopener" style="color:var(--blue-deep);font-weight:600">Gradle 공식 — Best Practices for Structuring Builds</a></li>
+      <li><a href="https://spring.io/blog/2022/10/21/introducing-spring-modulith/" target="_blank" rel="noopener" style="color:var(--blue-deep);font-weight:600">Spring 공식 블로그 — Introducing Spring Modulith</a> — 반대 근거(application module 기본 단위는 패키지)도 함께 검토</li>
+    </ul>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    결정의 원본은 docs/features/module-split/01-design.md 입니다. 이 문서는 그 시각화본입니다.
+  </footer>
+
+</div>
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+</body>
+</html>
