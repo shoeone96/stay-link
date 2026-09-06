@@ -1,0 +1,17 @@
+supplier:
+  fan-out:
+    max-concurrent: 2
+    per-call: 2s
+    budget: 5s
+
+spring:
+  http:
+    serviceclient:
+      supplier-a:
+        base-url: http://supplier-a.test
+        connect-timeout: 1s
+        read-timeout: 2s
+      supplier-b:
+        base-url: http://supplier-b.test
+        connect-timeout: 1s
+        read-timeout: 2s

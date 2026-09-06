@@ -10,3 +10,23 @@ spring:
   sql:
     init:
       mode: always
+  # 공급사마다 그룹을 나눠야 커넥터가 갈리고 타임아웃을 다르게 줄 수 있다.
+  # 아래 값은 아직 실측한 것이 아니라 자리를 잡아 둔 것이다 — 실제 값은 모의 서버로 재서 채운다.
+  http:
+    serviceclient:
+      supplier-a:
+        base-url: http://localhost:9091
+        connect-timeout: 1s
+        read-timeout: 2s
+      supplier-b:
+        base-url: http://localhost:9092
+        connect-timeout: 1s
+        read-timeout: 2s
+
+# 조합기의 상한. budget 은 per-call 보다 커야 하며, 어긋나면 기동이 실패한다.
+# 지켜야 하는 부등식은 budget > ⌈공급사 수 ÷ max-concurrent⌉ × per-call 이다.
+supplier:
+  fan-out:
+    max-concurrent: 2
+    per-call: 2s
+    budget: 5s
