@@ -69,12 +69,16 @@ supplier-client                      ← F3a가 만드는 전부
 │                       + <T> List<Outcome<T>> runAll(List<SupplierCall<T>>)
 ├ FanOutProperties → FanOutPolicy    바인딩 시 budget > perCall 강제
 ├ SupplierHttpClientConfig           @ImportHttpServices
-└ MaskingExchangeFilter              WebClientCustomizer 로 그룹에 붙는다
+└ MaskingExchangeFilter              WebClientHttpServiceGroupConfigurer 로 그룹에 붙는다
 ```
 
 - **LAY-5**: 포트는 안쪽 레이어가 소유하나, **F3a는 포트를 정의하지 않는다** (F4 소관)
 - **의존 방향**: `supplier-client → core` 단방향. `core`를 향한 참조는 `Supplier` 하나뿐
 - **리액티브 타입은 `supplier-client`를 벗어나지 않는다**
+- **마스킹 필터를 붙이는 수단** (2026-09-07 정정) — 원래 `WebClientCustomizer`로 적었으나 그 빈은
+  컨텍스트의 **모든** `WebClient.Builder`에 붙어 "그룹에 붙는다"는 이 문장과 어긋난다. 공급사와
+  무관한 호출까지 "공급사 호출"로 기록되므로, `filterByName`으로 그룹을 좁힐 수 있는
+  `WebClientHttpServiceGroupConfigurer`를 쓴다. 범위가 설계의 뜻이고 수단은 그 뜻을 지키는 쪽이다.
 
 ### 조합 체인
 

@@ -1,9 +1,9 @@
 package com.stay.property.infrastructure;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.webclient.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.support.WebClientHttpServiceGroupConfigurer;
 import org.springframework.web.service.registry.HttpServiceGroup.ClientType;
 import org.springframework.web.service.registry.ImportHttpServices;
 
@@ -34,9 +34,16 @@ public class SupplierHttpClientConfig {
         return new FanOutExecutor(policy);
     }
 
-    /** 그룹마다 만들어지는 {@code WebClient} 에 로깅 필터를 얹는다. */
+    /**
+     * 공급사 그룹의 {@code WebClient} 에만 로깅 필터를 얹는다. {@code WebClientCustomizer} 빈으로
+     * 붙이면 컨텍스트의 <b>모든</b> {@code WebClient.Builder} 에 적용되어, 공급사와 무관한 호출까지
+     * "공급사 호출"로 기록된다. 지금은 다른 {@code WebClient} 가 없어 결과가 같지만, 로그 문구가
+     * 거짓이 되는 것은 하나만 늘어도 시작된다.
+     */
     @Bean
-    WebClientCustomizer maskingWebClientCustomizer() {
-        return builder -> builder.filter(new MaskingExchangeFilter());
+    WebClientHttpServiceGroupConfigurer maskingLogGroupConfigurer() {
+        return groups ->
+                groups.filterByName(SUPPLIER_A_GROUP, SUPPLIER_B_GROUP)
+                        .forEachClient((group, builder) -> builder.filter(new MaskingExchangeFilter()));
     }
 }
