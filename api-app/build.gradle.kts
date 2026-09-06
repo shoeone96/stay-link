@@ -18,14 +18,14 @@ dependencies {
     // JPA(spring-boot-starter-data-jpa·mysql-connector-j)는 persistence가, WebClient(webflux)는
     // supplier-client가 implementation으로 선언 — 둘 다 runtimeOnly 의존을 통해 런타임 클래스패스로
     // 전이되므로 여기서 다시 선언하지 않는다. api-app 자신의 몫(presentation·실행 편의)만 남긴다.
-    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
 
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testRuntimeOnly("com.h2database:h2")
     testCompileOnly("org.projectlombok:lombok")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
