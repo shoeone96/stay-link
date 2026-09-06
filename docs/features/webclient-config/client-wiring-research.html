@@ -414,9 +414,9 @@
       <h1 class="title">공급사 클라이언트를 어떻게 만들고<br><span class="hl">어떻게 동시에 부르는가</span></h1>
       <p class="lede">공급사별 HTTP 클라이언트 인스턴스를 만드는 방식과, 여러 공급사를 한꺼번에 부를 때 쓸 조합 연산자를 정한다. 결론을 가른 것은 취향이 아니라 <b>버전 사실 하나</b>와 <b>자바독 한 문장</b>이다.</p>
       <div class="chips">
-        <div class="chip"><span class="k">STACK</span><span class="v">Java 25 · Boot 3.5.x · Framework 6.2.11 · reactor-core 3.7.11</span></div>
-        <div class="chip"><span class="k">전제</span><span class="v">supplier-client → domain 단방향 의존</span></div>
-        <div class="chip"><span class="k">검증</span><span class="v">출처 22건 · PASS 21 / FAIL 1</span></div>
+        <div class="chip"><span class="k">STACK</span><span class="v">Java 25 · Boot 4.1.1 · Framework 7.0.9 · reactor-core</span></div>
+        <div class="chip"><span class="k">전제</span><span class="v">supplier-client → core 단방향 의존</span></div>
+        <div class="chip"><span class="k">검증</span><span class="v">출처 22건 · PASS 21 / FAIL 1 · jar 실측 6건</span></div>
       </div>
     </div>
   </header>
@@ -425,8 +425,8 @@
     <h2>목차</h2>
     <ol class="toc-index">
       <li><a href="#s1">결론 먼저<span class="hint">한 장 요약</span></a></li>
-      <li><a href="#s2">버전 사실 — 3.5에는 없다<span class="hint">설계를 가른 것</span></a></li>
-      <li><a href="#s3">클라이언트 생성 구조 4안</a></li>
+      <li><a href="#s2">버전 사실 — 3.5에는 없었다<span class="hint">올린 이유</span></a></li>
+      <li><a href="#s3">그룹 등록으로 되는 것, 코드로 남는 것<span class="hint">개정</span></a></li>
       <li><a href="#s4">fan-out 조합 연산자 5종<span class="hint">핵심</span></a></li>
       <li><a href="#s5">외부 조언 판정 3건</a></li>
       <li><a href="#s6">정직하게 병기할 것<span class="hint">불리한 사실</span></a></li>
@@ -443,33 +443,35 @@
       <div><p class="sec-eyebrow">SUMMARY</p><h2 class="sec">결론 먼저</h2></div>
     </div>
 
-    <p class="lead">공급사별 <span class="term">@Bean</span> 수동 배선 + <span class="term">flatMap(fn, concurrency)</span> 조합. 둘 다 "더 좋아 보여서"가 아니라 다른 선택지가 막혀서 남은 답이다.</p>
+    <p class="lead"><span class="term">@ImportHttpServices</span> 그룹 등록 + <span class="term">flatMap(fn, concurrency)</span> 조합. 둘 다 "더 좋아 보여서"가 아니라 다른 선택지가 막혀서 남은 답이다.</p>
+
+    <div class="note"><span class="tag">개정 (2026-09-07)</span>이 문서는 <strong>Boot 3.5.x 기준으로 먼저 쓰였고, 프로젝트가 4.1.1로 올라간 뒤 3장을 다시 썼다.</strong> 클라이언트 생성 결론이 수동 <span class="term">@Bean</span> 배선에서 그룹 등록으로 바뀌었다. 2장은 <strong>버전을 올린 이유</strong>로 남긴다. 4장 이후(fan-out·연산자 판정)는 버전과 무관하므로 그대로다.</div>
 
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>축</th><th>결론</th><th>이걸 정한 근거</th></tr></thead>
         <tbody>
-          <tr><td>클라이언트 생성</td><td>공급사별 <span class="term">@Bean</span> 수동 배선 — <span class="term">builder.clone()</span> → <span class="term">WebClientAdapter</span> → <span class="term">HttpServiceProxyFactory</span></td><td>Boot 3.5에 자동 등록이 없다</td></tr>
-          <tr><td>설정</td><td><span class="term">@ConfigurationProperties</span> Map 바인딩으로 받고, 프록시는 공급사별 빈에서 꺼내 쓴다</td><td>A·B의 인터페이스가 서로 다르다</td></tr>
+          <tr><td>클라이언트 생성</td><td><span class="term">@ImportHttpServices(group, clientType = WEB_CLIENT, types = {...})</span> — 인터페이스마다 빈이 등록된다</td><td>Boot 4가 그룹마다 커넥터를 따로 만든다</td></tr>
+          <tr><td>설정</td><td><span class="term">spring.http.serviceclient.&lt;group&gt;.*</span> — base-url · 인증 헤더 · connect/read 타임아웃</td><td>공급사별 차등 타임아웃이 선언으로 된다</td></tr>
           <tr><td>fan-out 조합</td><td><span class="term">Flux.fromIterable(...).flatMap(fn, maxConcurrent).collectList()</span></td><td>상한 인자를 가진 유일한 후보</td></tr>
           <tr><td>호출당 체인</td><td><span class="term">.timeout()</span> → <span class="term">.retryWhen()</span> → <span class="term">.onErrorResume(값)</span></td><td>요구 조건의 세 축이 한자리에 모인다</td></tr>
-          <tr><td>포트 배치</td><td>포트는 <span class="term">domain</span>, 구현은 <span class="term">supplier-client</span></td><td>의존 역전 — 헥사고날 규범</td></tr>
+          <tr><td>포트 배치</td><td>포트는 <span class="term">core</span>의 <span class="term">application</span> 패키지, 구현은 <span class="term">supplier-client</span></td><td>의존 역전 — 헥사고날 규범 · D-MS-4</td></tr>
         </tbody>
       </table>
     </div>
 
-    <div class="note key"><span class="tag">핵심</span>이 프로젝트에 주어진 조건이 지목한 세 축은 <strong>타임아웃 · 재시도 · 병렬 호출 제어</strong>다. 이 문서의 모든 판단 기준은 "그 셋이 코드에 드러나는가" 하나다. 동작하느냐가 아니다.</div>
+    <div class="note key"><span class="tag">핵심</span>이 프로젝트에 주어진 조건이 지목한 세 축은 <strong>타임아웃 · 재시도 · 병렬 호출 제어</strong>다. 이 문서의 모든 판단 기준은 "그 셋이 코드에 드러나는가" 하나다. 동작하느냐가 아니다. <strong>버전을 올려서 선언으로 내려간 것은 타임아웃 하나뿐</strong>이고, 나머지 둘은 그대로 코드에 남는다.</div>
   </section>
 
   <section id="s2" class="fade">
     <div class="sec-head">
       <div class="sec-num">2</div>
-      <div><p class="sec-eyebrow">VERSION FACT</p><h2 class="sec">버전 사실 — 3.5에는 없다</h2></div>
+      <div><p class="sec-eyebrow">VERSION FACT</p><h2 class="sec">버전 사실 — 3.5에는 없었다</h2></div>
     </div>
 
-    <p class="lead">Boot 3.5.x / Framework 6.2.x에는 HTTP Interface 클라이언트의 자동 등록·설정 기능이 <strong>없다.</strong> 전부 수동 배선이다.</p>
+    <p class="lead">Boot 3.5.x / Framework 6.2.x에는 HTTP Interface 클라이언트의 자동 등록·설정 기능이 <strong>없다.</strong> 전부 수동 배선이다. <strong>이 표가 버전을 올린 직접적인 이유다.</strong></p>
 
-    <p>이 사실을 먼저 못 박는 이유는, 검색으로 나오는 최신 글 상당수가 <span class="term">@ImportHttpServices</span>나 <span class="term">spring.http.serviceclient.*</span>를 전제로 쓰여 있기 때문이다. 그대로 따라가면 <strong>우리 버전에 존재하지 않는 API</strong>를 쓰게 된다.</p>
+    <p>조사 시점에 이 사실을 먼저 못 박은 이유는, 검색으로 나오는 최신 글 상당수가 <span class="term">@ImportHttpServices</span>나 <span class="term">spring.http.serviceclient.*</span>를 전제로 쓰여 있기 때문이었다. 3.5에 머물렀다면 <strong>존재하지 않는 API</strong>를 쓰게 됐을 자리다. 그런데 표를 다 채우고 보니 <strong>없는 쪽이 우리 버전</strong>이었고, 그래서 결론이 "글을 무시하자"가 아니라 "버전을 올리자"로 갔다.</p>
 
     <div class="tbl-wrap">
       <table>
@@ -484,87 +486,127 @@
     </div>
 
     <div class="note warn"><span class="tag">주의</span>마지막 행이 함정이다. <span class="term">spring.http.reactiveclient.connect-timeout</span>은 <strong>존재하지만 전역</strong>이다. 공급사마다 다른 타임아웃을 주려면 이 프로퍼티가 아니라 공급사별 커넥터나 <span class="term">.timeout()</span> 연산자로 표현해야 한다. 후자라야 그 축이 코드에 드러난다.</div>
+
+    <div class="note key"><span class="tag">이후</span>이 표를 근거로 <strong>2026-09-06에 Boot 4.1.1로 올렸다.</strong> 결정을 굳힌 것은 편의가 아니라 라인 사실이다 — 3.5.x는 <strong>2026-06-30에 OSS 패치가 끊겼고</strong>, 3.5.16 릴리스 공지가 4.0/4.1로 올리라고 명시한다. 그룹별 타임아웃은 덤으로 따라온 것이고, 그 결과 3장의 결론이 바뀌었다.</div>
   </section>
 
   <section id="s3" class="fade">
     <div class="sec-head">
       <div class="sec-num">3</div>
-      <div><p class="sec-eyebrow">WIRING</p><h2 class="sec">클라이언트 생성 구조 4안</h2></div>
+      <div><p class="sec-eyebrow">WIRING</p><h2 class="sec">그룹 등록으로 되는 것, 코드로 남는 것</h2></div>
     </div>
+
+    <p class="lead">Boot 4.1.1로 올린 뒤 이 절의 결론이 뒤집혔다. 클라이언트 생성은 <span class="term">@ImportHttpServices</span> 그룹 등록으로 간다. 다만 <strong>그것이 대신해 주는 것은 세 축 중 타임아웃 하나뿐</strong>이고, 나머지 둘은 어느 안을 골라도 코드로 남는다.</p>
 
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>안</th><th>내용</th><th>판정</th></tr></thead>
         <tbody>
-          <tr><td>A</td><td>공급사별 <span class="term">@Bean</span> 수동 배선</td><td><strong>채택.</strong> 6.2 레퍼런스의 코드 예제 그대로<a href="#r1" class="cite">[1]</a></td></tr>
+          <tr><td>A</td><td>공급사별 <span class="term">@Bean</span> 수동 배선 — <span class="term">builder.clone()</span> → <span class="term">WebClientAdapter</span> → <span class="term">HttpServiceProxyFactory</span></td><td><strong>탈락(전 판본의 채택안).</strong> 프레임워크가 하는 일을 손으로 다시 조립하는 것이 된다</td></tr>
           <tr><td>B</td><td>Map 순회 + 동적 빈 등록</td><td>탈락 — 인터페이스가 갈려 루프로 못 찍는다</td></tr>
           <tr><td>C</td><td>단일 WebClient + 호출 시 절대 URI</td><td>탈락 — 공급사별 타임아웃·인증을 둘 자리가 없다</td></tr>
-          <tr><td>D</td><td>@ImportHttpServices 그룹</td><td>탈락 — 스택 밖(Framework 7 필요)</td></tr>
+          <tr><td>D</td><td><span class="term">@ImportHttpServices</span> 그룹 등록 + <span class="term">spring.http.serviceclient.&lt;group&gt;.*</span></td><td><strong>채택.</strong> 공급사별 커넥터를 프레임워크가 그룹마다 따로 만든다</td></tr>
         </tbody>
       </table>
     </div>
 
-    <p>B안을 탈락시킨 이유가 이 절의 핵심이다. "설정을 Map으로 받으니 인스턴스도 루프로 만들면 되지 않나"는 자연스러운 발상인데, <strong>루프로 찍어내려면 만들어지는 타입이 같아야 한다.</strong> 공급사 A는 4xx·5xx로 실패를 알리고 B는 HTTP 200 본문의 코드로 알린다. 실패 표현이 다르면 <span class="term">@HttpExchange</span> 인터페이스와 오류 해석 정책이 갈리고, 그러면 찍어낼 틀이 없다.</p>
+    <p>A안이 전 판본에서 채택됐던 이유는 단 하나, <strong>3.5에 그 기능이 없었기 때문</strong>이다(2장). 그 제약이 사라진 지금 A안을 유지하면 <strong>버전을 올린 이유를 스스로 지우는 셈</strong>이 된다. B·C안의 탈락 사유는 버전과 무관하므로 그대로다.</p>
+
+    <p>B안을 탈락시킨 이유는 여전히 이 절의 핵심이다. "설정을 Map으로 받으니 인스턴스도 루프로 만들면 되지 않나"는 자연스러운 발상인데, <strong>루프로 찍어내려면 만들어지는 타입이 같아야 한다.</strong> 공급사 A는 4xx·5xx로 실패를 알리고 B는 HTTP 200 본문의 코드로 알린다. 실패 표현이 다르면 <span class="term">@HttpExchange</span> 인터페이스와 오류 해석 정책이 갈리고, 그러면 찍어낼 틀이 없다. D안은 이 문제를 피해 간다 — 인터페이스를 <strong>타입으로 나열</strong>할 뿐 찍어내지 않기 때문이다.</p>
+
+    <h3 id="s3-1">경계 — 어디까지 선언이고 어디부터 코드인가</h3>
 
     <figure>
       <div class="fig-box" data-fig="FIG. 01">
-        <svg viewBox="0 0 720 236" role="img" aria-label="프로토타입 WebClient 빌더를 clone하여 공급사 A와 B의 WebClient를 각각 만들고, 어댑터와 프록시 팩토리를 거쳐 공급사별 클라이언트 프록시를 생성하는 배선 흐름">
+        <svg viewBox="0 0 720 318" role="img" aria-label="왼쪽은 yaml 그룹 프로퍼티로 선언되는 base-url·인증 헤더·connect-timeout·read-timeout, 오른쪽은 코드로 직접 작성해야 하는 동시 호출 상한·재시도·부분 실패 흡수·block 경계. 가운데 세로 점선이 두 영역을 가른다">
           <defs>
-            <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+            <marker id="b1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
               <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
             </marker>
           </defs>
 
+          <text class="svg-l" x="176" y="20" text-anchor="middle" fill="#1B64DA">선언 — yaml</text>
+          <text class="svg-l" x="530" y="20" text-anchor="middle" fill="#C9303C">코드 — Reactor 연산자</text>
+
+          <line x1="356" y1="32" x2="356" y2="306" stroke="#B0B8C1" stroke-width="1.4" stroke-dasharray="6 5"/>
+
           <g>
-            <rect x="16" y="72" width="160" height="76" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
-            <foreignObject x="16" y="72" width="160" height="76">
-              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">WebClient.Builder</div><div class="s">prototype · stateful</div></div>
+            <rect x="16" y="36" width="320" height="70" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="16" y="36" width="320" height="70">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">@ImportHttpServices</div><div class="d">group · clientType=WEB_CLIENT · types — 인터페이스마다 프록시 빈이 등록된다</div></div>
             </foreignObject>
           </g>
 
-          <line x1="180" y1="98" x2="250" y2="60" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
-          <line x1="180" y1="122" x2="250" y2="160" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
-          <text class="svg-l" x="215" y="105" text-anchor="middle" fill="#1B64DA">clone()</text>
+          <line x1="176" y1="108" x2="176" y2="130" stroke="#3182F6" stroke-width="2" marker-end="url(#b1)"/>
 
           <g>
-            <rect x="252" y="20" width="176" height="76" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
-            <foreignObject x="252" y="20" width="176" height="76">
-              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">WebClient (A)</div><div class="s">baseUrl · 인증 · 커넥터</div></div>
-            </foreignObject>
-          </g>
-          <g>
-            <rect x="252" y="124" width="176" height="76" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
-            <foreignObject x="252" y="124" width="176" height="76">
-              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">WebClient (B)</div><div class="s">baseUrl · 인증 · 커넥터</div></div>
+            <rect x="16" y="132" width="320" height="84" rx="14" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="16" y="132" width="320" height="84">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">spring.http.serviceclient.&lt;group&gt;</div><div class="d">base-url · default-header · connect-timeout · read-timeout · redirects · cookie-handling · ssl · apiversion</div></div>
             </foreignObject>
           </g>
 
-          <line x1="430" y1="58" x2="498" y2="58" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
-          <line x1="430" y1="162" x2="498" y2="162" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
-          <text class="svg-l" x="464" y="46" text-anchor="middle" fill="#0A8F5B">Adapter</text>
-          <text class="svg-l" x="464" y="150" text-anchor="middle" fill="#0A8F5B">Adapter</text>
+          <line x1="176" y1="218" x2="176" y2="240" stroke="#3182F6" stroke-width="2" marker-end="url(#b1)"/>
 
           <g>
-            <rect x="500" y="20" width="204" height="76" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
-            <foreignObject x="500" y="20" width="204" height="76">
-              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">공급사 A 클라이언트</div><div class="s">HTTP Interface · Mono 반환</div></div>
-            </foreignObject>
-          </g>
-          <g>
-            <rect x="500" y="124" width="204" height="76" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
-            <foreignObject x="500" y="124" width="204" height="76">
-              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">공급사 B 클라이언트</div><div class="s">HTTP Interface · Mono 반환</div></div>
+            <rect x="16" y="242" width="320" height="62" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+            <foreignObject x="16" y="242" width="320" height="62">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">그룹마다 별도 커넥터</div><div class="d">공급사별 차등 타임아웃이 여기서 성립한다</div></div>
             </foreignObject>
           </g>
 
-          <line x1="500" y1="110" x2="704" y2="110" stroke="#8B95A1" stroke-width="1.4" stroke-dasharray="5 4"/>
-          <text class="svg-s" x="602" y="222" text-anchor="middle" fill="#8B95A1">서로 다른 인터페이스 — 루프로 못 찍는다</text>
+          <g>
+            <rect x="376" y="36" width="328" height="60" rx="14" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+            <foreignObject x="376" y="36" width="328" height="60">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">flatMap(fn, maxConcurrent)</div><div class="d">동시 호출 상한 — 그룹 키에 없다</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="376" y="104" width="328" height="60" rx="14" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+            <foreignObject x="376" y="104" width="328" height="60">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">retryWhen(...)</div><div class="d">재시도 — 그룹 키에 없다</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="376" y="172" width="328" height="60" rx="14" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+            <foreignObject x="376" y="172" width="328" height="60">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">onErrorResume(값)</div><div class="d">부분 실패 흡수 — fallback은 반드시 값</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="376" y="240" width="328" height="64" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="376" y="240" width="328" height="64">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">block(예산) — 모듈 경계</div><div class="d">리액티브 타입이 여기서 소멸한다</div></div>
+            </foreignObject>
+          </g>
         </svg>
       </div>
-      <figcaption><b>그림 1.</b> 배선 흐름. 프로토타입 빌더를 <b>clone</b>해 공급사별로 갈라놓는 것이 시작점이다<a href="#r4" class="cite">[4]</a>.</figcaption>
+      <figcaption><b>그림 1.</b> 버전을 올려서 왼쪽으로 옮겨간 것은 <b>타임아웃 하나</b>다. 오른쪽의 붉은 세 칸은 3.5에서도 4.1에서도 똑같이 손으로 쓴다.</figcaption>
     </figure>
 
-    <div class="note warn"><span class="tag">함정</span>Boot 문서가 직접 경고한다 — <em>"WebClient.Builder instances are stateful: Any change on the builder is reflected in all clients subsequently created with it."</em> 같은 빌더를 두 번 커스터마이즈하면 <strong>A의 설정이 B에 샌다.</strong> 조용히 틀리는 종류의 버그다<a href="#r4" class="cite">[4]</a>.</div>
+    <div class="note key"><span class="tag">핵심</span>이 경계가 F3a 범위 판단의 근거다. 왼쪽은 <strong>설정 파일 한 벌</strong>이라 설계가 정할 것이 값뿐이다. 오른쪽 세 칸은 전부 <strong>같은 체인 한 자리</strong>에 붙으므로, 그중 하나만 떼어 다른 feature로 미루면 체인이 반쪽으로 남는다.</div>
+
+    <h3 id="s3-2">D안이 성립하는지 바이트코드로 확인한 것</h3>
+
+    <p>Boot 4의 그룹 등록에 대해서는 공개 문서보다 <strong>저장소가 실제로 내려받은 jar</strong>가 더 확실한 근거다. 아래는 이번에 이 프로젝트가 의존하는 아티팩트를 직접 열어 확인한 사실이다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>확인한 것</th><th>결과</th><th>어디서</th></tr></thead>
+        <tbody>
+          <tr><td>WebClient로도 그룹 등록이 되나</td><td><span class="term">ClientType</span>에 <span class="term">REST_CLIENT</span> · <span class="term">WEB_CLIENT</span> · <span class="term">UNSPECIFIED</span> 세 상수가 있다</td><td>spring-web 7.0.9<br><span class="term">HttpServiceGroup$ClientType</span></td></tr>
+          <tr><td>애노테이션이 받는 것</td><td><span class="term">value</span> · <span class="term">types</span> · <span class="term">group</span> · <span class="term">basePackageClasses</span> · <span class="term">basePackages</span> · <span class="term">clientType</span></td><td>spring-web 7.0.9<br><span class="term">ImportHttpServices</span></td></tr>
+          <tr><td>그룹마다 커넥터가 갈리나</td><td><span class="term">ReactiveHttpServiceClientAutoConfiguration</span>이 <span class="term">PropertiesWebClientHttpServiceGroupConfigurer</span>를 등록하고, 그것이 <span class="term">ClientHttpConnectorBuilder</span>를 받는다</td><td>spring-boot-webclient 4.1.1<br>자동설정 imports 3줄 중 1줄</td></tr>
+          <tr><td>프로퍼티 접두사</td><td>상수 문자열 <span class="term">spring.http.serviceclient</span></td><td>spring-boot-http-client 4.1.1<br><span class="term">HttpServiceClientProperties</span></td></tr>
+          <tr><td>그룹 키 전체</td><td><span class="term">baseUrl</span> · <span class="term">defaultHeader</span> · <span class="term">apiversion</span> / <span class="term">redirects</span> · <span class="term">connectTimeout</span> · <span class="term">readTimeout</span> · <span class="term">cookieHandling</span> · <span class="term">ssl</span> — <strong>그게 전부다</strong></td><td><span class="term">HttpClientProperties</span>와 상위 <span class="term">HttpClientSettingsProperties</span>의 필드 목록</td></tr>
+          <tr><td>인터페이스로 주입되나</td><td>등록기가 클라이언트 타입마다 빈 정의를 만들고 <span class="term">setBeanClassName</span>에 인터페이스를, 인스턴스 공급자에 <span class="term">registry.getClient(group, type)</span>를 건다</td><td>spring-web 7.0.9<br><span class="term">AbstractHttpServiceRegistrar</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">해소된 걱정</span>"쓰는 쪽에서 인터페이스 메서드 호출로 확실히 쓸 수 있어야 한다"는 요구는 <strong>프레임워크가 이미 만족시킨다.</strong> 그룹 등록은 레지스트리 하나만 만드는 것이 아니라 <strong>인터페이스마다 별도 빈</strong>을 등록하므로, 쓰는 쪽은 레지스트리를 몰라도 되고 타입으로 주입받아 그냥 메서드를 부르면 된다. 다만 그 프록시는 <span class="term">Mono</span>를 반환하므로, <strong>포트 인터페이스는 그것과 별개</strong>다 — 리액티브 타입을 <span class="term">core</span>로 흘리지 않으려면 어댑터가 한 겹 더 필요하다.</div>
+
+    <div class="note warn"><span class="tag">확인 못 한 것</span><span class="term">@ImportHttpServices</span>를 <strong><span class="term">supplier-client</span> 모듈 안의 <span class="term">@Configuration</span>에 두었을 때 <span class="term">api-app</span>의 컴포넌트 스캔이 그것을 집어 오는지</strong>는 아직 확인하지 않았다. <span class="term">api-app</span>은 어댑터 모듈을 <span class="term">runtimeOnly</span>로만 의존하므로(D-MS-5) 컴파일 시점에 그 설정 클래스를 참조할 수 없고, 스캔 경로가 닿는지는 패키지 배치에 달렸다. <strong>문서로 판단하지 않고 최소 예제를 실제로 태워서 확정한다.</strong></div>
   </section>
 
   <section id="s4" class="fade">
@@ -589,6 +631,8 @@
     </div>
 
     <p>기본 동시성 <strong>256</strong>은 <span class="term">Queues.SMALL_BUFFER_SIZE</span>에서 온다<a href="#r18" class="cite">[18]</a>. 공급사가 둘뿐인 지금은 값 자체가 무의미하지만, <strong>상한을 명시적으로 적는 행위 자체가</strong> 세 축 중 하나에 대한 답이다. 생략하면 "제한 없음"과 사실상 같은 상태로 남는다.</p>
+
+    <div class="note warn"><span class="tag">버전 격차</span>이 절의 출처 6건(15~20번)은 <strong>reactor-core 3.7.11</strong>에 고정돼 있는데, Boot 4.1.1이 끌어오는 실제 런타임은 <strong>3.8.7</strong>이다. 출처를 조용히 3.8 URL로 바꾸면 검증하지 않은 것을 검증한 것처럼 만드는 셈이라 그대로 두고, 대신 <strong>핵심 수치만 3.8.7 jar에서 직접 다시 확인했다</strong> — <span class="term">Queues</span>의 정적 초기화가 <span class="term">SMALL_BUFFER_SIZE = max(16, prop "reactor.bufferSize.small" ?: 256)</span>, <span class="term">XS_BUFFER_SIZE = max(8, prop "reactor.bufferSize.x" ?: 32)</span>로 <strong>3.7.11과 동일</strong>하다. 표의 나머지 행(zip의 취소 의미론 등)은 3.8에서 재확인하지 않았다.</div>
 
     <h3 id="s4-1">zip이 위험한 진짜 이유</h3>
 
@@ -708,7 +752,8 @@
     <ul class="checklist">
       <li><span class="box"></span><b>공식 문서의 예시는 Mono.zip이다.</b> 「Synchronous Use」 페이지에 flatMap도 concurrency도 언급이 없다. 다만 그 문서가 스스로 <em>"merely one example"</em>이라 한정하므로, "공식이 zip을 권장한다"가 아니라 <b>"최소 예시로 zip을 보인다"</b>가 정확하다<a href="#r14" class="cite">[14]</a>.</li>
       <li><span class="box"></span><b>같은 페이지 마지막 문장은 <em>"you should never have to block in a Spring MVC or Spring WebFlux controller"</em>다.</b> 우리는 컨트롤러가 아니라 인프라 어댑터에서 block하고 가상 스레드로 서빙한다. 그러나 <b>이 긴장을 문서가 해소해 주지는 않는다</b> — 프로젝트 판단으로 적어야 한다<a href="#r14" class="cite">[14]</a>.</li>
-      <li><span class="box"></span><b>"리액티브 타입을 인프라 모듈 안에만 둔다"를 직접 서술한 1·2차 출처는 없다.</b> 의존 역전(포트는 domain, 구현은 supplier-client)은 뒷받침된다<a href="#r10" class="cite">[10]</a><a href="#r12" class="cite">[12]</a>. 하지만 리액티브 타입 차단은 별개 주장이므로 <b>이 프로젝트의 규약</b>으로 적고 출처를 붙이지 않는다.</li>
+      <li><span class="box"></span><b>"리액티브 타입을 인프라 모듈 안에만 둔다"를 직접 서술한 1·2차 출처는 없다.</b> 의존 역전(포트는 <span class="term">core</span>, 구현은 <span class="term">supplier-client</span>)은 뒷받침된다<a href="#r10" class="cite">[10]</a><a href="#r12" class="cite">[12]</a>. 하지만 리액티브 타입 차단은 별개 주장이므로 <b>이 프로젝트의 규약</b>으로 적고 출처를 붙이지 않는다.</li>
+      <li><span class="box"></span><b>3장의 개정 근거는 공개 문서가 아니라 jar 바이트코드다.</b> 저장소가 실제로 내려받은 아티팩트를 열어 확인한 것이라 재현은 되지만, <b>클릭해 볼 수 있는 URL이 아니다.</b> 반대로 그래서 "문서에 그렇게 쓰여 있더라"보다 강한 근거이기도 하다 — 확인 명령은 3.2의 표에 아티팩트·클래스명으로 남겼다.</li>
     </ul>
   </section>
 
@@ -724,14 +769,14 @@
       <table>
         <thead><tr><th>항목</th><th>문제</th><th>처리</th></tr></thead>
         <tbody>
-          <tr><td>FAIL 1건</td><td>Boot 4 프로퍼티 클래스 페이지에 접두사 문자열이 없다. 클래스 존재로부터 접두사를 추론한 주장이었다</td><td><strong>목록에서 제외.</strong> 이 문서는 그 주장을 쓰지 않는다</td></tr>
+          <tr><td>FAIL 1건</td><td>Boot 4 프로퍼티 클래스 페이지에 접두사 문자열이 없다. 클래스 존재로부터 접두사를 추론한 주장이었다</td><td><strong>목록에서 제외.</strong> 개정 후 3장이 이 접두사를 쓰지만, 근거는 그 페이지가 아니라 <strong>클래스 상수 실측</strong>으로 바꿔 세웠다</td></tr>
           <tr><td>인용 범위 축소</td><td>Spring 공식 블로그의 시점 접두사와 현재 GA 접두사가 다르다</td><td>프로퍼티 <strong>이름</strong>의 근거로 쓰지 않고, "레지스트리 계층이 7·4 신규"에만 쓴다</td></tr>
           <tr><td>서술 정정</td><td>merge(Iterable)만 기본 동시성을 <strong>간접</strong> 위임한다</td><td>"직접 위임"이라 쓰지 않는다</td></tr>
         </tbody>
       </table>
     </div>
 
-    <div class="note key"><span class="tag">남는 결론</span>FAIL 처리 후에도 <strong>"Boot 3.5에는 자동 등록이 없다"</strong>는 흔들리지 않는다. 3.5 페이지 전문의 문자열 부재<a href="#r4" class="cite">[4]</a>와 <span class="term">Since 7.0</span> 자바독<a href="#r8" class="cite">[8]</a>이 각각 독립적으로 뒷받침한다.</div>
+    <div class="note key"><span class="tag">남는 결론</span>FAIL 처리 후에도 <strong>"Boot 3.5에는 자동 등록이 없다"</strong>는 흔들리지 않는다. 3.5 페이지 전문의 문자열 부재<a href="#r4" class="cite">[4]</a>와 <span class="term">Since 7.0</span> 자바독<a href="#r8" class="cite">[8]</a>이 각각 독립적으로 뒷받침한다. 이 결론이 <strong>버전을 올린 근거</strong>가 됐으므로, 개정 후에도 이 절을 지우지 않는다.</div>
   </section>
 
   <section id="refs" class="fade">

@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F3a webclient-config 설계 협의</title>
+<!-- 폰트: Pretendard(본문) + JetBrains Mono(코드/라벨). 이 두 개만 사용한다. -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     색/폰트/그림자는 반드시 이 변수로만 참조한다 (임의 hex 금지).
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  /* scroll progress bar */
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  /* page sheet (흰 카드) */
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  /* .sheet.wide — 스키마/ER 같은 표 중심 문서용 넓은 시트 (2026-09-04 추가). SVG viewBox 는 1140 기준 */
+  .sheet.wide{max-width:1300px}
+
+  /* cover */
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  /* toc — 심플 인덱스 (유일한 목차 컴포넌트, 2026-08-02 재설계)
+     1열 세로 나열 = 읽는 순서 그대로. 카드·박스·그리드 금지 (구 2열 카드형·toc-deep 카드형 폐기).
+     하위 항목이 필요하면 li 안에 .ts 를 들여쓴 평문 링크로만 추가한다. */
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  /* sections */
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  /* stchip — 상태 칩: 목록·표 항목의 진행 상태 (ok=확정 / mid=뼈대 / open=미정) */
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  /* blockquote (인용) */
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  /* note / callout (.note 기본 · .key 파랑 · .warn 빨강) */
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  /* figure + SVG 다이어그램 컨테이너 */
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  /* foreignObject 자동 줄바꿈 박스 — 글자가 박스를 절대 넘지 않게 자동 줄바꿈+중앙정렬.
+     라벨 길이가 불확실하거나 한글이 많은 박스엔 .svg-t/.svg-s <text> 대신 이걸 쓴다 (폭 계산 불필요). */
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  /* .fo.left — 표 셀·설명 칸용 좌측 정렬 변형 (2026-09-04 추가). .d 는 본문 설명 텍스트 */
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  /* wide figure — 시트(860px) 폭을 넘는 다이어그램 (긴 시퀀스/타임라인 전용) */
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  /* code block (mac 윈도우 스타일) */
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  /* toggle — 접기/펼치기 (details/summary) */
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  /* 2-column 비교 카드 (.x 중립 · .o 강조) */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  /* table */
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  /* fn-card — 함수/API 시그니처 카드 (어두운 시그니처 바 + 명세 표) */
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  /* 참고문헌 리스트 */
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  /* checklist — 체크 항목 리스트. li 안에 <span class="box"></span> + 텍스트. 완료는 li.done
+     ⚠️ li 는 display:block + 박스는 position:absolute 다 (display:flex 금지).
+     li 안에는 <b>/<strong>/<span class="term"> 같은 인라인 요소가 섞이는데,
+     li 를 flex 로 두면 그 인라인 요소들이 각각 별도 flex item 이 되어
+     좁은 칸에 글자가 "세로로" 쌓이며 깨진다. 그래서 텍스트는 일반 인라인 흐름으로 둔다. */
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  /* carousel — 좌우 슬라이드 (분위기 사진 + 캡션). JS는 화살표 스크롤만.
+     사진이 없으면 .ph 가 플레이스홀더로 남는다 (img onerror 로 .empty 부여). */
+  .carousel{position:relative;margin:34px 0}
+  .carousel .track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+    scroll-behavior:smooth;padding:2px 2px 10px;-webkit-overflow-scrolling:touch}
+  .carousel .track::-webkit-scrollbar{height:6px}
+  .carousel .track::-webkit-scrollbar-thumb{background:var(--g300);border-radius:3px}
+  .carousel .track::-webkit-scrollbar-track{background:transparent}
+  .carousel .slide{flex:0 0 82%;scroll-snap-align:center;background:var(--white);
+    border:1px solid var(--g200);border-radius:20px;overflow:hidden;transition:.18s}
+  .carousel .slide:hover{border-color:var(--blue);box-shadow:var(--shadow-sm)}
+  .carousel .ph{position:relative;aspect-ratio:16/9;background:var(--blue-bg2);
+    display:grid;place-items:center;overflow:hidden}
+  .carousel .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .carousel .ph.empty{background:linear-gradient(135deg,var(--blue-bg2),var(--g100))}
+  .carousel .ph.empty::after{content:attr(data-empty);font-family:var(--mono);font-size:11.5px;
+    font-weight:500;color:var(--g400);letter-spacing:.02em;text-align:center;padding:0 20px;line-height:1.6}
+  .carousel .cap{padding:18px 20px 20px}
+  .carousel .cap .t{display:block;font-size:15.5px;font-weight:700;color:var(--g900);line-height:1.4;margin-bottom:6px}
+  .carousel .cap .d{display:block;font-size:14px;font-weight:500;color:var(--g600);line-height:1.6;word-break:keep-all}
+  .carousel .cap .d b{color:var(--g800);font-weight:700}
+  .carousel .cap .src{display:block;font-family:var(--mono);font-size:10px;color:var(--g400);
+    margin-top:9px;line-height:1.5;word-break:break-all}
+  .carousel .cap .src a{color:var(--g500);text-decoration:none}
+  .carousel .cap .src a:hover{color:var(--blue);text-decoration:underline}
+  .carousel .nav{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
+  .carousel .nav button{width:36px;height:36px;border-radius:12px;border:1px solid var(--g200);
+    background:var(--white);color:var(--g600);cursor:pointer;display:grid;place-items:center;
+    font-family:var(--mono);font-size:15px;font-weight:700;transition:.15s;padding:0}
+  .carousel .nav button:hover{border-color:var(--blue);color:var(--blue-deep);background:var(--blue-bg2)}
+  @media(max-width:720px){.carousel .slide{flex:0 0 88%}}
+
+  /* docnav — 문서 시리즈(여러 HTML 파일) 간 네비게이션 바. cover 와 toc 사이에 둔다 */
+  .docnav{display:flex;flex-wrap:wrap;gap:8px;padding:20px 56px;background:var(--white);
+    border-bottom:1px solid var(--g100)}
+  .docnav a{font-family:var(--mono);font-size:12.5px;font-weight:700;text-decoration:none;
+    padding:9px 14px;border-radius:100px;background:var(--g50);border:1px solid var(--g200);
+    color:var(--g600);transition:.18s}
+  .docnav a:hover{border-color:var(--blue);color:var(--blue-deep);transform:translateY(-1px)}
+  .docnav a.cur{background:var(--blue-bg);border-color:#cfe4ff;color:var(--blue-deep)}
+  .docnav a .n{color:var(--g400);margin-right:6px}
+  .docnav a.cur .n{color:var(--blue)}
+
+  /* book-nav — 책 시리즈 내비게이션 (breadcrumb + prev/next). 스니펫: components.md */
+  .book-nav-crumb{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:15px 56px;
+    background:var(--g50);border-bottom:1px solid var(--g100);
+    font-family:var(--mono);font-size:12px;font-weight:500;color:var(--g600)}
+  .book-nav-crumb a{color:var(--blue);text-decoration:none;font-weight:700}
+  .book-nav-crumb a:hover{text-decoration:underline}
+  .book-nav-crumb .sep{color:var(--g300)}
+  .book-nav-crumb b{color:var(--g800);font-weight:700}
+  .book-nav-foot{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;
+    padding:26px 56px;border-top:1px solid var(--g100);background:var(--g50)}
+  .book-nav-foot .prev,.book-nav-foot .next{display:block;border:1px solid var(--g200);border-radius:14px;
+    padding:13px 17px;text-decoration:none;background:var(--white);transition:.18s}
+  .book-nav-foot a.prev:hover,.book-nav-foot a.next:hover{border-color:var(--blue);box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+  .book-nav-foot .dir{display:block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    color:var(--g500);letter-spacing:.04em;margin-bottom:4px}
+  .book-nav-foot .t{display:block;font-size:13.5px;font-weight:700;color:var(--g900);line-height:1.4}
+  .book-nav-foot .next{text-align:right}
+  .book-nav-foot .toc-link{font-family:var(--mono);font-size:12px;font-weight:700;text-decoration:none;
+    color:var(--blue-deep);background:var(--blue-bg);border:1px solid #cfe4ff;border-radius:100px;
+    padding:10px 18px;transition:.18s}
+  .book-nav-foot .toc-link:hover{border-color:var(--blue)}
+  .book-nav-foot .off{opacity:.6;background:var(--g100);cursor:default}
+  .book-nav-foot .off .t{color:var(--g500)}
+
+  /* book-toc — 책 목차 (허브 전용: 장 행 + 상태 배지). 스니펫: components.md */
+  .bk-part{margin:28px 0}
+  .bk-part-h{display:flex;align-items:baseline;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+  .bk-part-h .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.05em}
+  .bk-part-h .t{font-size:17px;font-weight:800;color:var(--g900)}
+  .bk-list{list-style:none;margin:0;padding:0;border:1px solid var(--g200);border-radius:16px;
+    overflow:hidden;background:var(--white)}
+  .bk-list>li{border-top:1px solid var(--g100)}
+  .bk-list>li:first-child{border-top:none}
+  .bk-list>li>a,.bk-list>li>.row{display:flex;align-items:center;gap:14px;padding:13px 18px;
+    text-decoration:none;transition:background .15s}
+  .bk-list>li>a:hover{background:var(--blue-bg2)}
+  .bk-list .no{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--g400);flex:none;width:32px}
+  .bk-list .tt{font-size:14.5px;font-weight:700;color:var(--g900);line-height:1.45;min-width:0}
+  .bk-list .tt small{display:block;font-size:12.5px;font-weight:500;color:var(--g500)}
+  .bk-list .bdg{margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;font-weight:700;
+    padding:4px 10px;border-radius:100px}
+  .bk-list .bdg.done{background:var(--blue-bg);color:var(--blue-deep)}
+  .bk-list .bdg.part{background:var(--g100);color:var(--g600)}
+  .bk-list .bdg.live{background:var(--green-bg);color:var(--green-deep)}
+  .bk-list .bdg.slot{background:none;border:1px dashed var(--g400);color:var(--g500)}
+  .bk-list>li.slot .tt{color:var(--g500);font-weight:600}
+  .bk-list>li.slot .tt small{color:var(--g400)}
+
+  /* docfab — 플로팅 퀵내비 (섹션 점프 + 허브 복귀). 스니펫: components.md */
+  .docfab{position:fixed;right:22px;bottom:22px;z-index:60;font-family:var(--sans)}
+  .docfab>button{width:48px;height:48px;border-radius:16px;border:1px solid var(--g200);
+    background:var(--white);box-shadow:var(--shadow);cursor:pointer;display:grid;place-items:center;
+    color:var(--g600);transition:.18s;padding:0}
+  .docfab>button:hover{color:var(--blue-deep);border-color:var(--blue)}
+  .docfab>button svg{width:20px;height:20px}
+  .docfab .panel{position:absolute;right:0;bottom:58px;width:min(320px,84vw);max-height:min(430px,68vh);
+    overflow:auto;background:var(--white);border:1px solid var(--g200);border-radius:18px;
+    box-shadow:var(--shadow);padding:10px;display:none}
+  .docfab.open .panel{display:block}
+  .docfab .panel .hd{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--g500);
+    letter-spacing:.06em;padding:8px 10px 4px}
+  .docfab .panel a{display:block;padding:8px 10px;border-radius:10px;font-size:13.5px;font-weight:600;
+    color:var(--g800);text-decoration:none;line-height:1.4}
+  .docfab .panel a:hover{background:var(--blue-bg2);color:var(--blue-deep)}
+  .docfab .panel a.sub{padding-left:24px;font-size:12.5px;font-weight:500;color:var(--g600)}
+  .docfab .panel .hub{margin-top:6px;border-top:1px solid var(--g100);padding-top:8px}
+  .docfab .panel a.hubl{color:var(--blue-deep);font-weight:700}
+  @media(max-width:720px){.docfab{right:14px;bottom:14px}}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer,.docnav{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+    .book-nav-crumb{padding:13px 24px}
+    .book-nav-foot{padding:20px 24px;grid-template-columns:1fr;gap:10px}
+    .book-nav-foot .next{text-align:left}
+    .book-nav-foot .toc-link{justify-self:start}
+    .bk-list .bdg{display:none}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>F3a · webclient-config · 설계 협의</span>
+      <h1 class="title">공통 HTTP 배선을<br><span class="hl">어떤 모양으로 내놓을 것인가</span></h1>
+      <p class="lede">범위는 확정됐다. 남은 것은 <b>모양</b>이다 — 조합기가 무엇을 받고 무엇을 돌려주는지, 그리고 그 경계가 어느 모듈에 그어지는지. 이 문서는 읽는 문서가 아니라 <b>고르기 위한 문서</b>다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">STACK</span><span class="v">Java 25 · Boot 4.1.1 · Framework 7.0.9 · reactor-core 3.8.7</span></div>
+        <div class="chip"><span class="k">모듈</span><span class="v">core ← supplier-client</span></div>
+        <div class="chip"><span class="k">상태</span><span class="v">② 범위 확정 완료 · ⑤ 협의 중</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">확정된 범위<span class="hint">체크포인트 통과</span></a></li>
+      <li>
+        <a href="#s2">D-F3A-1 조합기와 포트의 모양</a>
+        <ul class="ts">
+          <li><a href="#s2-1">병렬이 어디서 나오는가</a></li>
+        </ul>
+      </li>
+      <li><a href="#s3">안 D — 포트를 미루고 조합기만<span class="hint">검토함</span></a></li>
+      <li>
+        <a href="#s4">확정 — 목록 포트를 지금 만든다<span class="hint">채택</span></a>
+        <ul class="ts">
+          <li><a href="#s4-1">클래스 — 무엇이 무엇을 참조하는가</a></li>
+          <li><a href="#s4-2">시퀀스 — 한쪽이 실패할 때</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#s5">연산자마다 역할 하나씩<span class="hint">체인 확정</span></a>
+        <ul class="ts">
+          <li><a href="#s5-1">예산 부등식 — 기동 시 검증</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#s6">포트 계약<span class="hint">세 줄</span></a>
+        <ul class="ts">
+          <li><a href="#s6-1">예외가 나가는 자리는 한 군데뿐</a></li>
+          <li><a href="#s6-2">F3에 넘기는 계약</a></li>
+        </ul>
+      </li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">SCOPE</p><h2 class="sec">확정된 범위</h2></div>
+    </div>
+
+    <p class="lead">Boot 4.1.1로 올라가면서 F3a가 <strong>작아졌다.</strong> 타임아웃이 코드에서 yaml로 내려갔고, 재시도는 F9에 남기기로 했다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>결정</th><th>근거</th></tr></thead>
+        <tbody>
+          <tr><td>클라이언트 생성</td><td><strong>포함</strong> — <span class="term">@ImportHttpServices</span> 그룹 등록</td><td>Boot 4가 그룹마다 커넥터를 따로 만든다</td></tr>
+          <tr><td>타임아웃</td><td><strong>포함</strong> — 단 yaml 그룹 키로</td><td>코드가 아니라 설정이 된다</td></tr>
+          <tr><td>동시 호출 상한 · 예산</td><td><strong>포함</strong> — 조합기와 <span class="term">@ConfigurationProperties</span></td><td>그룹 키에 없어 코드 몫</td></tr>
+          <tr><td>실패를 값으로 흡수</td><td><strong>포함</strong> — 구조화된 <span class="term">Failure</span></td><td>fallback이 값이어야 조합기가 성립</td></tr>
+          <tr><td>로깅 필터</td><td><strong>포함</strong> — 인증 키 마스킹</td><td>완료 기준에 명시</td></tr>
+          <tr><td>재시도</td><td><strong>제외 → F9</strong></td><td>F9가 수단 비교를 미결로 들고 있어 선점하면 안 된다</td></tr>
+          <tr><td>상관 ID 전파 · 메트릭 · 이벤트</td><td><strong>제외</strong></td><td>소비자·sink 부재 (DDD-8). 알릴 <em>값</em>만 만들어 둔다</td></tr>
+          <tr><td>공급사별 인터페이스 · DTO</td><td><strong>제외 → F3</strong></td><td>A·B의 실패 표현이 달라 F3 지식</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">DDD 적용 여부</span><strong>전술 패턴 미적용.</strong> 불변식도 상태 전이도 없는 인프라 배선이고 트랜잭션 자체가 없어 Transaction Script도 아니다(<span class="term">coding-standard</span> 「적용하지 않을 때」). 도메인 모델에서 새로 생기는 것은 <strong>결과 표현 VO 두 개</strong>(<span class="term">Outcome</span>·<span class="term">Failure</span>)뿐이며, 둘 다 <span class="term">DDD-4</span>의 불변·자기검증 규칙을 따른다.</div>
+  </section>
+
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">DECISION</p><h2 class="sec">D-F3A-1 조합기와 포트의 모양</h2></div>
+    </div>
+
+    <p class="lead">"F3a가 포트를 정의한다"를 고른 순간 <strong>배타적인 선택 하나가 따라온다.</strong> 지금 정의할 수 있는 포트는 범용 조합 포트뿐인데, 범용이려면 <span class="term">core</span>가 Reactor를 못 보므로 인자가 <strong>블로킹 람다</strong>가 된다. 그러면 진짜 병렬 상한이 연산자가 아니라 스레드 풀에서 나온다.</p>
+
+    <div class="note warn"><span class="tag">배타 관계</span><strong>"F3a가 포트를 갖는다"</strong>와 <strong>"조합이 진짜 논블로킹이다"</strong>는 지금 동시에 성립하지 않는다. 도메인 포트(<span class="term">searchAll(query, targets)</span>)라면 논블로킹이 되지만, 그 반환 타입은 F5 소관이라 <strong>지금 정할 수 없다.</strong> 아래 세 안은 이 긴장을 각각 다른 쪽으로 푼다.</div>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 1120 452" role="img" aria-label="세 가지 안의 클래스 배치 비교. 위 레인은 core.application, 아래 레인은 supplier-client. 안 A는 블로킹 람다를 받는 범용 포트와 Reactor 조합기, 안 B는 도메인 게이트웨이 포트와 Mono 직접 조합, 안 C는 블로킹 람다 포트와 가상 스레드 조합기다">
+          <rect x="8" y="30" width="1104" height="222" rx="18" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.2"/>
+          <rect x="8" y="264" width="1104" height="176" rx="18" fill="#F2F4F6" stroke="#E5E8EB" stroke-width="1.2"/>
+          <text class="svg-l" x="22" y="50" fill="#8B95A1">core.application</text>
+          <text class="svg-l" x="22" y="284" fill="#8B95A1">supplier-client</text>
+
+          <text class="svg-l" x="180" y="18" text-anchor="middle" fill="#191F28">안 A — 블로킹 람다 포트</text>
+          <text class="svg-l" x="560" y="18" text-anchor="middle" fill="#191F28">안 B — 도메인 게이트웨이 포트</text>
+          <text class="svg-l" x="940" y="18" text-anchor="middle" fill="#191F28">안 C — 가상 스레드 조합</text>
+
+          <line x1="370" y1="24" x2="370" y2="446" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+          <line x1="750" y1="24" x2="750" y2="446" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+
+          <g>
+            <rect x="16" y="60" width="328" height="58" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="16" y="60" width="328" height="58">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">«port» SupplierFanOut</div><div class="s">+ &lt;T&gt; List&lt;Outcome&lt;T&gt;&gt; callAll(List&lt;Task&lt;T&gt;&gt;)</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="16" y="126" width="328" height="58" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="16" y="126" width="328" height="58">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">record Task&lt;T&gt;</div><div class="s">SupplierId supplierId</div><div class="s">Supplier&lt;T&gt; action ← 블로킹 람다</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="16" y="192" width="328" height="52" rx="12" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="16" y="192" width="328" height="52">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">record Outcome&lt;T&gt; · Failure</div><div class="s">T value | Failure(kind, elapsed)</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="396" y="60" width="328" height="58" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+            <foreignObject x="396" y="60" width="328" height="58">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">«port» StaySupplierGateway</div><div class="s">+ List&lt;Outcome&lt;Stays&gt;&gt; searchAll(Query, Targets)</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="396" y="126" width="328" height="58" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3" stroke-dasharray="5 4"/>
+            <foreignObject x="396" y="126" width="328" height="58">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">Query · Stays</div><div class="s">F5·F7 소관 — F3a가 지금 못 정한다</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="396" y="192" width="328" height="52" rx="12" fill="#FFF5F5" stroke="#F04452" stroke-width="1.3"/>
+            <foreignObject x="396" y="192" width="328" height="52">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">record Outcome&lt;T&gt; · Failure</div><div class="s">T value | Failure(kind, elapsed)</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="776" y="60" width="328" height="58" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="776" y="60" width="328" height="58">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">«port» SupplierFanOut</div><div class="s">+ &lt;T&gt; List&lt;Outcome&lt;T&gt;&gt; callAll(List&lt;Task&lt;T&gt;&gt;)</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="776" y="126" width="328" height="58" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="776" y="126" width="328" height="58">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">record Task&lt;T&gt;</div><div class="s">SupplierId supplierId</div><div class="s">Supplier&lt;T&gt; action ← 블로킹 람다</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="776" y="192" width="328" height="52" rx="12" fill="#F0FBF6" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="776" y="192" width="328" height="52">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">record Outcome&lt;T&gt; · Failure</div><div class="s">T value | Failure(kind, elapsed)</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="16" y="294" width="328" height="96" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+            <foreignObject x="16" y="294" width="328" height="96">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">ReactorFanOut</div><div class="s">Mono.fromCallable(action)</div><div class="s">.subscribeOn(boundedElastic)</div><div class="s">.flatMap(fn, maxConcurrent)</div><div class="s">.collectList().block(budget)</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="16" y="396" width="328" height="40" rx="10" fill="#FFF0F0" stroke="#F8D4D4" stroke-width="1.2"/>
+            <foreignObject x="16" y="396" width="328" height="40">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="d">상한이 flatMap(n)과 스레드 풀 <b>두 겹</b> — 축이 흐려진다</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="396" y="294" width="328" height="96" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+            <foreignObject x="396" y="294" width="328" height="96">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">ReactorStayGateway</div><div class="s">- SupplierAClient a (Mono 반환)</div><div class="s">- SupplierBClient b (Mono 반환)</div><div class="s">.flatMap(fn, maxConcurrent)</div><div class="s">.collectList().block(budget)</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="396" y="396" width="328" height="40" rx="10" fill="#E7F9F1" stroke="#BFECD8" stroke-width="1.2"/>
+            <foreignObject x="396" y="396" width="328" height="40">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="d">진짜 논블로킹 · 스레드 안 씀 — 대신 지금 못 만든다</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="776" y="294" width="328" height="96" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+            <foreignObject x="776" y="294" width="328" height="96">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">VirtualThreadFanOut</div><div class="s">Semaphore(maxConcurrent)</div><div class="s">newVirtualThreadPerTaskExecutor()</div><div class="s">invokeAll(tasks, budget)</div><div class="s">Reactor 없음</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="776" y="396" width="328" height="40" rx="10" fill="#F2F4F6" stroke="#D1D6DB" stroke-width="1.2"/>
+            <foreignObject x="776" y="396" width="328" height="40">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="d">상한이 한 겹으로 명확 — 공급사마다 block 하게 된다</div></div>
+            </foreignObject>
+          </g>
+        </svg>
+      </div>
+      <figcaption><b>그림 1.</b> 같은 자리의 박스를 세로로 비교할 것. 위 레인(<b>core</b>)에서 <b>안 B만 포트가 도메인 타입을 요구</b>하고, 아래 레인에서 <b>안 B만 블로킹 람다 없이 Mono를 직접 조합</b>한다. 안 A와 안 C는 포트가 같고 <b>조합 수단만</b> 다르다.</figcaption>
+    </figure>
+
+    <h3 id="s2-1">병렬이 어디서 나오는가 — 같은 요청, 다른 실행</h3>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 02">
+        <svg viewBox="0 0 1120 316" role="img" aria-label="왼쪽은 안 A와 안 C의 실행 흐름으로 유스케이스가 조합기를 부르면 공급사마다 워커 스레드가 하나씩 붙어 각자 블로킹 대기한다. 오른쪽은 안 B의 흐름으로 게이트웨이가 Mono 두 개를 이벤트 루프에 올리고 워커 스레드를 하나도 점유하지 않은 채 조합 후 한 번만 대기한다">
+          <defs>
+            <marker id="c1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <text class="svg-l" x="280" y="18" text-anchor="middle" fill="#C9303C">안 A · 안 C — 태스크마다 스레드</text>
+          <text class="svg-l" x="840" y="18" text-anchor="middle" fill="#0A8F5B">안 B — 태스크마다 구독</text>
+          <line x1="560" y1="28" x2="560" y2="304" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+
+          <g>
+            <rect x="24" y="34" width="120" height="38" rx="10" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+            <foreignObject x="24" y="34" width="120" height="38"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">UseCase</div></div></foreignObject>
+            <line x1="84" y1="72" x2="84" y2="286" stroke="#B0B8C1" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="164" y="34" width="140" height="38" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+            <foreignObject x="164" y="34" width="140" height="38"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">FanOut</div></div></foreignObject>
+            <line x1="234" y1="72" x2="234" y2="286" stroke="#3182F6" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="324" y="34" width="100" height="38" rx="10" fill="#FFF0F0" stroke="#F04452" stroke-width="1.2"/>
+            <foreignObject x="324" y="34" width="100" height="38"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">워커 #1</div></div></foreignObject>
+            <line x1="374" y1="72" x2="374" y2="286" stroke="#F04452" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="440" y="34" width="100" height="38" rx="10" fill="#FFF0F0" stroke="#F04452" stroke-width="1.2"/>
+            <foreignObject x="440" y="34" width="100" height="38"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">워커 #2</div></div></foreignObject>
+            <line x1="490" y1="72" x2="490" y2="286" stroke="#F04452" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+
+          <line x1="84" y1="98" x2="228" y2="98" stroke="#8B95A1" stroke-width="1.8" marker-end="url(#c1)"/>
+          <text class="svg-s" x="156" y="92" text-anchor="middle" fill="#6B7684">callAll(tasks)</text>
+          <line x1="234" y1="130" x2="368" y2="130" stroke="#F04452" stroke-width="1.8" marker-end="url(#c1)"/>
+          <line x1="234" y1="154" x2="484" y2="154" stroke="#F04452" stroke-width="1.8" marker-end="url(#c1)"/>
+          <text class="svg-s" x="320" y="124" text-anchor="middle" fill="#C9303C">action.get()</text>
+
+          <rect x="356" y="166" width="36" height="86" rx="8" fill="#FFF0F0" stroke="#F04452" stroke-width="1.2"/>
+          <rect x="472" y="166" width="36" height="86" rx="8" fill="#FFF0F0" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-s" x="432" y="150" text-anchor="middle" fill="#C9303C">블로킹 점유</text>
+
+          <line x1="368" y1="266" x2="240" y2="266" stroke="#8B95A1" stroke-width="1.8" marker-end="url(#c1)"/>
+          <line x1="484" y1="278" x2="240" y2="278" stroke="#8B95A1" stroke-width="1.8" marker-end="url(#c1)"/>
+
+          <g>
+            <rect x="584" y="34" width="120" height="38" rx="10" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+            <foreignObject x="584" y="34" width="120" height="38"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">UseCase</div></div></foreignObject>
+            <line x1="644" y1="72" x2="644" y2="286" stroke="#B0B8C1" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="724" y="34" width="140" height="38" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+            <foreignObject x="724" y="34" width="140" height="38"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">Gateway</div></div></foreignObject>
+            <line x1="794" y1="72" x2="794" y2="286" stroke="#3182F6" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="900" y="34" width="180" height="38" rx="10" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+            <foreignObject x="900" y="34" width="180" height="38"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">이벤트 루프</div></div></foreignObject>
+            <line x1="990" y1="72" x2="990" y2="286" stroke="#15C47E" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+
+          <line x1="644" y1="98" x2="788" y2="98" stroke="#8B95A1" stroke-width="1.8" marker-end="url(#c1)"/>
+          <text class="svg-s" x="716" y="92" text-anchor="middle" fill="#6B7684">searchAll(...)</text>
+          <line x1="794" y1="130" x2="984" y2="130" stroke="#15C47E" stroke-width="1.8" marker-end="url(#c1)"/>
+          <line x1="794" y1="154" x2="984" y2="154" stroke="#15C47E" stroke-width="1.8" marker-end="url(#c1)"/>
+          <text class="svg-s" x="890" y="124" text-anchor="middle" fill="#0A8F5B">subscribe ×2</text>
+
+          <rect x="776" y="166" width="36" height="86" rx="8" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="880" y="196" text-anchor="middle" fill="#1B64DA">block() 1회</text>
+          <text class="svg-s" x="880" y="214" text-anchor="middle" fill="#6B7684">워커 스레드 0개</text>
+
+          <line x1="984" y1="272" x2="800" y2="272" stroke="#8B95A1" stroke-width="1.8" marker-end="url(#c1)"/>
+          <line x1="788" y1="292" x2="650" y2="292" stroke="#8B95A1" stroke-width="1.8" marker-end="url(#c1)"/>
+        </svg>
+      </div>
+      <figcaption><b>그림 2.</b> 붉은 세로 막대가 <b>점유된 스레드</b>다. 왼쪽은 공급사 수만큼 늘고 오른쪽은 0개다. 다만 가상 스레드에서는 그 점유 비용이 예전만큼 크지 않다 — 그래서 이건 성능 문제가 아니라 <b>"상한이 어디에 적히는가"</b>의 문제다.</figcaption>
+    </figure>
+
+    <div class="cols">
+      <div class="col x"><h4><span class="mk">안 A</span> 블로킹 람다 + Reactor</h4><p><b>장점.</b> 포트가 완전 범용이라 F3·F5가 무엇을 만들든 안 바뀐다. F3a 혼자서 가짜 태스크로 상한·타임아웃·흡수를 전부 테스트할 수 있다.<br><br><b>단점.</b> 상한이 <span class="term">flatMap(n)</span>과 <span class="term">boundedElastic</span> 크기 <b>두 곳</b>에 생겨, 어느 쪽이 진짜 상한인지 코드만 보고 알 수 없다. WebClient를 논블로킹으로 쓰는 의미도 절반 사라진다.</p></div>
+      <div class="col o"><h4><span class="mk">안 B</span> 도메인 게이트웨이</h4><p><b>장점.</b> 세 축이 전부 Reactor 연산자 하나씩으로 드러나고, Spring 공식이 다중 호출에 권하는 "조합 후 1회 대기" 형태와 정확히 같다. Mono가 모듈 경계를 넘지 않는다.<br><br><b>단점.</b> 포트 반환 타입이 <b>F5의 표준 모델</b>이라 지금 정하면 거의 확실히 F4·F5에서 고친다. F3a 단독으로는 공급사가 없어 완료 기준을 실증하기 어렵다.</p></div>
+    </div>
+
+    <div class="note"><span class="tag">안 C</span><b>가상 스레드 조합.</b> 포트는 안 A와 같고 조합 수단만 <span class="term">Semaphore</span> + <span class="term">newVirtualThreadPerTaskExecutor()</span>다.<br><br><b>장점.</b> 상한이 <span class="term">Semaphore(n)</span> 한 곳에만 있어 가장 읽기 쉽다. Java 25 · MVC · 가상 스레드라는 확정 스택과 가장 자연스럽고, JEP 491로 pinning 우려도 사라졌다. 조합기에서 Reactor 의존이 빠진다.<br><br><b>단점.</b> 공급사 클라이언트마다 <span class="term">block()</span>하게 되는데, Spring 공식 「Synchronous Use」는 다중 호출에 <b>개별 block이 아니라 조합 후 1회</b>를 권한다. <span class="term">WEB_CLIENT</span> 프록시가 주는 <span class="term">Mono</span>를 각자 즉시 소비해 버리는 셈이라, 그룹 등록으로 얻은 논블로킹 I/O를 스스로 되돌린다.</div>
+  </section>
+
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">FOURTH OPTION</p><h2 class="sec">안 D — 포트를 미루고 조합기만 내놓는다</h2></div>
+    </div>
+
+    <p class="lead">세 안이 각각 무언가를 잃는 <strong>이유가 같다.</strong> 셋 다 "F3a가 지금 포트를 정의한다"를 전제로 깔고, 그 전제를 지키려다 논블로킹을 버리거나(A·C) 정할 수 없는 타입을 정한다(B). 전제를 하나만 풀면 잃는 것이 없어진다.</p>
+
+    <div class="note key"><span class="tag">푸는 방법</span><strong>F3a는 결과 타입만 <span class="term">core</span>에 두고, 조합기는 <span class="term">supplier-client</span> 안의 평범한 클래스로 둔다.</strong> 포트 인터페이스는 도메인 타입이 실제로 생기는 F3·F5가 정의하고, 그 구현이 이 조합기를 쓴다. 고르신 의도(<em>core 의존이 F3a에서 생기고 결과 표현을 F3a가 정한다</em>)는 그대로 지켜지고, <strong>못 정하는 것 하나만</strong> 미룬다.</div>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 03">
+        <svg viewBox="0 0 720 384" role="img" aria-label="안 D의 배치. core.application에는 F3a가 정의하는 Outcome과 Failure만 있고 포트 인터페이스 자리는 점선으로 비워 F3와 F5가 채운다. supplier-client에는 조합기 FanOutExecutor와 그룹 등록 설정, 프로퍼티, 마스킹 로그 필터가 있으며 조합기는 Mono를 직접 조합해 한 번만 블로킹한다">
+          <defs>
+            <marker id="d1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="8" y="26" width="704" height="118" rx="16" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.2"/>
+          <rect x="8" y="158" width="704" height="218" rx="16" fill="#F2F4F6" stroke="#E5E8EB" stroke-width="1.2"/>
+          <text class="svg-l" x="22" y="18" fill="#8B95A1">core.application</text>
+          <text class="svg-l" x="22" y="152" fill="#8B95A1">supplier-client</text>
+
+          <g>
+            <rect x="18" y="44" width="330" height="88" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+            <foreignObject x="18" y="44" width="330" height="88">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">record Outcome&lt;T&gt; · Failure</div><div class="s">+ static Outcome&lt;T&gt; success(SupplierId, T)</div><div class="s">+ static Outcome&lt;T&gt; failed(SupplierId, Failure)</div><div class="s">Failure(kind, elapsed, cause)</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="372" y="44" width="330" height="88" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.4" stroke-dasharray="6 5"/>
+            <foreignObject x="372" y="44" width="330" height="88">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">«port» — 아직 비어 있다</div><div class="s">F3·F5가 도메인 타입과 함께 정의</div><div class="s">List&lt;Outcome&lt;Stays&gt;&gt; searchAll(...)</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="18" y="178" width="330" height="126" rx="12" fill="#FFFFFF" stroke="#3182F6" stroke-width="1.4"/>
+            <foreignObject x="18" y="178" width="330" height="126">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">FanOutExecutor</div><div class="s">+ &lt;T&gt; List&lt;Outcome&lt;T&gt;&gt; runAll(</div><div class="s">    List&lt;SupplierCall&lt;T&gt;&gt;)</div><div class="s">.flatMap(fn, maxConcurrent)</div><div class="s">.timeout · .onErrorResume(값)</div><div class="s">.collectList().block(budget)</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="372" y="178" width="330" height="38" rx="10" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="372" y="178" width="330" height="38">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">SupplierHttpClientConfig</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="372" y="222" width="330" height="38" rx="10" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="372" y="222" width="330" height="38">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">FanOutProperties</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="372" y="266" width="330" height="38" rx="10" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="372" y="266" width="330" height="38">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">MaskingExchangeFilter</div></div>
+            </foreignObject>
+          </g>
+
+          <line x1="348" y1="196" x2="366" y2="196" stroke="#15C47E" stroke-width="1.8" marker-end="url(#d1)"/>
+          <line x1="348" y1="240" x2="366" y2="240" stroke="#15C47E" stroke-width="1.8" marker-end="url(#d1)"/>
+          <line x1="348" y1="284" x2="366" y2="284" stroke="#15C47E" stroke-width="1.8" marker-end="url(#d1)"/>
+
+          <line x1="183" y1="178" x2="183" y2="136" stroke="#3182F6" stroke-width="1.8" marker-end="url(#d1)"/>
+          <text class="svg-s" x="196" y="162" fill="#1B64DA">Outcome 만 참조</text>
+
+          <g>
+            <rect x="18" y="318" width="684" height="44" rx="10" fill="#FFFFFF" stroke="#D1D6DB" stroke-width="1.2" stroke-dasharray="6 5"/>
+            <foreignObject x="18" y="318" width="684" height="44">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="d">F3의 게이트웨이 어댑터가 이 조합기를 <b>생성자로 주입받아</b> 쓴다 — 그때 위 점선 포트가 채워진다</div></div>
+            </foreignObject>
+          </g>
+        </svg>
+      </div>
+      <figcaption><b>그림 3.</b> 점선 두 개가 핵심이다 — <b>위 점선</b>은 지금 비워 두는 포트 자리, <b>아래 점선</b>은 F3에서 이어붙는 자리. F3a는 실선 부분만 만들고, <span class="term">core</span>를 향한 화살표는 <b>Outcome 하나</b>뿐이라 <span class="term">Mono</span>가 경계를 넘지 않는다.</figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>기준</th><th>안 A</th><th>안 B</th><th>안 C</th><th>안 D</th></tr></thead>
+        <tbody>
+          <tr><td>병렬 상한이 한 곳에만 있나</td><td>아니오 (두 겹)</td><td>예</td><td>예</td><td><strong>예</strong></td></tr>
+          <tr><td>진짜 논블로킹인가</td><td>아니오</td><td>예</td><td>아니오</td><td><strong>예</strong></td></tr>
+          <tr><td>지금 만들 수 있나</td><td>예</td><td><strong>아니오</strong></td><td>예</td><td><strong>예</strong></td></tr>
+          <tr><td>F3a가 core 의존을 갖나</td><td>예</td><td>예</td><td>예</td><td><strong>예</strong> (Outcome)</td></tr>
+          <tr><td>F3a 단독으로 완료 기준 실증</td><td>예</td><td>아니오</td><td>예</td><td><strong>예</strong></td></tr>
+          <tr><td>WebClient를 고른 이유가 유지되나</td><td>절반</td><td>예</td><td><strong>아니오</strong></td><td><strong>예</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn"><span class="tag">안 D의 단점</span><strong>포트 없이 구현 클래스만 있는 상태가 F3까지 이어진다.</strong> 그동안 <span class="term">api-app</span>은 이 조합기를 부를 수 없고(<span class="term">runtimeOnly</span>라 컴파일 참조가 막혀 있다), 조합기는 <strong>테스트에서만 호출된다.</strong> "쓰는 데가 없는 코드를 먼저 만든다"는 지적이 가능하다 — 다만 이건 F3a를 F3 앞에 따로 둔 순간부터 있던 성질이지 안 D가 만든 것은 아니다.</div>
+  </section>
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">CONFIRMED</p><h2 class="sec">확정 — F3a 는 조합기까지다</h2></div>
+    </div>
+
+    <div class="note warn"><span class="tag">이 절은 한 번 뒤집혔다 (기록)</span>처음에는 <strong>F3a가 목록 포트와 표준 모델까지 정의</strong>하기로 했다. 두 공급사 목록 응답이 구조가 같아 표준 타입을 F2의 검증된 계약에서 그대로 뽑아낼 수 있다는 이유였다. <strong>그런데 F4 절과 대조하니 정면으로 부딪혔다</strong> — 아래 표가 그 충돌이고, 이어지는 4.3이 최종 결론이다. 뒤집힌 과정을 지우지 않는 이유는 <strong>같은 실수를 다시 하지 않기 위해서</strong>다.</div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>F4가 이미 자기 것이라고 적어 둔 것</th><th>내가 F3a에 넣었던 것</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>"도메인 포트 경계를 <strong>여기서 처음 정의한다</strong>"</td><td>포트를 F3a가 정의</td></tr>
+          <tr><td>2</td><td>"<span class="term">maxOccupancy</span>는 저장하지 않으므로 <strong>목록 모델에서 제외</strong>"</td><td>표준 타입에 <strong>넣음</strong> — 명백한 오류</td></tr>
+          <tr><td>3</td><td>"실패 정규화 D12 … <strong>이 유형이 F8의 <span class="term">reason</span> 값 체계가 된다</strong>"</td><td><span class="term">FailureKind</span>를 따로 정의 — 체계가 둘</td></tr>
+          <tr><td>4</td><td>"포트 반환 형태: 예외 vs 값" — <strong>F4의 미결 항목</strong></td><td><span class="term">Outcome</span>으로 이미 확정</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">배운 것</span>2번이 결정적이었다. 표준 모델을 F3a에서 <strong>발명하자마자 틀렸다</strong> — 두 공급사가 둘 다 <span class="term">maxOccupancy</span>를 주니 표준에 넣는 게 맞다고 봤는데, F4는 <strong>저장하지 않는다는 이유로 빼기로</strong> 이미 정해 뒀다. <strong>무엇을 저장하고 무엇을 안 하는지 아는 쪽이 표준 모델을 정해야 한다.</strong> 아래 표는 그 판단 없이 만든 것이라 <strong>참고로만</strong> 남긴다.</div>
+
+    <p class="lead">아래 필드 대응 자체는 F2에 구현·검증된 사실이므로 유효하다. 다만 <strong>어떤 필드를 표준에 넣을지 고르는 일은 F4가</strong> 한다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>표준 이름</th><th>공급사 A</th><th>공급사 B</th><th>이 이름을 고른 이유</th></tr></thead>
+        <tbody>
+          <tr><td><span class="term">supplierPropertyCode</span></td><td><span class="term">hotelCode</span></td><td><span class="term">propertyId</span></td><td>F1 <span class="term">Property</span> 엔티티의 컬럼명과 같다</td></tr>
+          <tr><td><span class="term">propertyName</span></td><td><span class="term">hotelName</span></td><td><span class="term">propertyName</span></td><td>F1 엔티티와 같다</td></tr>
+          <tr><td><span class="term">rooms[]</span></td><td><span class="term">roomTypes[]</span></td><td><span class="term">rooms[]</span></td><td>F1 <span class="term">Room</span> 엔티티 기준</td></tr>
+          <tr><td><span class="term">supplierRoomCode</span></td><td><span class="term">roomTypeCode</span></td><td><span class="term">roomId</span></td><td>F1 엔티티와 같다</td></tr>
+          <tr><td><span class="term">maxOccupancy</span></td><td><span class="term">maxOccupancy</span></td><td><span class="term">maxOccupancy</span></td><td>두 공급사가 이미 같다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 id="s4-3">4.3 최종 — F3a는 조합기까지, 포트와 표준 모델은 F4</h3>
+
+    <p>F3a가 내는 것은 <strong>타입을 모르는 조합기</strong>다. <span class="term">T</span>가 무엇인지는 F4가 호출 지점에서 정한다.</p>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFC56B"></span><span class="dot" style="background:#15C47E"></span><span class="fn">경계 — 누가 무엇을 아는가</span></div>
+      <pre><span class="cm">// F3a — supplier-client. T 가 무엇인지 모른다.</span>
+<span class="kw">public record</span> <span class="ty">SupplierCall</span>&lt;T&gt;(<span class="ty">Supplier</span> supplier, <span class="ty">Mono</span>&lt;T&gt; mono) {}
+
+<span class="kw">public</span> &lt;T&gt; <span class="ty">List</span>&lt;<span class="ty">Outcome</span>&lt;T&gt;&gt; runAll(<span class="ty">List</span>&lt;<span class="ty">SupplierCall</span>&lt;T&gt;&gt; calls)
+
+<span class="cm">// F4 — 여기서 비로소 T 가 표준 목록 모델로 정해진다</span>
+<span class="ty">List</span>&lt;<span class="ty">SupplierCall</span>&lt;<span class="ty">StandardCatalog</span>&gt;&gt; calls = <span class="ty">List</span>.of(
+    <span class="kw">new</span> <span class="ty">SupplierCall</span>&lt;&gt;(A, aClient.hotels()    .map(aTranslator::toStandard)),
+    <span class="kw">new</span> <span class="ty">SupplierCall</span>&lt;&gt;(B, bClient.properties().map(bTranslator::toStandard)));
+<span class="cm">//                        └ AHotelsResponse          └ BEnvelope&lt;BPropertiesData&gt;</span>
+<span class="cm">//                          서로 다른 타입이 각자 .map() 에서 표준으로 바뀐다</span></pre>
+    </div>
+
+    <div class="note key"><span class="tag">왜 조합기 안에서 변환하면 안 되나</span><span class="term">runAll</span>의 <span class="term">T</span>는 한 호출 안에서 <strong>하나의 타입</strong>이다. <span class="term">Outcome&lt;AHotelsResponse&gt;</span>와 <span class="term">Outcome&lt;BEnvelope&lt;…&gt;&gt;</span>를 한 리스트에 담을 방법은 없다. 그래서 변환은 <strong>조합기에 들어오기 전, 각자의 호출 체인 안에서</strong> 끝난다. 반대로 조합기가 변환하려면 공급사별 타입을 알아야 하고 <span class="term">if (supplier == A)</span> 같은 분기가 공용 클래스에 생긴다 — <span class="term">OOP-4</span> 위반이자, F4가 적어 둔 "신규 공급사 추가 시 고칠 지점은 어댑터 1개 + <span class="term">Supplier</span> 값 1개" 구조를 깨는 일이다.</div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>무엇</th><th>하는 일</th><th>소관</th></tr></thead>
+        <tbody>
+          <tr><td>번역 어댑터 (ACL)</td><td>원본 → 표준. <span class="term">.map(aTranslator::toStandard)</span>가 이걸 부른다</td><td>F4</td></tr>
+          <tr><td>포트 어댑터</td><td><span class="term">Supplier</span> 키로 Fetcher를 골라 Call을 만들고, 결과를 D12 유형으로 번역해 포트 타입으로 돌려준다</td><td>F4</td></tr>
+          <tr><td><strong>조합기</strong></td><td>병렬 · 타임아웃 · 예산 · 실패 흡수. <strong>타입을 모른다</strong></td><td><strong>F3a</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note"><span class="tag">그래서 Outcome 은 core 가 아니다</span>F4의 포트는 D12 유형을 쓰는 <strong>자기 결과 타입</strong>을 반환한다. <span class="term">Outcome&lt;T&gt;</span>(<span class="term">Throwable</span>을 든)는 <strong>조합기 ↔ F4 어댑터 사이에서만</strong> 오가고 둘 다 <span class="term">supplier-client</span>에 있다 — <span class="term">core</span>를 넘지 않으므로 <span class="term">core</span>에 둘 이유가 없다. 결국 F3a가 <span class="term">core</span>에 <strong>넣는 것은 없고</strong>, <span class="term">core</span> 의존은 <span class="term">SupplierCall</span>이 <span class="term">Supplier</span> 값을 참조해서 생긴다.</div>
+
+    <h3 id="s4-1">클래스 — 무엇이 무엇을 참조하는가</h3>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 04">
+        <svg viewBox="0 0 1120 496" role="img" aria-label="확정 범위의 클래스 배치. 위 레인 core에는 F1의 Supplier enum과 F4가 채울 포트·표준 모델·D12 실패 유형 자리가 점선으로 있다. 아래 레인 supplier-client에는 F3a가 만드는 SupplierCall, Outcome, FanOutExecutor, 그룹 등록 설정, 프로퍼티, 마스킹 필터가 실선으로 있고, F4가 채울 포트 어댑터와 Fetcher와 번역 어댑터는 점선이다">
+          <defs>
+            <marker id="e1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="8" y="26" width="1104" height="152" rx="16" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.2"/>
+          <rect x="8" y="190" width="1104" height="296" rx="16" fill="#F2F4F6" stroke="#E5E8EB" stroke-width="1.2"/>
+          <text class="svg-l" x="22" y="18" fill="#8B95A1">core</text>
+          <text class="svg-l" x="22" y="184" fill="#8B95A1">supplier-client</text>
+
+          <text class="svg-l" x="960" y="18" text-anchor="end" fill="#3182F6">실선 = F3a 가 만든다</text>
+          <text class="svg-l" x="1104" y="18" text-anchor="end" fill="#8B95A1">점선 = 뒤 feature</text>
+
+          <g>
+            <rect x="18" y="46" width="330" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="6 5"/>
+            <foreignObject x="18" y="46" width="330" height="60">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">enum Supplier { A, B }</div><div class="s">F1 것 — F3a 는 참조만 한다</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="372" y="46" width="330" height="112" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="6 5"/>
+            <foreignObject x="372" y="46" width="330" height="112">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">«port» 목록·재고 조회 — F4</div><div class="s">core.application (D-MS-4)</div><div class="s">표준 목록 모델 — F4</div><div class="s">  maxOccupancy 는 넣지 않는다</div><div class="s">D12 내부 실패 유형 — F4</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="726" y="46" width="378" height="112" rx="12" fill="#FFFFFF" stroke="#D1D6DB" stroke-width="1.2"/>
+            <foreignObject x="726" y="46" width="378" height="112">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">F3a 가 core 에 넣는 것</div><div class="s">없다.</div><div class="s">core 의존은 SupplierCall 이 Supplier 를</div><div class="s">참조해서 생긴다 — 그것뿐이다</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="18" y="210" width="330" height="96" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+            <foreignObject x="18" y="210" width="330" height="96">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">record SupplierCall&lt;T&gt;</div><div class="s">Supplier supplier</div><div class="s">Mono&lt;T&gt; mono ← Mono 는 여기까지</div><div class="s">T 가 무엇인지 F3a 는 모른다</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="18" y="318" width="330" height="112" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+            <foreignObject x="18" y="318" width="330" height="112">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">sealed interface Outcome&lt;T&gt;</div><div class="s">  Supplier supplier()</div><div class="s">  record Success&lt;T&gt;(Supplier, T value)</div><div class="s">  record Failed&lt;T&gt;(Supplier, Throwable cause,</div><div class="s">                    Duration elapsed)</div><div class="s">nullable 필드 0개 — 분류는 하지 않는다</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="372" y="210" width="330" height="126" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+            <foreignObject x="372" y="210" width="330" height="126">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">FanOutExecutor</div><div class="s">- FanOutPolicy policy</div><div class="s">+ &lt;T&gt; List&lt;Outcome&lt;T&gt;&gt; runAll(</div><div class="s">      List&lt;SupplierCall&lt;T&gt;&gt;)</div><div class="s">flatMap(n) · timeout · onErrorResume</div><div class="s">take(budget) · block(hardStop) · reconcile</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="372" y="348" width="330" height="82" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+            <foreignObject x="372" y="348" width="330" height="82">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">FanOutProperties → FanOutPolicy</div><div class="s">maxConcurrent · perCall · budget</div><div class="s">바인딩 시 budget &gt; perCall 강제</div><div class="s">hardStop 은 budget + 상수로 유도</div></div>
+            </foreignObject>
+          </g>
+
+          <g>
+            <rect x="726" y="210" width="378" height="60" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+            <foreignObject x="726" y="210" width="378" height="60">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">SupplierHttpClientConfig</div><div class="s">@ImportHttpServices(group, WEB_CLIENT, types)</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="726" y="282" width="378" height="60" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+            <foreignObject x="726" y="282" width="378" height="60">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">MaskingExchangeFilter</div><div class="s">WebClientCustomizer 로 그룹에 붙는다</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="726" y="354" width="378" height="118" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="6 5"/>
+            <foreignObject x="726" y="354" width="378" height="118">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">F3 · F4 가 채운다</div><div class="s">SupplierAClient / B — HTTP Interface (F3)</div><div class="s">aTranslator / b — 원본→표준 (F4)</div><div class="s">CatalogPortAdapter (F4)</div><div class="s">  Map&lt;Supplier, Fetcher&gt; 로 고른다</div><div class="s">  Throwable → D12 유형 번역</div></div>
+            </foreignObject>
+          </g>
+
+          <line x1="183" y1="210" x2="183" y2="112" stroke="#B0B8C1" stroke-width="1.6" marker-end="url(#e1)"/>
+          <text class="svg-s" x="192" y="170" fill="#6B7684">Supplier 참조</text>
+
+          <line x1="352" y1="258" x2="368" y2="258" stroke="#3182F6" stroke-width="1.8" marker-end="url(#e1)"/>
+          <line x1="352" y1="374" x2="368" y2="374" stroke="#3182F6" stroke-width="1.8" marker-end="url(#e1)"/>
+          <line x1="706" y1="386" x2="722" y2="386" stroke="#B0B8C1" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#e1)"/>
+          <line x1="722" y1="240" x2="706" y2="240" stroke="#15C47E" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#e1)"/>
+
+          <text class="svg-s" x="560" y="486" text-anchor="middle" fill="#6B7684">core 를 향한 화살표는 Supplier 참조 하나뿐 — 리액티브 타입은 이 아래 레인을 벗어나지 않는다</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 4.</b> <b>실선 상자가 F3a가 만드는 전부</b>다. 위 레인(<span class="term">core</span>)에는 <b>실선이 하나도 없다</b> — F3a는 <span class="term">core</span>에 아무것도 넣지 않고 <span class="term">Supplier</span> 값을 참조만 한다. <span class="term">Mono</span>는 <span class="term">SupplierCall</span>에서 끊기고 아래 레인을 벗어나지 않는다.</figcaption>
+    </figure>
+
+    <h3 id="s4-2">시퀀스 — 호출 1건이 지나는 길과, 한쪽이 실패할 때</h3>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 05">
+        <svg viewBox="0 0 1120 472" role="img" aria-label="fetchAll 호출 1건의 순서. 호출자가 어댑터를 부르면 어댑터가 조합기에 두 공급사 호출을 넘기고, 조합기가 동시 상한 안에서 둘을 구독한다. 공급사 A는 정상 응답하고 공급사 B는 읽기 타임아웃이 나 실패가 값으로 흡수된다. 조합기는 예산 안에서 한 번만 블로킹하고 두 결과를 함께 돌려준다">
+          <defs>
+            <marker id="f1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="452" y="132" width="620" height="176" rx="14" fill="#F4F9FF" stroke="#CFE4FF" stroke-width="1.3"/>
+          <text class="svg-l" x="466" y="152" fill="#1B64DA">병렬 구간 — 동시 구독 ≤ maxConcurrent</text>
+
+          <g>
+            <rect x="16" y="34" width="150" height="44" rx="10" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+            <foreignObject x="16" y="34" width="150" height="44"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">호출자</div><div class="s">테스트 · F6</div></div></foreignObject>
+            <line x1="91" y1="78" x2="91" y2="450" stroke="#B0B8C1" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="196" y="34" width="196" height="44" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="196" y="34" width="196" height="44"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">CatalogAdapter</div></div></foreignObject>
+            <line x1="294" y1="78" x2="294" y2="450" stroke="#3182F6" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="422" y="34" width="196" height="44" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="422" y="34" width="196" height="44"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">FanOutExecutor</div></div></foreignObject>
+            <line x1="520" y1="78" x2="520" y2="450" stroke="#3182F6" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="656" y="34" width="196" height="44" rx="10" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="656" y="34" width="196" height="44"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">Fetcher A</div><div class="s">HTTP 프록시</div></div></foreignObject>
+            <line x1="754" y1="78" x2="754" y2="426" stroke="#15C47E" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <rect x="890" y="34" width="196" height="44" rx="10" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+            <foreignObject x="890" y="34" width="196" height="44"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">Fetcher B</div><div class="s">HTTP 프록시</div></div></foreignObject>
+            <line x1="988" y1="78" x2="988" y2="426" stroke="#F04452" stroke-width="1.2" stroke-dasharray="4 4"/>
+          </g>
+
+          <line x1="91" y1="100" x2="288" y2="100" stroke="#6B7684" stroke-width="1.8" marker-end="url(#f1)"/>
+          <text class="svg-s" x="190" y="94" text-anchor="middle" fill="#4E5968">fetchAll()</text>
+
+          <line x1="294" y1="124" x2="514" y2="124" stroke="#3182F6" stroke-width="1.8" marker-end="url(#f1)"/>
+          <text class="svg-s" x="404" y="118" text-anchor="middle" fill="#1B64DA">runAll(fetchers 로 만든 Call 2개)</text>
+
+          <line x1="520" y1="176" x2="748" y2="176" stroke="#15C47E" stroke-width="1.8" marker-end="url(#f1)"/>
+          <text class="svg-s" x="634" y="170" text-anchor="middle" fill="#0A8F5B">subscribe · fetch()</text>
+          <line x1="520" y1="200" x2="982" y2="200" stroke="#F04452" stroke-width="1.8" marker-end="url(#f1)"/>
+          <text class="svg-s" x="800" y="194" text-anchor="middle" fill="#C9303C">subscribe · fetch()</text>
+
+          <rect x="740" y="212" width="28" height="42" rx="7" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <rect x="974" y="212" width="28" height="80" rx="7" fill="#FFF0F0" stroke="#F04452" stroke-width="1.2"/>
+
+          <line x1="748" y1="266" x2="526" y2="266" stroke="#15C47E" stroke-width="1.8" marker-end="url(#f1)"/>
+          <text class="svg-s" x="640" y="260" text-anchor="middle" fill="#0A8F5B">결과 T (A)</text>
+
+          <text class="svg-s" x="988" y="306" text-anchor="middle" fill="#C9303C">timeout(perCall) 초과</text>
+          <line x1="982" y1="326" x2="526" y2="326" stroke="#F04452" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#f1)"/>
+          <text class="svg-s" x="756" y="320" text-anchor="middle" fill="#C9303C">onErrorResume → Failed(B, TimeoutException)</text>
+
+          <rect x="506" y="342" width="28" height="30" rx="7" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="548" y="354" fill="#1B64DA">take(budget) — 도착분을 지키며 정상 완료</text>
+          <text class="svg-s" x="548" y="370" fill="#1B64DA">collectList().block(hardStop) — 방어망</text>
+
+          <line x1="514" y1="392" x2="300" y2="392" stroke="#3182F6" stroke-width="1.8" marker-end="url(#f1)"/>
+          <rect x="280" y="404" width="28" height="26" rx="7" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="322" y="420" fill="#1B64DA">reconcile — 안 온 공급사를 Failed(BudgetExceeded)로</text>
+
+          <line x1="288" y1="446" x2="97" y2="446" stroke="#6B7684" stroke-width="1.8" marker-end="url(#f1)"/>
+          <text class="svg-s" x="196" y="440" text-anchor="middle" fill="#4E5968">[A: 성공, B: 실패] — 요청한 수만큼</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 5.</b> 다섯 참여자 중 <b>F3a 것은 <span class="term">FanOutExecutor</span> 하나</b>이고 나머지는 F4가 채운다 — 그래도 함께 그리는 이유는 <b>실패가 어디서 값으로 바뀌는지</b>가 이 흐름 안에서만 보이기 때문이다. B가 죽어도 A의 결과는 그대로 돌아온다. 아래 세 칸이 순서대로 <b>예산 자르기 → 값 꺼내기 → 빠진 것 채우기</b>이며, 셋을 한 연산자에 겹치지 않는 것이 요점이다.</figcaption>
+    </figure>
+
+    <div class="note warn"><span class="tag">F3a 시점의 실제 모습</span>위 흐름에서 F3a가 만드는 것은 가운데 한 칸뿐이고, 공급사 호출은 <strong>아직 존재하지 않는다.</strong> 그래서 이 시퀀스는 <strong>테스트가 심는 가짜 <span class="term">SupplierCall</span>로만</strong> 재현된다 — 지연을 흉내 내는 <span class="term">Mono.delay</span>, 절대 안 끝나는 <span class="term">Mono.never</span>, 구독 수를 세는 카운터. <strong>웹 서버가 필요 없다</strong>는 뜻이기도 하다. 실제 소켓을 여는 검증은 공급사가 생기는 F3이 정한다.</div>
+  </section>
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">CHAIN</p><h2 class="sec">연산자마다 역할 하나씩</h2></div>
+    </div>
+
+    <p class="lead">처음 그린 체인은 <span class="term">block(budget)</span> 하나에 <strong>예산 관리와 최후 방어를 겸하게</strong> 뒀다. 그러면 예산을 넘는 순간 <span class="term">dispose()</span>가 먼저 불려 <strong>이미 성공한 공급사의 결과까지 사라진다.</strong> 부분 실패를 값으로 흡수하려고 만든 장치가 통째로 무력화되는 자리였다.</p>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFC56B"></span><span class="dot" style="background:#15C47E"></span><span class="fn">FanOutExecutor#runAll — 확정 체인</span></div>
+      <pre><span class="ty">List</span>&lt;<span class="ty">Outcome</span>&lt;T&gt;&gt; arrived = <span class="ty">Flux</span>.fromIterable(calls)
+    .flatMap(call -&gt; call.mono()
+            .timeout(perCall)                            <span class="cm">// ① 공급사 1곳의 상한</span>
+            .map(v  -&gt; <span class="ty">Outcome</span>.success(call.supplier(), v))
+            .onErrorResume(e -&gt; <span class="ty">Mono</span>.just(                 <span class="cm">// ② 실패를 값으로</span>
+                    <span class="ty">Outcome</span>.failed(call.supplier(), classify(e)))),
+        maxConcurrent)                                   <span class="cm">// ③ 동시 호출 상한</span>
+    .take(budget)                                        <span class="cm">// ④ 전체 예산 — 정상 완료</span>
+    .collectList()
+    .block(hardStop);                                    <span class="cm">// ⑤ 방어망 (터지면 버그)</span>
+
+<span class="kw">return</span> reconcile(calls, arrived);                        <span class="cm">// ⑥ 안 온 곳을 명시적 실패로</span></pre>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>연산자</th><th>이것만 한다</th><th>없으면</th></tr></thead>
+        <tbody>
+          <tr><td>①</td><td><span class="term">.timeout(perCall)</span></td><td>공급사 한 곳의 상한</td><td>느린 한 곳이 전체를 끌고 간다</td></tr>
+          <tr><td>②</td><td><span class="term">.onErrorResume(값)</span></td><td>실패를 값으로 바꾼다</td><td>한 곳의 오류가 나머지를 취소시킨다</td></tr>
+          <tr><td>③</td><td><span class="term">.flatMap(fn, n)</span></td><td>동시 구독 상한</td><td>생략 시 256 — 사실상 무제한</td></tr>
+          <tr><td>④</td><td><span class="term">.take(budget)</span></td><td>전체 예산. <strong>오류가 아니라 정상 완료</strong></td><td>예산 방어를 ⑤에 겸하게 되어 도착분이 날아간다</td></tr>
+          <tr><td>⑤</td><td><span class="term">.block(hardStop)</span></td><td>값을 꺼낸다 + 체인 고장 시 방어</td><td>인자 없는 <span class="term">block()</span>이면 영원히 안 끝난다</td></tr>
+          <tr><td>⑥</td><td><span class="term">reconcile</span></td><td>④가 자른 공급사를 <span class="term">Failed(BudgetExceeded)</span>로 채운다</td><td>그 공급사가 <strong>조용히 사라진다</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">④가 핵심</span><span class="term">Flux.take(Duration)</span>은 시간이 지나면 <strong>오류가 아니라 정상 완료</strong>하고, <strong>그때까지 도착한 원소를 그대로 지킨다</strong>(reactor-core 3.8.7에 <span class="term">take(java.time.Duration)</span> 존재 확인). 예산을 <span class="term">block</span>이 아니라 여기서 표현하는 것이 이 설계의 유일한 비자명한 선택이다.</div>
+
+    <div class="note warn"><span class="tag">⑥이 없으면 생기는 사고</span>④가 자르면 아직 안 끝난 공급사는 리스트에서 <strong>그냥 빠진다.</strong> 호출자는 2건을 요청했는데 1건만 받고, B가 왜 없는지 알 방법이 없다 — 조사 문서가 <span class="term">Mono.empty()</span>에 대해 경고한 것과 같은 종류의 사고다. 그래서 요청 목록과 대조해 빠진 곳을 채운다. <strong>돌려주는 리스트의 크기는 언제나 요청한 호출 수와 같다</strong>는 것이 이 포트의 계약이다.</div>
+
+    <h3 id="s5-1">예산 부등식 — 기동 시 검증</h3>
+
+    <p><span class="term">perCall</span>과 <span class="term">budget</span>은 성격이 다르다. 전자를 넘기면 <strong>그 공급사만</strong> 실패 값이 되고, 후자를 넘기면 <strong>남은 전부가</strong> 잘린다. 그리고 ③의 상한이 걸리면 호출이 배치로 나뉘므로 조건이 한 겹 더 붙는다.</p>
+
+    <blockquote>
+      <p>budget &nbsp;&gt;&nbsp; ⌈ 공급사 수 ÷ maxConcurrent ⌉ × perCall</p>
+      <cite>— 공급사 2곳에 maxConcurrent=1 이면 perCall이 두 번 직렬로 흐른다</cite>
+    </blockquote>
+
+    <p>기동 시점에는 공급사 수를 모르므로(F3a에서는 <span class="term">Fetcher</span>가 0개다) <strong>최소 조건 <span class="term">budget &gt; perCall</span> 만 바인딩 시점에 강제</strong>하고, 위 부등식 전체는 프로퍼티 문서로 남겨 F3이 공급사를 붙일 때 지키게 한다. 지금 없는 공급사 수를 미리 계산하는 코드는 넣지 않는다.</p>
+
+    <div class="note key"><span class="tag">F3a 는 실패를 분류하지 않는다</span>실패 종류를 이름 붙이는 일은 <strong>F4의 D12</strong>가 하고, 그 유형이 F8의 <span class="term">reason</span> 체계가 된다. F3a가 분류 enum을 따로 만들면 <strong>체계가 둘</strong>이 되어 F8이 어느 쪽을 쓸지 애매해진다. 그래서 <span class="term">Outcome.Failed</span>는 <strong><span class="term">Throwable cause</span>와 <span class="term">Duration elapsed</span>만</strong> 들고 넘긴다.<br><br>다만 F4가 구분할 수 있도록 <strong>원인이 타입으로 갈리게</strong> 한다 — <span class="term">perCall</span> 초과는 Reactor가 던지는 <span class="term">TimeoutException</span> 그대로, 예산에 잘린 경우는 F3a가 만드는 <span class="term">BudgetExceededException</span>. 둘 다 "시간 초과"지만 <strong>호출이 나갔다 늦은 것</strong>과 <strong>아예 기다려 주지 못한 것</strong>이라 의미가 다르다.</div>
+  </section>
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">CONTRACT</p><h2 class="sec">포트 계약 — 한쪽이 죽어도 나머지는 내려간다</h2></div>
+    </div>
+
+    <p class="lead">이 feature가 존재하는 이유를 세 줄로 줄이면 이것이다. 구현도 리뷰도 이 세 줄을 기준으로 본다.</p>
+
+    <ul class="checklist">
+      <li><span class="box"></span><b>돌려주는 리스트 크기는 언제나 요청한 호출 수와 같다.</b> 잘려서 안 온 공급사도 <span class="term">Failed(BudgetExceededException)</span>으로 채워 넣는다 — 조용히 빠지는 항목이 없다.</li>
+      <li><span class="box"></span><b>공급사 쪽 실패는 예외가 아니라 <span class="term">Failed</span> 값이다.</b> 타임아웃·연결 실패·예산 초과 전부 값으로 내려온다.</li>
+      <li><span class="box"></span><b>한 곳이 실패해도 나머지 결과는 그대로 돌아온다.</b> 실패 하나가 성공한 호출을 취소시키지 않는다.</li>
+    </ul>
+
+    <h3 id="s6-1">예외가 나가는 자리는 한 군데뿐이고, 그것은 의도다</h3>
+
+    <p><span class="term">block(hardStop)</span>이 터지면 예외가 나가고 도착분도 잃는다. <strong>이 자리는 그대로 둔다.</strong> <span class="term">take(budget)</span>이 있는 한 도달하지 않으며, 도달했다면 그것은 <strong>공급사 장애가 아니라 우리 코드나 설정이 고장 난 것</strong>이기 때문이다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>무엇이 잘못됐나</th><th>어떻게 나가나</th><th>왜 그렇게</th></tr></thead>
+        <tbody>
+          <tr><td>공급사가 느리다 · 죽었다</td><td><span class="term">Failed</span> <strong>값</strong> → 부분 응답</td><td>이 feature가 만들어진 이유 그 자체</td></tr>
+          <tr><td>예산 안에 못 들어왔다</td><td><span class="term">Failed(BudgetExceededException)</span> <strong>값</strong></td><td>도착분은 지키고 못 온 곳만 표시</td></tr>
+          <tr><td>우리 체인·설정이 고장 났다</td><td><strong>예외</strong> → 5xx (형태는 F8)</td><td>"공급사 전부 장애"로 포장하면 <strong>거짓말</strong>이 된다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn"><span class="tag">여기서 catch-all 을 쓰면 안 되는 이유</span>세 번째 행을 <span class="term">catch (Exception e)</span>로 삼켜 "전 공급사 실패"로 바꾸면 응답은 200이 되고 운영자는 <strong>공급사를 들여다보는데 진짜 원인은 우리 쪽</strong>에 있게 된다. 버그를 장애로 위장하는 것이라 <span class="term">CLN-6</span>에 정면으로 걸린다.</div>
+
+    <h3 id="s6-2">F3에 넘기는 계약 — SPI 에 문서로 못 박는다</h3>
+
+    <div class="note warn"><span class="tag">fetch() 는 즉시 Mono 를 돌려줘야 한다</span>공급사별 Fetcher의 <span class="term">fetch()</span>가 <strong>본문에서 먼저 블로킹하면</strong> <span class="term">Mono</span>가 만들어지기 전이라 <span class="term">.timeout(perCall)</span>이 붙을 자리가 없다. 그러면 <strong>어떤 장치도 그 호출을 자르지 못하고</strong> 위 세 줄이 통째로 무너진다. 컴파일로는 잡히지 않는 종류라 SPI 인터페이스 자바독에 계약으로 적고, F3 리뷰의 확인 항목으로 넘긴다.</div>
+  </section>
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    결정의 원본은 <b>docs/features/webclient-config/01-design.md</b> 다.<br>
+    이 문서는 그 결정을 고르기 위한 그림이며, 여기에만 있는 결정은 두지 않는다.
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>
