@@ -12,7 +12,7 @@
                                                                             │
 [F1 property-mapping] ──────────────────────────┐                           │
                                                  ├─→ [F6 catalog-sync] ─────┤
-[F2 mock-supplier-server] → [F3 supplier-client] ┤                          │
+[F3a webclient-config] ───→ [F3 supplier-client] ┤                          │
                                      │           └─→ [F4 catalog-adapter]───┤
                                      │                                      │
                                      └─→ [F5 availability-adapter] → [F7 stay-search-api]
@@ -24,7 +24,9 @@
                                                           └─→ [F11 unmapped-code-recovery] (선택)
 ```
 
-- F1·F2는 서로 독립이라 어느 쪽을 먼저 해도 된다. F1을 먼저 두는 이유는 외부 의존 없이 도메인·DB 경계를 닫아 JPA DDL 전략(이연)을 가장 먼저 확정할 수 있어서다.
+- **F2(모의 공급사 서버)는 흐름의 선행이 아니라 F3~F5의 로컬 확인 도구**라서 그림에서 뺐다. 이미 병합됐고, F3a·F3의 테스트는 F2 없이 돌아가야 한다.
+- **F3a는 F3의 앞부분**이다 — 공급사와 무관한 공통 HTTP 배선을 먼저 깔고, 그 위에 공급사별 클라이언트(F3)를 얹는다.
+- F1과 F3a는 서로 독립이라 어느 쪽을 먼저 해도 된다. F1을 먼저 두는 이유는 외부 의존 없이 도메인·DB 경계를 닫아 JPA DDL 전략(이연)을 가장 먼저 확정할 수 있어서다.
 - F7이 첫 번째 end-to-end 지점이다. F7까지가 "흐름 하나가 끊김 없이 동작"하는 최우선 요건이고, F8~F10은 그 위에 얹는 견고성이다.
 - 마무리(README·테스트 정리)는 feature가 아니라 상시 작업이며 맨 아래에 따로 둔다.
 - 각 feature는 `main`에서 딴 `feature/f<N>-<feature>` 브랜치에서 진행하고(예: `feature/f1-property-mapping`), 끝나면 `pr` 스킬로 `main` PR을 만든다. 규칙 원본은 `CLAUDE.md` 「브랜치·PR」.
@@ -35,7 +37,8 @@
 |---|---|---|---|---|---|
 | F0 | `api-response` | 조회 1 파생(자사 API 응답·오류 본문) | 완료(병합) | 2026-09-04 | 2026-09-04 |
 | F1 | `property-mapping` | 사전작업 1(스키마) 구현화 | 완료(병합) | 2026-09-03 | 2026-09-04 |
-| F2 | `mock-supplier-server` | 사전작업 2 | PR | 2026-09-05 | 2026-09-05 |
+| F2 | `mock-supplier-server` | 사전작업 2 | 완료(병합) | 2026-09-05 | 2026-09-05 |
+| F3a | `webclient-config` | 사전작업 3 앞부분(공통 HTTP 배선) | PR | 2026-09-07 | 2026-09-07 |
 | F3 | `supplier-client` | 사전작업 3 | 대기 | - | - |
 | F4 | `supplier-catalog-adapter` | 사전작업 4 (목록) | 대기 | - | - |
 | F5 | `supplier-availability-adapter` | 사전작업 4 (재고·요금) | 대기 | - | - |
@@ -102,32 +105,69 @@
 
 > 2026-09-05: 1프로세스·단일 포트로 구현했던 첫 시도를 커밋 전에 폐기했다. 사유는 `docs/ai-history.md` 55번.
 
+## F3a. `webclient-config` — 공통 HTTP 배선
+
+> **범위 확정 (2026-09-07).** 설계 협의는 `docs/features/webclient-config/design.html`, 결정의 원본은 `01-design.md`.
+> 조사·검증 근거는 `client-wiring-research.html`(출처 22건 검증, PASS 21 / FAIL 1 + jar 실측 6건).
+> 그 문서 3장은 Boot 4.1.1 업그레이드 반영으로 **2026-09-07에 개정**됐다 — 클라이언트 생성이 수동 배선에서 그룹 등록으로 바뀌었다.
+
+- **목적**: 공급사와 무관한 공통 HTTP 호출 배선. 공급사별 클라이언트(F3)와 어댑터(F4·F5)가 이 위에 얹힌다. 존재 이유는 "호출을 편하게"가 아니라 **바깥으로 나가는 호출에 상한을 두는 것**이다.
+- **사는 곳**: `supplier-client` 모듈. 이 feature가 그 모듈의 첫 코드이며, **`core` 의존을 추가하는 것도 여기서** 한다(`module-split` 설계가 "F3a 병합 시 추가"로 남겨 둔 자리). 다만 `core`에 **넣는 것은 없다** — `SupplierCall`이 `Supplier` 값을 참조해서 생기는 의존이다.
+- **포함**
+  - 공급사별 클라이언트 인스턴스 생성 — `@ImportHttpServices(group, clientType = WEB_CLIENT, types = {...})`. 등록기가 **인터페이스마다 빈을 만들어** 주므로 쓰는 쪽은 타입으로 주입받아 메서드를 부르면 된다
+  - 커넥터 구성 — `spring.http.serviceclient.<group>.*`의 `base-url`·`default-header`·`connect-timeout`·`read-timeout`. Boot 4가 **그룹마다 별도 커넥터**를 만들어 공급사별 차등이 성립한다
+  - fan-out 조합기 `FanOutExecutor` — `flatMap(fn, maxConcurrent)` → `take(budget)` → `collectList()` → `block(hardStop)`. **연산자마다 역할이 하나씩**이며, 예산을 `block`이 아니라 `take`로 표현하는 것이 핵심이다(`block`으로 자르면 이미 도착한 결과까지 사라진다)
+  - 조합기의 입출력 타입 — `SupplierCall<T>`(공급사 값 + `Mono<T>`)와 `Outcome<T>`(`Success` | `Failed`). **둘 다 `supplier-client`에 산다** — `core`를 넘지 않는다
+  - 요청 응답 로깅 필터 — 인증 키 마스킹 포함. `WebClientCustomizer`로 붙는다
+  - `FanOutProperties` — `maxConcurrent`·`perCall`·`budget`. 바인딩 시점에 `budget > perCall` 강제
+- **제외**
+  - 공급사별 HTTP Interface와 원본 DTO — **F3**
+  - 도메인 포트·표준 목록 모델·내부 실패 유형(D12) — **F4.** F3a의 `Outcome.Failed`는 `Throwable`만 들고 분류하지 않는다(실패 분류 체계를 둘로 만들지 않기 위해)
+  - 재시도 — **F9.** F9가 수단 비교(Resilience4j vs Reactor)를 미결로 들고 있어 F3a가 선점하지 않는다
+  - 상관 ID 전파·메트릭·이벤트 — 소비자와 sink가 없다(DDD-8). 알릴 **값**만 만들어 둔다
+  - 커넥션 풀 튜닝, 검색 유스케이스의 실제 호출(F7)
+- **선행**: `module-split`. F2는 필요 없다 — **테스트가 F2 없이 돌아가야 한다**
+- **포트 계약 (F4·F6·F7이 기대는 것)**
+  1. 돌려주는 리스트 크기는 **언제나 요청한 호출 수와 같다** — 잘린 공급사도 `Failed`로 채운다
+  2. 공급사 쪽 실패는 예외가 아니라 **`Failed` 값**이다
+  3. 한 곳이 실패해도 **나머지 결과는 그대로 돌아온다**
+  4. `Outcome`은 **어느 공급사 것인지 스스로 말한다** — `flatMap`은 완료 순서대로 내보내므로 순서에 기대면 안 된다
+- **닫아야 할 결정(구현 후)**
+  - 타임아웃 값과 동시 호출 상한의 실측 보정 — F2 모의 서버로 F3 이후 측정
+- **완료 기준**: 호출 N건을 한꺼번에 넣어도 **동시 구독 수가 상한을 넘지 않고**, 한 건이 `perCall`을 넘기면 **그 건만** 실패 값이 되며 나머지는 그대로 돌아오고, 예산을 넘겨도 **도착분은 보존**되고 못 온 곳은 실패 값으로 채워지며, 호출 1건마다 인증 키가 가려진 로그가 남는다.
+- **미리 확인한 걸림돌**
+  - `@ImportHttpServices`를 단 `@Configuration`을 `supplier-client`에 두었을 때 `api-app`의 컴포넌트 스캔이 집어 오는지는 **아직 확인하지 않았다**. `api-app`은 어댑터를 `runtimeOnly`로만 의존하므로(D-MS-5) 컴파일 시점 참조가 막혀 있다. **문서로 판단하지 않고 최소 예제를 실제로 태워서 확정한다.**
+  - `SupplierCatalogFetcher.fetch()`류의 구현은 **본문에서 블로킹하면 안 된다.** `Mono`가 만들어지기 전에 막히면 `.timeout(perCall)`이 붙을 자리가 없어 **어떤 장치도 그 호출을 자르지 못한다.** F3·F4에 계약으로 넘긴다.
+  - **재시도가 붙으면 예산 부등식이 커진다** — `budget > ⌈공급사 수 ÷ maxConcurrent⌉ × perCall × (1 + 최대 재시도)`. 지금은 재시도가 없어 계수를 코드로 넣지 않지만, F9가 이 부등식을 다시 봐야 한다.
+  - `supplier-client`에는 `@SpringBootApplication`도 서블릿 스택도 없다. 다만 **F3a 테스트에는 웹 서버가 필요 없다** — 조합기는 테스트 더블로, 필터는 `ExchangeFunction` 스텁으로, 그룹 등록은 서버 없는 컨텍스트 테스트로 확인한다. 실제 소켓을 여는 테스트 방식은 **F3이 정한다**.
+
 ## F3. `supplier-client` — 공급사 HTTP 클라이언트
 
-- **목적**: WebClient 기반 공급사 호출 계층과 타임아웃 계층. 응답을 공급사별 원본 DTO로 받는 데까지.
+- **목적**: 공급사별 호출 인터페이스와 원본 DTO. F3a가 깐 배선 위에 공급사 A·B를 얹는다.
+- **사는 곳**: `supplier-client` 모듈. `core`의 `com.stay.property.application`이 소유한 포트를 구현한다(`module-split` D-MS-4).
 - **포함**
-  - 공급사별 WebClient 인스턴스 (base URL·API key 설정 분리)
-  - 타임아웃 계층: connect / response(read) / 호출 전체 예산 — 값과 근거 확정 (이연 항목)
+  - 공급사별 HTTP Interface — F3a가 깐 그룹 등록에 **타입으로 얹힌다**. **A와 B는 실패 표현이 달라 인터페이스가 서로 다르다**(하나를 N번 찍어낼 수 없다)
   - 공급사별 원본 응답 DTO (목록·재고요금·실패 본문) — 어댑터(F4·F5)의 입력
   - A는 4xx/5xx를, B는 200 + `resultCode != "0000"`을 각각 "실패 응답"으로 구분해 어댑터에 넘길 수 있는 형태
-- **제외**: 표준 모델 변환(F4·F5), retry/circuit(F9), 병렬 fan-out(F7)
-- **선행**: F2 (로컬 확인용). 단위 테스트는 F2 없이 돌아가야 한다
+- **제외**: 공통 HTTP 배선·타임아웃·조합기(F3a), 표준 모델 변환(F4·F5), circuit(F9), 병렬 fan-out 호출(F7)
+- **선행**: **F3a.** F2는 로컬 확인용이며 단위 테스트는 F2 없이 돌아가야 한다
 - **닫아야 할 결정**
-  - 클라이언트 테스트 방식: 새 의존성(MockWebServer·WireMock) vs 기존 의존성만으로 가능한지 먼저 검토
-  - 타임아웃 값 3종과 근거 — `tech-research` 필요 시 사용
-  - Reactor `Mono`를 그대로 노출할지, 클라이언트 경계에서 block 할지 (확정 스택: Virtual Thread 서빙 + Reactor는 fan-out 제어용)
+  - ~~`Mono` 노출 여부~~ — **F3a에서 닫았다.** `SupplierCall<T>`가 `Mono`를 받고 조합기가 소비하므로 리액티브 타입은 `supplier-client` 밖으로 안 나간다
+  - **클라이언트 테스트 방식** — F3a는 웹 서버 없이 테스트 더블로만 검증하므로 **여기서 처음 정한다.** 실제 소켓을 여는 방식(`RANDOM_PORT` 테스트 컨트롤러 / 스텁 서버 / 모의 서버 기동)을 고르고 그 모듈에 서버 스택을 넣을지 함께 결정한다
+  - **타임아웃 값** — F3a가 그룹 프로퍼티 **자리**는 만들었지만 값은 미정이다. F2 모의 서버로 실측해 채운다
 - **완료 기준**: 정상·장애·무응답 3모드 각각에서 클라이언트가 예측된 결과(DTO / 실패 DTO / 타임아웃)를 정해진 시간 안에 돌려준다.
 
 ## F4. `supplier-catalog-adapter` — 목록 어댑터 + 도메인 포트
 
 - **목적**: 공급사 목록 응답 → 표준 목록 모델 번역. 도메인 포트 경계를 여기서 처음 정의한다.
 - **포함**
-  - 도메인 포트 인터페이스(공급사 목록 조회 / 재고·요금 조회) — 소유 레이어는 도메인, 구현은 인프라
+  - 도메인 포트 인터페이스(공급사 목록 조회 / 재고·요금 조회) — 소유 레이어는 `core`의 **`application`** 패키지(`module-split` D-MS-4: Aggregate 불변식이 아니라 유스케이스 오케스트레이션이라서), 구현은 `supplier-client`
   - A·B 어댑터: 필드 매칭 7쌍 (봉투 해체, hotelCode↔propertyId, roomTypes↔rooms 등), `maxOccupancy`는 저장하지 않으므로 목록 모델에서 제외
-  - 실패 정규화 D12 — A의 HTTP 상태 ↔ B의 `resultCode`를 내부 실패 유형(요청 오류 / 인증 / 한도 초과 / 장애 / 타임아웃)으로 통일. 이 유형이 F8의 `suppliers[].reason` 값 체계가 된다
+  - **공급사별 Fetcher 구현과 선택** — 원본 Mono에 `.map(번역 어댑터)`를 걸어 표준 타입으로 맞춘 뒤 `SupplierCall`로 감싼다. 포트 어댑터는 주입받은 `List<Fetcher>`를 **`Supplier` 값을 키로 한 Map**으로 만들어 고른다(기동 시 키 중복·누락이 걸린다)
+  - 실패 정규화 D12 — A의 HTTP 상태 ↔ B의 `resultCode`, 그리고 **F3a가 준 `Outcome.Failed`의 `Throwable`** 을 내부 실패 유형(요청 오류 / 인증 / 한도 초과 / 장애 / 타임아웃)으로 통일. 이 유형이 F8의 `suppliers[].reason` 값 체계가 된다 — **실패 분류 체계는 이것 하나뿐이다**
   - 신규 공급사 추가 시 고칠 지점이 어댑터 1개 + `Supplier` 값 1개로 한정되는 구조 (README 확장 예시의 근거)
-- **제외**: 저장(F6), 재고·요금 번역(F5)
-- **선행**: F1(`Supplier` 값), F3(원본 DTO)
+- **제외**: 저장(F6), 재고·요금 번역(F5), 병렬 호출·타임아웃·예산(F3a의 조합기를 쓴다)
+- **선행**: F1(`Supplier` 값), **F3a**(`FanOutExecutor`·`SupplierCall`·`Outcome`), F3(원본 DTO)
 - **닫아야 할 결정**
   - 내부 실패 유형의 값 목록과 A·B 코드 대응표 (D12 확정)
   - 포트 반환 형태: 성공/실패를 예외로 던질지 값(Result)으로 돌려줄지 — 설계 문서는 "실패를 값으로 취급"
@@ -175,8 +215,8 @@
 - **포함**
   - 자사 API 스펙 확정 (조회 작업 1): 요청 파라미터(checkIn·checkOut·adults·children), 검증 규칙(날짜 순서·과거 날짜·인원 범위), 응답 = `results[]` + `suppliers[]` (D10 구조)
   - 매핑 역조회로 내부 `propertyId`·`roomId` 부여, 미매핑 코드는 동기 경로에서 항목 제외 + 로그 (D11 동기 트랙). 역방향 조회 메서드는 F1에서 이관된 항목으로 여기서 추가한다 (D-F1-8)
-  - 공급사별 병렬 호출 — Reactor 연산자로 fan-out, 결과를 하나로 합침
-  - 이 단계에서는 정상 경로 위주. 실패 처리는 F8에서 완성하되, 한쪽 실패가 전체를 죽이지 않는 골격은 여기서 잡는다
+  - 공급사별 병렬 호출 — **F4·F5의 포트를 호출한다.** 유스케이스는 Reactor 연산자를 직접 쓰지 않는다(`core`에 리액티브 타입이 들어오면 안 된다). 병렬·타임아웃·예산은 포트 구현이 F3a의 조합기로 처리하고, 유스케이스는 돌아온 공급사별 결과를 하나로 합치기만 한다
+  - 이 단계에서는 정상 경로 위주. **한쪽 실패가 전체를 죽이지 않는 골격은 F3a에 이미 있으므로 쓰기만 한다.** 그 결과를 응답으로 어떻게 표기할지는 F8에서 완성
 - **제외**: 실패 유형 표기 완성(F8), retry/circuit(F9), 캐시(F10)
 - **선행**: F1, F5, F6(매핑 데이터)
 - **닫아야 할 결정**
@@ -207,13 +247,17 @@
 - **포함**
   - 공급사별 retry 정책 — 재시도 대상 실패 유형 한정(요청 오류·인증은 제외), 최대 횟수·백오프·지터
   - 공급사별 circuit breaker — 열림 상태에서는 호출 없이 즉시 FAILED(reason: 차단)로 F8 블록에 반영
-  - retry가 F3의 전체 예산 타임아웃 안에 들어오도록 계층 정합
+  - retry가 **F3a의 예산(`budget`)** 안에 들어오도록 계층 정합. 재시도가 붙으면 부등식이 `budget > ⌈공급사 수 ÷ maxConcurrent⌉ × perCall × (1 + 최대 재시도)`로 커지므로 F3a의 `FanOutProperties` 값을 함께 다시 잡는다
   - (선택) rate limiter — 공급사 한도 초과 유형이 관측될 때만
 - **제외**: 캐시(F10)
 - **선행**: F8
 - **닫아야 할 결정**
   - 수단: Resilience4j(새 의존성) vs Reactor `retryWhen` 등 기존 의존성 — `tech-research`로 비교 후 결정
   - 수치(횟수·백오프·차단 임계) 와 근거
+  - **`retryWhen`을 `timeout(perCall)` 안에 두는가 밖에 두는가** — 안이면 재시도 전체가 `perCall` 하나를 나눠 쓰고, 밖이면 시도마다 `perCall`이 새로 붙는다. 총 소요와 예산 계산이 완전히 달라진다
+  - **`per-call`·`budget`·`max-concurrent`·재시도 횟수를 한 부등식으로 함께 잡는다** (2026-09-07 추가) — 묶음 분할 때문에 부등식의 좌변이 공급사 수가 아니라 **호출(묶음) 수**다. 숙소 120곳이 A·B 각 3묶음이면 호출 6건이고, F3a가 남긴 현재 값(`max-concurrent 2` · `per-call 2s` · `budget 5s`)은 **재시도 없이도 이미 깨진다**(`⌈6÷2⌉ × 2s = 6s > 5s`). 재시도 2회면 18s인데 검색은 동기 경로라 `budget`으로 감당할 값이 아니다. `max-concurrent`를 6으로 올리면 웨이브가 3→1로 줄어 같은 재시도가 6s에 들어온다 — **예산보다 동시 상한이 병목**이다. 대신 공급사에 한 번에 나가는 부하와 자사 동시 요청 수의 곱을 함께 본다. 실제 값은 F3의 응답 시간 실측과 F4·F7의 묶음 수가 나온 뒤에 정한다
+  - **지터를 왜 넣는지의 근거가 묶음 분할로 강해졌다** (2026-09-07 추가) — 한 공급사로 묶음 여러 건이 동시에 나가므로, 그 공급사가 흔들리면 여러 묶음이 같은 순간에 실패하고 재시도도 같은 순간에 겹친다. 고정 백오프면 이미 힘든 공급사에 재시도가 한 덩어리로 다시 꽂힌다. 지터 상한도 최악 소요에 더해지므로 위 부등식과 함께 잡는다
+  - **재시도를 거는 층** — 조합기가 아니라 묶음 하나(`Mono`) 단위로 어댑터가 건다. 조합기는 `Throwable`을 분류하지 않으므로(D-F3A-5) 재시도 대상인지 판단할 근거가 없다. 조회는 GET이라 멱등이므로 재시도 자체는 안전하다
 - **완료 기준**: 일시 장애 후 복구되는 모의 시나리오에서 재시도로 성공하고, 연속 실패 시 circuit이 열려 호출이 차단됨이 테스트로 확인된다.
 
 ## F10. `search-cache` — 검색 결과 캐시
@@ -246,7 +290,7 @@
 
 ## 구조 변경 (feature 번호 없음)
 
-- **`module-split`** — 단일 모듈이던 `stay-link`를 `core`(domain+application)·`persistence`(JPA)·`supplier-client`(WebClient, 아직 비어 있음)·`api-app`(presentation) 4개 Gradle 모듈로 분리. F3(`supplier-client`)·F4·F5·F6부터는 이 구조 위에서 진행한다 — 설계·근거는 `docs/features/module-split/01-design.md` 참조. `batch-app`은 F6 설계 시 별도로 만든다.
+- **`module-split`** — 단일 모듈이던 `stay-link`를 `core`(domain+application)·`persistence`(JPA)·`supplier-client`(WebClient, 아직 비어 있음)·`api-app`(presentation) 4개 Gradle 모듈로 분리. F3(`supplier-client`)·F4·F5·F6부터는 이 구조 위에서 진행한다 — 설계·근거는 `docs/features/module-split/01-design.md` 참조. `batch-app`은 F6 설계 시 별도로 만든다. **`supplier-client`는 아직 비어 있고 `core` 의존도 없다 — 그 모듈의 첫 코드와 `core` 의존 선언은 F3a가 넣는다.**
 
 ## 마무리 (feature 아님, 상시)
 
