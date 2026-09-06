@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>공급사 클라이언트 배선과 fan-out 조합 — F3a 레퍼런스</title>
+<!-- 폰트: Pretendard(본문) + JetBrains Mono(코드/라벨). 이 두 개만 사용한다. -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     색/폰트/그림자는 반드시 이 변수로만 참조한다 (임의 hex 금지).
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  /* scroll progress bar */
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  /* page sheet (흰 카드) */
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  /* .sheet.wide — 스키마/ER 같은 표 중심 문서용 넓은 시트 (2026-09-04 추가). SVG viewBox 는 1140 기준 */
+  .sheet.wide{max-width:1300px}
+
+  /* cover */
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  /* toc — 심플 인덱스 (유일한 목차 컴포넌트, 2026-08-02 재설계)
+     1열 세로 나열 = 읽는 순서 그대로. 카드·박스·그리드 금지 (구 2열 카드형·toc-deep 카드형 폐기).
+     하위 항목이 필요하면 li 안에 .ts 를 들여쓴 평문 링크로만 추가한다. */
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  /* sections */
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  /* stchip — 상태 칩: 목록·표 항목의 진행 상태 (ok=확정 / mid=뼈대 / open=미정) */
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  /* blockquote (인용) */
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  /* note / callout (.note 기본 · .key 파랑 · .warn 빨강) */
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  /* figure + SVG 다이어그램 컨테이너 */
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  /* foreignObject 자동 줄바꿈 박스 — 글자가 박스를 절대 넘지 않게 자동 줄바꿈+중앙정렬.
+     라벨 길이가 불확실하거나 한글이 많은 박스엔 .svg-t/.svg-s <text> 대신 이걸 쓴다 (폭 계산 불필요). */
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  /* .fo.left — 표 셀·설명 칸용 좌측 정렬 변형 (2026-09-04 추가). .d 는 본문 설명 텍스트 */
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  /* wide figure — 시트(860px) 폭을 넘는 다이어그램 (긴 시퀀스/타임라인 전용) */
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  /* code block (mac 윈도우 스타일) */
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  /* toggle — 접기/펼치기 (details/summary) */
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  /* 2-column 비교 카드 (.x 중립 · .o 강조) */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  /* table */
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  /* fn-card — 함수/API 시그니처 카드 (어두운 시그니처 바 + 명세 표) */
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  /* 참고문헌 리스트 */
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  /* checklist — 체크 항목 리스트. li 안에 <span class="box"></span> + 텍스트. 완료는 li.done
+     ⚠️ li 는 display:block + 박스는 position:absolute 다 (display:flex 금지).
+     li 안에는 <b>/<strong>/<span class="term"> 같은 인라인 요소가 섞이는데,
+     li 를 flex 로 두면 그 인라인 요소들이 각각 별도 flex item 이 되어
+     좁은 칸에 글자가 "세로로" 쌓이며 깨진다. 그래서 텍스트는 일반 인라인 흐름으로 둔다. */
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  /* carousel — 좌우 슬라이드 (분위기 사진 + 캡션). JS는 화살표 스크롤만.
+     사진이 없으면 .ph 가 플레이스홀더로 남는다 (img onerror 로 .empty 부여). */
+  .carousel{position:relative;margin:34px 0}
+  .carousel .track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+    scroll-behavior:smooth;padding:2px 2px 10px;-webkit-overflow-scrolling:touch}
+  .carousel .track::-webkit-scrollbar{height:6px}
+  .carousel .track::-webkit-scrollbar-thumb{background:var(--g300);border-radius:3px}
+  .carousel .track::-webkit-scrollbar-track{background:transparent}
+  .carousel .slide{flex:0 0 82%;scroll-snap-align:center;background:var(--white);
+    border:1px solid var(--g200);border-radius:20px;overflow:hidden;transition:.18s}
+  .carousel .slide:hover{border-color:var(--blue);box-shadow:var(--shadow-sm)}
+  .carousel .ph{position:relative;aspect-ratio:16/9;background:var(--blue-bg2);
+    display:grid;place-items:center;overflow:hidden}
+  .carousel .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .carousel .ph.empty{background:linear-gradient(135deg,var(--blue-bg2),var(--g100))}
+  .carousel .ph.empty::after{content:attr(data-empty);font-family:var(--mono);font-size:11.5px;
+    font-weight:500;color:var(--g400);letter-spacing:.02em;text-align:center;padding:0 20px;line-height:1.6}
+  .carousel .cap{padding:18px 20px 20px}
+  .carousel .cap .t{display:block;font-size:15.5px;font-weight:700;color:var(--g900);line-height:1.4;margin-bottom:6px}
+  .carousel .cap .d{display:block;font-size:14px;font-weight:500;color:var(--g600);line-height:1.6;word-break:keep-all}
+  .carousel .cap .d b{color:var(--g800);font-weight:700}
+  .carousel .cap .src{display:block;font-family:var(--mono);font-size:10px;color:var(--g400);
+    margin-top:9px;line-height:1.5;word-break:break-all}
+  .carousel .cap .src a{color:var(--g500);text-decoration:none}
+  .carousel .cap .src a:hover{color:var(--blue);text-decoration:underline}
+  .carousel .nav{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
+  .carousel .nav button{width:36px;height:36px;border-radius:12px;border:1px solid var(--g200);
+    background:var(--white);color:var(--g600);cursor:pointer;display:grid;place-items:center;
+    font-family:var(--mono);font-size:15px;font-weight:700;transition:.15s;padding:0}
+  .carousel .nav button:hover{border-color:var(--blue);color:var(--blue-deep);background:var(--blue-bg2)}
+  @media(max-width:720px){.carousel .slide{flex:0 0 88%}}
+
+  /* docnav — 문서 시리즈(여러 HTML 파일) 간 네비게이션 바. cover 와 toc 사이에 둔다 */
+  .docnav{display:flex;flex-wrap:wrap;gap:8px;padding:20px 56px;background:var(--white);
+    border-bottom:1px solid var(--g100)}
+  .docnav a{font-family:var(--mono);font-size:12.5px;font-weight:700;text-decoration:none;
+    padding:9px 14px;border-radius:100px;background:var(--g50);border:1px solid var(--g200);
+    color:var(--g600);transition:.18s}
+  .docnav a:hover{border-color:var(--blue);color:var(--blue-deep);transform:translateY(-1px)}
+  .docnav a.cur{background:var(--blue-bg);border-color:#cfe4ff;color:var(--blue-deep)}
+  .docnav a .n{color:var(--g400);margin-right:6px}
+  .docnav a.cur .n{color:var(--blue)}
+
+  /* book-nav — 책 시리즈 내비게이션 (breadcrumb + prev/next). 스니펫: components.md */
+  .book-nav-crumb{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:15px 56px;
+    background:var(--g50);border-bottom:1px solid var(--g100);
+    font-family:var(--mono);font-size:12px;font-weight:500;color:var(--g600)}
+  .book-nav-crumb a{color:var(--blue);text-decoration:none;font-weight:700}
+  .book-nav-crumb a:hover{text-decoration:underline}
+  .book-nav-crumb .sep{color:var(--g300)}
+  .book-nav-crumb b{color:var(--g800);font-weight:700}
+  .book-nav-foot{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;
+    padding:26px 56px;border-top:1px solid var(--g100);background:var(--g50)}
+  .book-nav-foot .prev,.book-nav-foot .next{display:block;border:1px solid var(--g200);border-radius:14px;
+    padding:13px 17px;text-decoration:none;background:var(--white);transition:.18s}
+  .book-nav-foot a.prev:hover,.book-nav-foot a.next:hover{border-color:var(--blue);box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+  .book-nav-foot .dir{display:block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    color:var(--g500);letter-spacing:.04em;margin-bottom:4px}
+  .book-nav-foot .t{display:block;font-size:13.5px;font-weight:700;color:var(--g900);line-height:1.4}
+  .book-nav-foot .next{text-align:right}
+  .book-nav-foot .toc-link{font-family:var(--mono);font-size:12px;font-weight:700;text-decoration:none;
+    color:var(--blue-deep);background:var(--blue-bg);border:1px solid #cfe4ff;border-radius:100px;
+    padding:10px 18px;transition:.18s}
+  .book-nav-foot .toc-link:hover{border-color:var(--blue)}
+  .book-nav-foot .off{opacity:.6;background:var(--g100);cursor:default}
+  .book-nav-foot .off .t{color:var(--g500)}
+
+  /* book-toc — 책 목차 (허브 전용: 장 행 + 상태 배지). 스니펫: components.md */
+  .bk-part{margin:28px 0}
+  .bk-part-h{display:flex;align-items:baseline;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+  .bk-part-h .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.05em}
+  .bk-part-h .t{font-size:17px;font-weight:800;color:var(--g900)}
+  .bk-list{list-style:none;margin:0;padding:0;border:1px solid var(--g200);border-radius:16px;
+    overflow:hidden;background:var(--white)}
+  .bk-list>li{border-top:1px solid var(--g100)}
+  .bk-list>li:first-child{border-top:none}
+  .bk-list>li>a,.bk-list>li>.row{display:flex;align-items:center;gap:14px;padding:13px 18px;
+    text-decoration:none;transition:background .15s}
+  .bk-list>li>a:hover{background:var(--blue-bg2)}
+  .bk-list .no{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--g400);flex:none;width:32px}
+  .bk-list .tt{font-size:14.5px;font-weight:700;color:var(--g900);line-height:1.45;min-width:0}
+  .bk-list .tt small{display:block;font-size:12.5px;font-weight:500;color:var(--g500)}
+  .bk-list .bdg{margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;font-weight:700;
+    padding:4px 10px;border-radius:100px}
+  .bk-list .bdg.done{background:var(--blue-bg);color:var(--blue-deep)}
+  .bk-list .bdg.part{background:var(--g100);color:var(--g600)}
+  .bk-list .bdg.live{background:var(--green-bg);color:var(--green-deep)}
+  .bk-list .bdg.slot{background:none;border:1px dashed var(--g400);color:var(--g500)}
+  .bk-list>li.slot .tt{color:var(--g500);font-weight:600}
+  .bk-list>li.slot .tt small{color:var(--g400)}
+
+  /* docfab — 플로팅 퀵내비 (섹션 점프 + 허브 복귀). 스니펫: components.md */
+  .docfab{position:fixed;right:22px;bottom:22px;z-index:60;font-family:var(--sans)}
+  .docfab>button{width:48px;height:48px;border-radius:16px;border:1px solid var(--g200);
+    background:var(--white);box-shadow:var(--shadow);cursor:pointer;display:grid;place-items:center;
+    color:var(--g600);transition:.18s;padding:0}
+  .docfab>button:hover{color:var(--blue-deep);border-color:var(--blue)}
+  .docfab>button svg{width:20px;height:20px}
+  .docfab .panel{position:absolute;right:0;bottom:58px;width:min(320px,84vw);max-height:min(430px,68vh);
+    overflow:auto;background:var(--white);border:1px solid var(--g200);border-radius:18px;
+    box-shadow:var(--shadow);padding:10px;display:none}
+  .docfab.open .panel{display:block}
+  .docfab .panel .hd{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--g500);
+    letter-spacing:.06em;padding:8px 10px 4px}
+  .docfab .panel a{display:block;padding:8px 10px;border-radius:10px;font-size:13.5px;font-weight:600;
+    color:var(--g800);text-decoration:none;line-height:1.4}
+  .docfab .panel a:hover{background:var(--blue-bg2);color:var(--blue-deep)}
+  .docfab .panel a.sub{padding-left:24px;font-size:12.5px;font-weight:500;color:var(--g600)}
+  .docfab .panel .hub{margin-top:6px;border-top:1px solid var(--g100);padding-top:8px}
+  .docfab .panel a.hubl{color:var(--blue-deep);font-weight:700}
+  @media(max-width:720px){.docfab{right:14px;bottom:14px}}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer,.docnav{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+    .book-nav-crumb{padding:13px 24px}
+    .book-nav-foot{padding:20px 24px;grid-template-columns:1fr;gap:10px}
+    .book-nav-foot .next{text-align:left}
+    .book-nav-foot .toc-link{justify-self:start}
+    .bk-list .bdg{display:none}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>F3a · webclient-config · 조사 근거</span>
+      <h1 class="title">공급사 클라이언트를 어떻게 만들고<br><span class="hl">어떻게 동시에 부르는가</span></h1>
+      <p class="lede">공급사별 HTTP 클라이언트 인스턴스를 만드는 방식과, 여러 공급사를 한꺼번에 부를 때 쓸 조합 연산자를 정한다. 결론을 가른 것은 취향이 아니라 <b>버전 사실 하나</b>와 <b>자바독 한 문장</b>이다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">STACK</span><span class="v">Java 25 · Boot 3.5.x · Framework 6.2.11 · reactor-core 3.7.11</span></div>
+        <div class="chip"><span class="k">전제</span><span class="v">supplier-client → domain 단방향 의존</span></div>
+        <div class="chip"><span class="k">검증</span><span class="v">출처 22건 · PASS 21 / FAIL 1</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">결론 먼저<span class="hint">한 장 요약</span></a></li>
+      <li><a href="#s2">버전 사실 — 3.5에는 없다<span class="hint">설계를 가른 것</span></a></li>
+      <li><a href="#s3">클라이언트 생성 구조 4안</a></li>
+      <li><a href="#s4">fan-out 조합 연산자 5종<span class="hint">핵심</span></a></li>
+      <li><a href="#s5">외부 조언 판정 3건</a></li>
+      <li><a href="#s6">정직하게 병기할 것<span class="hint">불리한 사실</span></a></li>
+      <li><a href="#s7">검증 결과와 FAIL 처리</a></li>
+      <li><a href="#refs">참고문헌</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">SUMMARY</p><h2 class="sec">결론 먼저</h2></div>
+    </div>
+
+    <p class="lead">공급사별 <span class="term">@Bean</span> 수동 배선 + <span class="term">flatMap(fn, concurrency)</span> 조합. 둘 다 "더 좋아 보여서"가 아니라 다른 선택지가 막혀서 남은 답이다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>축</th><th>결론</th><th>이걸 정한 근거</th></tr></thead>
+        <tbody>
+          <tr><td>클라이언트 생성</td><td>공급사별 <span class="term">@Bean</span> 수동 배선 — <span class="term">builder.clone()</span> → <span class="term">WebClientAdapter</span> → <span class="term">HttpServiceProxyFactory</span></td><td>Boot 3.5에 자동 등록이 없다</td></tr>
+          <tr><td>설정</td><td><span class="term">@ConfigurationProperties</span> Map 바인딩으로 받고, 프록시는 공급사별 빈에서 꺼내 쓴다</td><td>A·B의 인터페이스가 서로 다르다</td></tr>
+          <tr><td>fan-out 조합</td><td><span class="term">Flux.fromIterable(...).flatMap(fn, maxConcurrent).collectList()</span></td><td>상한 인자를 가진 유일한 후보</td></tr>
+          <tr><td>호출당 체인</td><td><span class="term">.timeout()</span> → <span class="term">.retryWhen()</span> → <span class="term">.onErrorResume(값)</span></td><td>요구 조건의 세 축이 한자리에 모인다</td></tr>
+          <tr><td>포트 배치</td><td>포트는 <span class="term">domain</span>, 구현은 <span class="term">supplier-client</span></td><td>의존 역전 — 헥사고날 규범</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">핵심</span>이 프로젝트에 주어진 조건이 지목한 세 축은 <strong>타임아웃 · 재시도 · 병렬 호출 제어</strong>다. 이 문서의 모든 판단 기준은 "그 셋이 코드에 드러나는가" 하나다. 동작하느냐가 아니다.</div>
+  </section>
+
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">VERSION FACT</p><h2 class="sec">버전 사실 — 3.5에는 없다</h2></div>
+    </div>
+
+    <p class="lead">Boot 3.5.x / Framework 6.2.x에는 HTTP Interface 클라이언트의 자동 등록·설정 기능이 <strong>없다.</strong> 전부 수동 배선이다.</p>
+
+    <p>이 사실을 먼저 못 박는 이유는, 검색으로 나오는 최신 글 상당수가 <span class="term">@ImportHttpServices</span>나 <span class="term">spring.http.serviceclient.*</span>를 전제로 쓰여 있기 때문이다. 그대로 따라가면 <strong>우리 버전에 존재하지 않는 API</strong>를 쓰게 된다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>기능</th><th>어디부터 있나</th><th>확인 방법</th></tr></thead>
+        <tbody>
+          <tr><td>@ImportHttpServices</td><td>Spring Framework <strong>7.0</strong></td><td>자바독 <span class="term">Since</span> 필드가 7.0. 6.2.11 자바독의 같은 경로는 404<a href="#r8" class="cite">[8]</a></td></tr>
+          <tr><td>spring.http.serviceclient</td><td>Spring Boot <strong>4.x</strong></td><td>3.5 「Calling REST Services」 전문에 문자열 0건<a href="#r4" class="cite">[4]</a></td></tr>
+          <tr><td>레지스트리 계층</td><td>Framework 7 / Boot 4</td><td>Spring 공식 블로그가 직접 서술<a href="#r7" class="cite">[7]</a></td></tr>
+          <tr><td>spring.http.reactiveclient</td><td>Boot <strong>3.5에 있음</strong></td><td>단 <strong>전역</strong>이라 공급사별 차등 타임아웃에는 못 쓴다<a href="#r4" class="cite">[4]</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn"><span class="tag">주의</span>마지막 행이 함정이다. <span class="term">spring.http.reactiveclient.connect-timeout</span>은 <strong>존재하지만 전역</strong>이다. 공급사마다 다른 타임아웃을 주려면 이 프로퍼티가 아니라 공급사별 커넥터나 <span class="term">.timeout()</span> 연산자로 표현해야 한다. 후자라야 그 축이 코드에 드러난다.</div>
+  </section>
+
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">WIRING</p><h2 class="sec">클라이언트 생성 구조 4안</h2></div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>안</th><th>내용</th><th>판정</th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td>공급사별 <span class="term">@Bean</span> 수동 배선</td><td><strong>채택.</strong> 6.2 레퍼런스의 코드 예제 그대로<a href="#r1" class="cite">[1]</a></td></tr>
+          <tr><td>B</td><td>Map 순회 + 동적 빈 등록</td><td>탈락 — 인터페이스가 갈려 루프로 못 찍는다</td></tr>
+          <tr><td>C</td><td>단일 WebClient + 호출 시 절대 URI</td><td>탈락 — 공급사별 타임아웃·인증을 둘 자리가 없다</td></tr>
+          <tr><td>D</td><td>@ImportHttpServices 그룹</td><td>탈락 — 스택 밖(Framework 7 필요)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>B안을 탈락시킨 이유가 이 절의 핵심이다. "설정을 Map으로 받으니 인스턴스도 루프로 만들면 되지 않나"는 자연스러운 발상인데, <strong>루프로 찍어내려면 만들어지는 타입이 같아야 한다.</strong> 공급사 A는 4xx·5xx로 실패를 알리고 B는 HTTP 200 본문의 코드로 알린다. 실패 표현이 다르면 <span class="term">@HttpExchange</span> 인터페이스와 오류 해석 정책이 갈리고, 그러면 찍어낼 틀이 없다.</p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 720 236" role="img" aria-label="프로토타입 WebClient 빌더를 clone하여 공급사 A와 B의 WebClient를 각각 만들고, 어댑터와 프록시 팩토리를 거쳐 공급사별 클라이언트 프록시를 생성하는 배선 흐름">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <g>
+            <rect x="16" y="72" width="160" height="76" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+            <foreignObject x="16" y="72" width="160" height="76">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">WebClient.Builder</div><div class="s">prototype · stateful</div></div>
+            </foreignObject>
+          </g>
+
+          <line x1="180" y1="98" x2="250" y2="60" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="180" y1="122" x2="250" y2="160" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
+          <text class="svg-l" x="215" y="105" text-anchor="middle" fill="#1B64DA">clone()</text>
+
+          <g>
+            <rect x="252" y="20" width="176" height="76" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="252" y="20" width="176" height="76">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">WebClient (A)</div><div class="s">baseUrl · 인증 · 커넥터</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="252" y="124" width="176" height="76" rx="16" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+            <foreignObject x="252" y="124" width="176" height="76">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">WebClient (B)</div><div class="s">baseUrl · 인증 · 커넥터</div></div>
+            </foreignObject>
+          </g>
+
+          <line x1="430" y1="58" x2="498" y2="58" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="430" y1="162" x2="498" y2="162" stroke="#15C47E" stroke-width="2" marker-end="url(#a1)"/>
+          <text class="svg-l" x="464" y="46" text-anchor="middle" fill="#0A8F5B">Adapter</text>
+          <text class="svg-l" x="464" y="150" text-anchor="middle" fill="#0A8F5B">Adapter</text>
+
+          <g>
+            <rect x="500" y="20" width="204" height="76" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="500" y="20" width="204" height="76">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">공급사 A 클라이언트</div><div class="s">HTTP Interface · Mono 반환</div></div>
+            </foreignObject>
+          </g>
+          <g>
+            <rect x="500" y="124" width="204" height="76" rx="16" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="500" y="124" width="204" height="76">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">공급사 B 클라이언트</div><div class="s">HTTP Interface · Mono 반환</div></div>
+            </foreignObject>
+          </g>
+
+          <line x1="500" y1="110" x2="704" y2="110" stroke="#8B95A1" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <text class="svg-s" x="602" y="222" text-anchor="middle" fill="#8B95A1">서로 다른 인터페이스 — 루프로 못 찍는다</text>
+        </svg>
+      </div>
+      <figcaption><b>그림 1.</b> 배선 흐름. 프로토타입 빌더를 <b>clone</b>해 공급사별로 갈라놓는 것이 시작점이다<a href="#r4" class="cite">[4]</a>.</figcaption>
+    </figure>
+
+    <div class="note warn"><span class="tag">함정</span>Boot 문서가 직접 경고한다 — <em>"WebClient.Builder instances are stateful: Any change on the builder is reflected in all clients subsequently created with it."</em> 같은 빌더를 두 번 커스터마이즈하면 <strong>A의 설정이 B에 샌다.</strong> 조용히 틀리는 종류의 버그다<a href="#r4" class="cite">[4]</a>.</div>
+  </section>
+
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">FAN-OUT</p><h2 class="sec">fan-out 조합 연산자 5종</h2></div>
+    </div>
+
+    <p class="lead">동시 구독 상한을 인자로 줄 수 있는 연산자는 둘뿐이고, 그중 순서 제약이 없는 것은 하나다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>연산자</th><th>동시 구독 상한</th><th>하나가 오류 → 나머지</th><th>빈 리스트</th></tr></thead>
+        <tbody>
+          <tr><td>flatMap(fn, n)</td><td><strong>있음</strong> — 생략 시 256</td><td>취소함</td><td>collectList → 빈 List</td></tr>
+          <tr><td>Mono.zip</td><td>없음</td><td>취소함 — <strong>빈 완료도 취소 사유</strong></td><td>combinator 미호출 → block 시 null</td></tr>
+          <tr><td>Flux.merge(Iterable)</td><td>없음 (256 고정)</td><td>취소함</td><td>빈 Flux</td></tr>
+          <tr><td>mergeSequential(…, n, p)</td><td>있음</td><td>취소함</td><td>빈 Flux</td></tr>
+          <tr><td>Mono.zipDelayError</td><td>없음</td><td>취소 안 함</td><td>빈 완료</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>기본 동시성 <strong>256</strong>은 <span class="term">Queues.SMALL_BUFFER_SIZE</span>에서 온다<a href="#r18" class="cite">[18]</a>. 공급사가 둘뿐인 지금은 값 자체가 무의미하지만, <strong>상한을 명시적으로 적는 행위 자체가</strong> 세 축 중 하나에 대한 답이다. 생략하면 "제한 없음"과 사실상 같은 상태로 남는다.</p>
+
+    <h3 id="s4-1">zip이 위험한 진짜 이유</h3>
+
+    <blockquote>
+      <p>An error or empty completion of any source will cause other sources to be cancelled and the resulting Mono to immediately error or complete, respectively.</p>
+      <cite>— Mono 자바독, reactor-core 3.7.11<a href="#r16" class="cite">[16]</a></cite>
+    </blockquote>
+
+    <p><span class="term">Mono.zip</span>은 <strong>빈 완료를 오류와 똑같이 취급해 나머지를 취소한다.</strong> 그런데 부분 실패를 흡수하려고 붙이는 것이 <span class="term">onErrorResume</span>이다. 여기서 fallback을 <span class="term">Mono.empty()</span>로 두면 — 실패를 흡수하려던 코드가 <strong>오히려 나머지 공급사 호출을 전부 취소시키고 전체를 빈 결과로 만든다.</strong></p>
+
+    <figure>
+      <div class="fig-box" data-fig="FIG. 02">
+        <svg viewBox="0 0 720 252" role="img" aria-label="왼쪽은 flatMap이 동시성 상한 게이트로 동시 호출 수를 제한하는 흐름, 오른쪽은 Mono.zip에서 빈 완료 하나가 나머지 호출을 모두 취소시키는 흐름">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="8" y="8" width="344" height="236" rx="18" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.2"/>
+          <text class="svg-t" x="180" y="34" text-anchor="middle" fill="#0A8F5B">flatMap(fn, 2)</text>
+
+          <rect x="28" y="52" width="76" height="32" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="66" y="72" text-anchor="middle" fill="#1B64DA">호출 1</text>
+          <rect x="28" y="92" width="76" height="32" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="66" y="112" text-anchor="middle" fill="#1B64DA">호출 2</text>
+          <rect x="28" y="132" width="76" height="32" rx="10" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <text class="svg-s" x="66" y="152" text-anchor="middle" fill="#6B7684">호출 3</text>
+          <rect x="28" y="172" width="76" height="32" rx="10" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <text class="svg-s" x="66" y="192" text-anchor="middle" fill="#6B7684">호출 4</text>
+
+          <rect x="130" y="52" width="13" height="152" rx="6" fill="#15C47E" opacity="0.2"/>
+          <text class="svg-l" x="136" y="222" text-anchor="middle" fill="#0A8F5B">상한 2</text>
+
+          <line x1="106" y1="68" x2="126" y2="68" stroke="#15C47E" stroke-width="2" marker-end="url(#a2)"/>
+          <line x1="106" y1="108" x2="126" y2="108" stroke="#15C47E" stroke-width="2" marker-end="url(#a2)"/>
+          <line x1="106" y1="148" x2="126" y2="148" stroke="#B0B8C1" stroke-width="1.6" stroke-dasharray="4 4"/>
+          <line x1="106" y1="188" x2="126" y2="188" stroke="#B0B8C1" stroke-width="1.6" stroke-dasharray="4 4"/>
+
+          <line x1="147" y1="128" x2="210" y2="128" stroke="#15C47E" stroke-width="2" marker-end="url(#a2)"/>
+
+          <g>
+            <rect x="214" y="98" width="122" height="60" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+            <foreignObject x="214" y="98" width="122" height="60">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">collectList</div><div class="s">실패는 값으로 남음</div></div>
+            </foreignObject>
+          </g>
+
+          <rect x="368" y="8" width="344" height="236" rx="18" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.2"/>
+          <text class="svg-t" x="540" y="34" text-anchor="middle" fill="#C9303C">Mono.zip</text>
+
+          <rect x="388" y="52" width="76" height="32" rx="10" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-s" x="426" y="72" text-anchor="middle" fill="#C9303C">빈 완료</text>
+          <rect x="388" y="92" width="76" height="32" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="426" y="112" text-anchor="middle" fill="#1B64DA">호출 2</text>
+          <rect x="388" y="132" width="76" height="32" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="426" y="152" text-anchor="middle" fill="#1B64DA">호출 3</text>
+          <rect x="388" y="172" width="76" height="32" rx="10" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-s" x="426" y="192" text-anchor="middle" fill="#1B64DA">호출 4</text>
+
+          <line x1="466" y1="68" x2="560" y2="68" stroke="#F04452" stroke-width="2" marker-end="url(#a2)"/>
+          <line x1="500" y1="80" x2="500" y2="192" stroke="#F04452" stroke-width="1.6" stroke-dasharray="5 4"/>
+          <line x1="500" y1="108" x2="470" y2="108" stroke="#F04452" stroke-width="1.6" marker-end="url(#a2)"/>
+          <line x1="500" y1="148" x2="470" y2="148" stroke="#F04452" stroke-width="1.6" marker-end="url(#a2)"/>
+          <line x1="500" y1="188" x2="470" y2="188" stroke="#F04452" stroke-width="1.6" marker-end="url(#a2)"/>
+          <text class="svg-l" x="560" y="222" text-anchor="middle" fill="#C9303C">나머지 전부 취소</text>
+
+          <g>
+            <rect x="566" y="42" width="130" height="56" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+            <foreignObject x="566" y="42" width="130" height="56">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">빈 결과</div><div class="s">block() 시 null</div></div>
+            </foreignObject>
+          </g>
+        </svg>
+      </div>
+      <figcaption><b>그림 2.</b> 같은 실수(<b>fallback을 empty로 두는 것</b>)가 두 연산자에서 다른 크기의 사고가 된다<a href="#r16" class="cite">[16]</a><a href="#r19" class="cite">[19]</a>.</figcaption>
+    </figure>
+
+    <h3 id="s4-2">채택안</h3>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFC56B"></span><span class="dot" style="background:#15C47E"></span><span class="fn">fan-out 조합 — 형태만</span></div>
+      <pre><span class="cm">// 호출 하나마다: 타임아웃 → 재시도 → 실패를 "값"으로 흡수</span>
+<span class="ty">Flux</span>.fromIterable(calls)
+    .flatMap(<span class="ty">Function</span>.identity(), maxConcurrentCalls)   <span class="cm">// 병렬 호출 제어</span>
+    .collectList()
+    .block(fanOutBudget);                                <span class="cm">// 경계에서 1회만</span></pre>
+    </div>
+
+    <div class="note warn"><span class="tag">규약</span><strong><span class="term">onErrorResume</span>의 fallback은 반드시 값이다.</strong> <span class="term">Mono.empty()</span>를 쓰면 flatMap에서는 그 공급사가 조용히 사라지고, zip에서는 전체가 취소된다. 그리고 개별 흡수와 <span class="term">delayError</span> 변형을 같이 쓰면 <strong>후자가 죽은 코드</strong>가 된다 — 둘 중 하나만 고른다.</div>
+  </section>
+
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">CLAIM CHECK</p><h2 class="sec">외부 조언 판정 3건</h2></div>
+    </div>
+
+    <p class="lead">방향은 맞고, 수단 둘이 어긋난다.</p>
+
+    <div class="cols">
+      <div class="col x"><h4><span class="mk">주장 1</span> vthread pinning 리스크</h4><p><strong>근거가 낡았다.</strong> JEP 491(Status <em>Closed / Delivered</em>, Release <strong>24</strong>)이 synchronized pinning을 제거했다<a href="#r21" class="cite">[21]</a>. 이 프로젝트는 <strong>Java 25</strong>다. vthread를 조합 수단으로 안 쓰는 이유는 pinning이 아니라 <em>동시 호출 상한을 직접 만들어야 하고 제어 로직이 코드에 안 드러나서</em>다.</p></div>
+      <div class="col o"><h4><span class="mk">주장 2</span> zip으로 묶으면 된다</h4><p><strong>부분적으로만 맞다.</strong> 동작은 하지만 전 오버로드에 concurrency 인자가 없어 <em>병렬 호출 제어</em>를 쓸 문법 자리가 없다<a href="#r16" class="cite">[16]</a>. 여기에 4장의 빈 완료 취소 문제가 겹친다.</p></div>
+    </div>
+
+    <div class="note"><span class="tag">주장 3</span>"vthread + block()은 RestTemplate 멀티스레드와 로직상 동일하다" — <strong>부분적으로 맞다.</strong> Spring 6.2 레퍼런스는 동기 사용을 정식으로 인정하되, 다중 호출은 개별 block이 아니라 <strong>조합 후 1회 대기</strong>를 권한다<a href="#r14" class="cite">[14]</a>. 실제 I/O가 호출 스레드가 아닌 이벤트 루프에서 돌기 때문에 병렬성 제어 지점이 스레드 수가 아니라 연산자다.<br><br><strong>block()이 가상 스레드에서 carrier를 점유하는지는 확인하지 못했다.</strong> 공식 문서에 그 서술이 없어 추측하지 않는다. 이 결정에는 영향이 없다.</div>
+  </section>
+
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">AGAINST US</p><h2 class="sec">정직하게 병기할 것</h2></div>
+    </div>
+
+    <p class="lead">결론에 불리한 사실 셋. 감추면 리뷰에서 그대로 되돌아온다.</p>
+
+    <ul class="checklist">
+      <li><span class="box"></span><b>공식 문서의 예시는 Mono.zip이다.</b> 「Synchronous Use」 페이지에 flatMap도 concurrency도 언급이 없다. 다만 그 문서가 스스로 <em>"merely one example"</em>이라 한정하므로, "공식이 zip을 권장한다"가 아니라 <b>"최소 예시로 zip을 보인다"</b>가 정확하다<a href="#r14" class="cite">[14]</a>.</li>
+      <li><span class="box"></span><b>같은 페이지 마지막 문장은 <em>"you should never have to block in a Spring MVC or Spring WebFlux controller"</em>다.</b> 우리는 컨트롤러가 아니라 인프라 어댑터에서 block하고 가상 스레드로 서빙한다. 그러나 <b>이 긴장을 문서가 해소해 주지는 않는다</b> — 프로젝트 판단으로 적어야 한다<a href="#r14" class="cite">[14]</a>.</li>
+      <li><span class="box"></span><b>"리액티브 타입을 인프라 모듈 안에만 둔다"를 직접 서술한 1·2차 출처는 없다.</b> 의존 역전(포트는 domain, 구현은 supplier-client)은 뒷받침된다<a href="#r10" class="cite">[10]</a><a href="#r12" class="cite">[12]</a>. 하지만 리액티브 타입 차단은 별개 주장이므로 <b>이 프로젝트의 규약</b>으로 적고 출처를 붙이지 않는다.</li>
+    </ul>
+  </section>
+
+  <section id="s7" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">7</div>
+      <div><p class="sec-eyebrow">VERIFICATION</p><h2 class="sec">검증 결과와 FAIL 처리</h2></div>
+    </div>
+
+    <p class="lead">출처 22건을 탐색자와 분리된 검증자가 다시 열어 확인했다 — <strong>PASS 21 / FAIL 1 / UNVERIFIED 0.</strong></p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>문제</th><th>처리</th></tr></thead>
+        <tbody>
+          <tr><td>FAIL 1건</td><td>Boot 4 프로퍼티 클래스 페이지에 접두사 문자열이 없다. 클래스 존재로부터 접두사를 추론한 주장이었다</td><td><strong>목록에서 제외.</strong> 이 문서는 그 주장을 쓰지 않는다</td></tr>
+          <tr><td>인용 범위 축소</td><td>Spring 공식 블로그의 시점 접두사와 현재 GA 접두사가 다르다</td><td>프로퍼티 <strong>이름</strong>의 근거로 쓰지 않고, "레지스트리 계층이 7·4 신규"에만 쓴다</td></tr>
+          <tr><td>서술 정정</td><td>merge(Iterable)만 기본 동시성을 <strong>간접</strong> 위임한다</td><td>"직접 위임"이라 쓰지 않는다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">남는 결론</span>FAIL 처리 후에도 <strong>"Boot 3.5에는 자동 등록이 없다"</strong>는 흔들리지 않는다. 3.5 페이지 전문의 문자열 부재<a href="#r4" class="cite">[4]</a>와 <span class="term">Since 7.0</span> 자바독<a href="#r8" class="cite">[8]</a>이 각각 독립적으로 뒷받침한다.</div>
+  </section>
+
+  <section id="refs" class="fade">
+    <div class="sec-head">
+      <div class="sec-num" style="background:var(--g700);box-shadow:none">§</div>
+      <div><p class="sec-eyebrow">SOURCES</p><h2 class="sec">참고문헌</h2></div>
+    </div>
+
+    <p>검증을 통과한 21건만 싣는다. FAIL 1건은 제외했다.</p>
+
+    <a class="ref primary" id="r1" href="https://docs.spring.io/spring-framework/reference/6.2/integration/rest-clients.html" target="_blank" rel="noopener"><span class="n">1</span><span class="b"><b>REST Clients :: Spring Framework</b> — 6.2의 공식 프록시 생성 절차와 base URL 설정 위치.<span class="src">https://docs.spring.io/spring-framework/reference/6.2/integration/rest-clients.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r2" href="https://docs.spring.io/spring-framework/docs/6.2.11/javadoc-api/org/springframework/web/service/invoker/HttpServiceProxyFactory.html" target="_blank" rel="noopener"><span class="n">2</span><span class="b"><b>HttpServiceProxyFactory (6.2.11 API)</b> — 프록시 생성 진입점(Since 6.0), 자동 등록 언급 없음.<span class="src">https://docs.spring.io/spring-framework/docs/6.2.11/javadoc-api/org/springframework/web/service/invoker/HttpServiceProxyFactory.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r3" href="https://docs.spring.io/spring-framework/docs/6.2.11/javadoc-api/org/springframework/web/reactive/function/client/support/WebClientAdapter.html" target="_blank" rel="noopener"><span class="n">3</span><span class="b"><b>WebClientAdapter (6.2.11 API)</b> — WebClient 기반 리액티브 어댑터.<span class="src">https://docs.spring.io/spring-framework/docs/6.2.11/javadoc-api/org/springframework/web/reactive/function/client/support/WebClientAdapter.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r4" href="https://docs.spring.io/spring-boot/3.5/reference/io/rest-client.html" target="_blank" rel="noopener"><span class="n">4</span><span class="b"><b>Calling REST Services :: Spring Boot 3.5</b> — 빌더가 prototype이자 stateful이라 clone 권장. 자동 등록 부재와 전역 타임아웃 프로퍼티.<span class="src">https://docs.spring.io/spring-boot/3.5/reference/io/rest-client.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r5" href="https://docs.spring.io/spring-framework/reference/6.2/web/webflux-webclient/client-builder.html" target="_blank" rel="noopener"><span class="n">5</span><span class="b"><b>Configuration :: Spring Framework</b> — 빌드된 WebClient는 불변이며 mutate로 복제하고 필터가 누적된다.<span class="src">https://docs.spring.io/spring-framework/reference/6.2/web/webflux-webclient/client-builder.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r6" href="https://docs.spring.io/spring-boot/3.5/reference/features/external-config.html" target="_blank" rel="noopener"><span class="n">6</span><span class="b"><b>Externalized Configuration :: Spring Boot 3.5</b> — Map 바인딩 규칙과 대괄호 표기가 필요한 키.<span class="src">https://docs.spring.io/spring-boot/3.5/reference/features/external-config.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r7" href="https://spring.io/blog/2025/09/23/http-service-client-enhancements" target="_blank" rel="noopener"><span class="n">7</span><span class="b"><b>HTTP Service Client Enhancements (Spring Blog)</b> — 레지스트리 계층은 Framework 7 신규. 프로퍼티 이름 근거로는 쓰지 않는다.<span class="src">https://spring.io/blog/2025/09/23/http-service-client-enhancements</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r8" href="https://docs.spring.io/spring-framework/docs/7.0.x/javadoc-api/org/springframework/web/service/registry/ImportHttpServices.html" target="_blank" rel="noopener"><span class="n">8</span><span class="b"><b>ImportHttpServices (7.0.x API)</b> — Since 7.0. 6.2 스택에서 사용 불가.<span class="src">https://docs.spring.io/spring-framework/docs/7.0.x/javadoc-api/org/springframework/web/service/registry/ImportHttpServices.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r10" href="https://docs.aws.amazon.com/prescriptive-guidance/latest/hexagonal-architectures/best-practices.html" target="_blank" rel="noopener"><span class="n">10</span><span class="b"><b>Best practices — AWS Prescriptive Guidance</b> — 도메인은 다른 모듈에 의존하지 않고, secondary adapter가 도메인 포트를 구현한다.<span class="src">https://docs.aws.amazon.com/prescriptive-guidance/latest/hexagonal-architectures/best-practices.html</span><span class="pr bt">빅테크 공식</span></span></a>
+    <a class="ref primary" id="r11" href="https://docs.aws.amazon.com/prescriptive-guidance/latest/hexagonal-architectures/overview.html" target="_blank" rel="noopener"><span class="n">11</span><span class="b"><b>Overview — AWS Prescriptive Guidance</b> — 헥사고날은 의존성 역전을 관리하는 원칙이고 포트는 도메인이 정의한다.<span class="src">https://docs.aws.amazon.com/prescriptive-guidance/latest/hexagonal-architectures/overview.html</span><span class="pr bt">빅테크 공식</span></span></a>
+    <a class="ref" id="r12" href="https://microservices.io/post/architecture/2023/03/01/geometry-of-microservices.html" target="_blank" rel="noopener"><span class="n">12</span><span class="b"><b>The geometry of microservices</b> — 비즈니스 로직이 중심이고 어댑터가 그것에 의존한다.<span class="src">https://microservices.io/post/architecture/2023/03/01/geometry-of-microservices.html</span><span class="pr p1">패턴 카탈로그</span></span></a>
+    <a class="ref primary" id="r13" href="https://docs.spring.io/spring-framework/reference/6.2/web/webflux/new-framework.html" target="_blank" rel="noopener"><span class="n">13</span><span class="b"><b>Overview :: Spring Framework (Applicability)</b> — MVC 앱의 원격 호출에 리액티브 WebClient를 쓰는 것이 공식 권장 조합.<span class="src">https://docs.spring.io/spring-framework/reference/6.2/web/webflux/new-framework.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r14" href="https://docs.spring.io/spring-framework/reference/6.2/web/webflux-webclient/client-synchronous.html" target="_blank" rel="noopener"><span class="n">14</span><span class="b"><b>Synchronous Use :: Spring Framework</b> — 체인 끝 block 허용, 다중 호출은 조합 후 1회 대기. 예시는 zip이고 컨트롤러 block 경고가 함께 있다.<span class="src">https://docs.spring.io/spring-framework/reference/6.2/web/webflux-webclient/client-synchronous.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r15" href="https://projectreactor.io/docs/core/3.7.11/api/reactor/core/publisher/Flux.html" target="_blank" rel="noopener"><span class="n">15</span><span class="b"><b>Flux (reactor-core 3.7.11)</b> — flatMap concurrency 의미, merge 계열의 인자 유무, collectList의 빈 시퀀스 동작.<span class="src">https://projectreactor.io/docs/core/3.7.11/api/reactor/core/publisher/Flux.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r16" href="https://projectreactor.io/docs/core/3.7.11/api/reactor/core/publisher/Mono.html" target="_blank" rel="noopener"><span class="n">16</span><span class="b"><b>Mono (reactor-core 3.7.11)</b> — zip은 오류 또는 빈 완료에 나머지를 취소하며 concurrency 인자가 없다.<span class="src">https://projectreactor.io/docs/core/3.7.11/api/reactor/core/publisher/Mono.html</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r17" href="https://raw.githubusercontent.com/reactor/reactor-core/v3.7.11/reactor-core/src/main/java/reactor/core/publisher/Flux.java" target="_blank" rel="noopener"><span class="n">17</span><span class="b"><b>reactor-core Flux.java (v3.7.11)</b> — 인자 없는 flatMap과 mergeSequential이 기본 버퍼 크기로 위임한다(merge는 간접).<span class="src">https://raw.githubusercontent.com/reactor/reactor-core/v3.7.11/reactor-core/src/main/java/reactor/core/publisher/Flux.java</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r18" href="https://raw.githubusercontent.com/reactor/reactor-core/v3.7.11/reactor-core/src/main/java/reactor/util/concurrent/Queues.java" target="_blank" rel="noopener"><span class="n">18</span><span class="b"><b>reactor-core Queues.java (v3.7.11)</b> — SMALL_BUFFER_SIZE 기본 256, XS_BUFFER_SIZE 기본 32.<span class="src">https://raw.githubusercontent.com/reactor/reactor-core/v3.7.11/reactor-core/src/main/java/reactor/util/concurrent/Queues.java</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r19" href="https://raw.githubusercontent.com/reactor/reactor-core/v3.7.11/reactor-core/src/main/java/reactor/core/publisher/MonoZip.java" target="_blank" rel="noopener"><span class="n">19</span><span class="b"><b>reactor-core MonoZip.java (v3.7.11)</b> — 소스가 0개면 combinator 없이 빈 완료한다.<span class="src">https://raw.githubusercontent.com/reactor/reactor-core/v3.7.11/reactor-core/src/main/java/reactor/core/publisher/MonoZip.java</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r20" href="https://github.com/reactor/reactor-core/blob/v3.7.11/docs/modules/ROOT/pages/faq.adoc" target="_blank" rel="noopener"><span class="n">20</span><span class="b"><b>reactor-core FAQ (v3.7.11)</b> — zip에서 한 소스가 빈 완료하면 나머지에 구독조차 하지 않을 수 있다.<span class="src">https://github.com/reactor/reactor-core/blob/v3.7.11/docs/modules/ROOT/pages/faq.adoc</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r21" href="https://openjdk.org/jeps/491" target="_blank" rel="noopener"><span class="n">21</span><span class="b"><b>JEP 491: Synchronize Virtual Threads without Pinning</b> — Status Closed/Delivered, Release 24. 잔여 pinning은 드물게만 문제가 된다.<span class="src">https://openjdk.org/jeps/491</span><span class="pr p1">1차 출처</span></span></a>
+    <a class="ref primary" id="r22" href="https://openjdk.org/jeps/444" target="_blank" rel="noopener"><span class="n">22</span><span class="b"><b>JEP 444: Virtual Threads</b> — JDK 21 기준으로 synchronized 안의 블로킹이 캐리어를 붙잡는다고 서술한다.<span class="src">https://openjdk.org/jeps/444</span><span class="pr p1">1차 출처</span></span></a>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    F3a webclient-config — 클라이언트 배선과 fan-out 조합 조사 근거 · 2026-09-06<br>
+    출처 22건 검증 · PASS 21 / FAIL 1 · 통과분만 기재
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>
