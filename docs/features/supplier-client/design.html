@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F3 supplier-client 설계 협의</title>
+<!-- 폰트: Pretendard(본문) + JetBrains Mono(코드/라벨). 이 두 개만 사용한다. -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     색/폰트/그림자는 반드시 이 변수로만 참조한다 (임의 hex 금지).
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  /* scroll progress bar */
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  /* page sheet (흰 카드) */
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  /* .sheet.wide — 스키마/ER 같은 표 중심 문서용 넓은 시트 (2026-09-04 추가). SVG viewBox 는 1140 기준 */
+  .sheet.wide{max-width:1300px}
+
+  /* cover */
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  /* toc — 심플 인덱스 (유일한 목차 컴포넌트, 2026-08-02 재설계)
+     1열 세로 나열 = 읽는 순서 그대로. 카드·박스·그리드 금지 (구 2열 카드형·toc-deep 카드형 폐기).
+     하위 항목이 필요하면 li 안에 .ts 를 들여쓴 평문 링크로만 추가한다. */
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  /* sections */
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  /* stchip — 상태 칩: 목록·표 항목의 진행 상태 (ok=확정 / mid=뼈대 / open=미정) */
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  /* blockquote (인용) */
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  /* note / callout (.note 기본 · .key 파랑 · .warn 빨강) */
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  /* figure + SVG 다이어그램 컨테이너 */
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  /* foreignObject 자동 줄바꿈 박스 — 글자가 박스를 절대 넘지 않게 자동 줄바꿈+중앙정렬.
+     라벨 길이가 불확실하거나 한글이 많은 박스엔 .svg-t/.svg-s <text> 대신 이걸 쓴다 (폭 계산 불필요). */
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  /* .fo.left — 표 셀·설명 칸용 좌측 정렬 변형 (2026-09-04 추가). .d 는 본문 설명 텍스트 */
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  /* wide figure — 시트(860px) 폭을 넘는 다이어그램 (긴 시퀀스/타임라인 전용) */
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  /* code block (mac 윈도우 스타일) */
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  /* toggle — 접기/펼치기 (details/summary) */
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  /* 2-column 비교 카드 (.x 중립 · .o 강조) */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  /* table */
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  /* fn-card — 함수/API 시그니처 카드 (어두운 시그니처 바 + 명세 표) */
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  /* 참고문헌 리스트 */
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  /* checklist — 체크 항목 리스트. li 안에 <span class="box"></span> + 텍스트. 완료는 li.done
+     ⚠️ li 는 display:block + 박스는 position:absolute 다 (display:flex 금지).
+     li 안에는 <b>/<strong>/<span class="term"> 같은 인라인 요소가 섞이는데,
+     li 를 flex 로 두면 그 인라인 요소들이 각각 별도 flex item 이 되어
+     좁은 칸에 글자가 "세로로" 쌓이며 깨진다. 그래서 텍스트는 일반 인라인 흐름으로 둔다. */
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  /* carousel — 좌우 슬라이드 (분위기 사진 + 캡션). JS는 화살표 스크롤만.
+     사진이 없으면 .ph 가 플레이스홀더로 남는다 (img onerror 로 .empty 부여). */
+  .carousel{position:relative;margin:34px 0}
+  .carousel .track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+    scroll-behavior:smooth;padding:2px 2px 10px;-webkit-overflow-scrolling:touch}
+  .carousel .track::-webkit-scrollbar{height:6px}
+  .carousel .track::-webkit-scrollbar-thumb{background:var(--g300);border-radius:3px}
+  .carousel .track::-webkit-scrollbar-track{background:transparent}
+  .carousel .slide{flex:0 0 82%;scroll-snap-align:center;background:var(--white);
+    border:1px solid var(--g200);border-radius:20px;overflow:hidden;transition:.18s}
+  .carousel .slide:hover{border-color:var(--blue);box-shadow:var(--shadow-sm)}
+  .carousel .ph{position:relative;aspect-ratio:16/9;background:var(--blue-bg2);
+    display:grid;place-items:center;overflow:hidden}
+  .carousel .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .carousel .ph.empty{background:linear-gradient(135deg,var(--blue-bg2),var(--g100))}
+  .carousel .ph.empty::after{content:attr(data-empty);font-family:var(--mono);font-size:11.5px;
+    font-weight:500;color:var(--g400);letter-spacing:.02em;text-align:center;padding:0 20px;line-height:1.6}
+  .carousel .cap{padding:18px 20px 20px}
+  .carousel .cap .t{display:block;font-size:15.5px;font-weight:700;color:var(--g900);line-height:1.4;margin-bottom:6px}
+  .carousel .cap .d{display:block;font-size:14px;font-weight:500;color:var(--g600);line-height:1.6;word-break:keep-all}
+  .carousel .cap .d b{color:var(--g800);font-weight:700}
+  .carousel .cap .src{display:block;font-family:var(--mono);font-size:10px;color:var(--g400);
+    margin-top:9px;line-height:1.5;word-break:break-all}
+  .carousel .cap .src a{color:var(--g500);text-decoration:none}
+  .carousel .cap .src a:hover{color:var(--blue);text-decoration:underline}
+  .carousel .nav{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
+  .carousel .nav button{width:36px;height:36px;border-radius:12px;border:1px solid var(--g200);
+    background:var(--white);color:var(--g600);cursor:pointer;display:grid;place-items:center;
+    font-family:var(--mono);font-size:15px;font-weight:700;transition:.15s;padding:0}
+  .carousel .nav button:hover{border-color:var(--blue);color:var(--blue-deep);background:var(--blue-bg2)}
+  @media(max-width:720px){.carousel .slide{flex:0 0 88%}}
+
+  /* docnav — 문서 시리즈(여러 HTML 파일) 간 네비게이션 바. cover 와 toc 사이에 둔다 */
+  .docnav{display:flex;flex-wrap:wrap;gap:8px;padding:20px 56px;background:var(--white);
+    border-bottom:1px solid var(--g100)}
+  .docnav a{font-family:var(--mono);font-size:12.5px;font-weight:700;text-decoration:none;
+    padding:9px 14px;border-radius:100px;background:var(--g50);border:1px solid var(--g200);
+    color:var(--g600);transition:.18s}
+  .docnav a:hover{border-color:var(--blue);color:var(--blue-deep);transform:translateY(-1px)}
+  .docnav a.cur{background:var(--blue-bg);border-color:#cfe4ff;color:var(--blue-deep)}
+  .docnav a .n{color:var(--g400);margin-right:6px}
+  .docnav a.cur .n{color:var(--blue)}
+
+  /* book-nav — 책 시리즈 내비게이션 (breadcrumb + prev/next). 스니펫: components.md */
+  .book-nav-crumb{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:15px 56px;
+    background:var(--g50);border-bottom:1px solid var(--g100);
+    font-family:var(--mono);font-size:12px;font-weight:500;color:var(--g600)}
+  .book-nav-crumb a{color:var(--blue);text-decoration:none;font-weight:700}
+  .book-nav-crumb a:hover{text-decoration:underline}
+  .book-nav-crumb .sep{color:var(--g300)}
+  .book-nav-crumb b{color:var(--g800);font-weight:700}
+  .book-nav-foot{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;
+    padding:26px 56px;border-top:1px solid var(--g100);background:var(--g50)}
+  .book-nav-foot .prev,.book-nav-foot .next{display:block;border:1px solid var(--g200);border-radius:14px;
+    padding:13px 17px;text-decoration:none;background:var(--white);transition:.18s}
+  .book-nav-foot a.prev:hover,.book-nav-foot a.next:hover{border-color:var(--blue);box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+  .book-nav-foot .dir{display:block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    color:var(--g500);letter-spacing:.04em;margin-bottom:4px}
+  .book-nav-foot .t{display:block;font-size:13.5px;font-weight:700;color:var(--g900);line-height:1.4}
+  .book-nav-foot .next{text-align:right}
+  .book-nav-foot .toc-link{font-family:var(--mono);font-size:12px;font-weight:700;text-decoration:none;
+    color:var(--blue-deep);background:var(--blue-bg);border:1px solid #cfe4ff;border-radius:100px;
+    padding:10px 18px;transition:.18s}
+  .book-nav-foot .toc-link:hover{border-color:var(--blue)}
+  .book-nav-foot .off{opacity:.6;background:var(--g100);cursor:default}
+  .book-nav-foot .off .t{color:var(--g500)}
+
+  /* book-toc — 책 목차 (허브 전용: 장 행 + 상태 배지). 스니펫: components.md */
+  .bk-part{margin:28px 0}
+  .bk-part-h{display:flex;align-items:baseline;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+  .bk-part-h .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.05em}
+  .bk-part-h .t{font-size:17px;font-weight:800;color:var(--g900)}
+  .bk-list{list-style:none;margin:0;padding:0;border:1px solid var(--g200);border-radius:16px;
+    overflow:hidden;background:var(--white)}
+  .bk-list>li{border-top:1px solid var(--g100)}
+  .bk-list>li:first-child{border-top:none}
+  .bk-list>li>a,.bk-list>li>.row{display:flex;align-items:center;gap:14px;padding:13px 18px;
+    text-decoration:none;transition:background .15s}
+  .bk-list>li>a:hover{background:var(--blue-bg2)}
+  .bk-list .no{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--g400);flex:none;width:32px}
+  .bk-list .tt{font-size:14.5px;font-weight:700;color:var(--g900);line-height:1.45;min-width:0}
+  .bk-list .tt small{display:block;font-size:12.5px;font-weight:500;color:var(--g500)}
+  .bk-list .bdg{margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;font-weight:700;
+    padding:4px 10px;border-radius:100px}
+  .bk-list .bdg.done{background:var(--blue-bg);color:var(--blue-deep)}
+  .bk-list .bdg.part{background:var(--g100);color:var(--g600)}
+  .bk-list .bdg.live{background:var(--green-bg);color:var(--green-deep)}
+  .bk-list .bdg.slot{background:none;border:1px dashed var(--g400);color:var(--g500)}
+  .bk-list>li.slot .tt{color:var(--g500);font-weight:600}
+  .bk-list>li.slot .tt small{color:var(--g400)}
+
+  /* docfab — 플로팅 퀵내비 (섹션 점프 + 허브 복귀). 스니펫: components.md */
+  .docfab{position:fixed;right:22px;bottom:22px;z-index:60;font-family:var(--sans)}
+  .docfab>button{width:48px;height:48px;border-radius:16px;border:1px solid var(--g200);
+    background:var(--white);box-shadow:var(--shadow);cursor:pointer;display:grid;place-items:center;
+    color:var(--g600);transition:.18s;padding:0}
+  .docfab>button:hover{color:var(--blue-deep);border-color:var(--blue)}
+  .docfab>button svg{width:20px;height:20px}
+  .docfab .panel{position:absolute;right:0;bottom:58px;width:min(320px,84vw);max-height:min(430px,68vh);
+    overflow:auto;background:var(--white);border:1px solid var(--g200);border-radius:18px;
+    box-shadow:var(--shadow);padding:10px;display:none}
+  .docfab.open .panel{display:block}
+  .docfab .panel .hd{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--g500);
+    letter-spacing:.06em;padding:8px 10px 4px}
+  .docfab .panel a{display:block;padding:8px 10px;border-radius:10px;font-size:13.5px;font-weight:600;
+    color:var(--g800);text-decoration:none;line-height:1.4}
+  .docfab .panel a:hover{background:var(--blue-bg2);color:var(--blue-deep)}
+  .docfab .panel a.sub{padding-left:24px;font-size:12.5px;font-weight:500;color:var(--g600)}
+  .docfab .panel .hub{margin-top:6px;border-top:1px solid var(--g100);padding-top:8px}
+  .docfab .panel a.hubl{color:var(--blue-deep);font-weight:700}
+  @media(max-width:720px){.docfab{right:14px;bottom:14px}}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer,.docnav{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+    .book-nav-crumb{padding:13px 24px}
+    .book-nav-foot{padding:20px 24px;grid-template-columns:1fr;gap:10px}
+    .book-nav-foot .next{text-align:left}
+    .book-nav-foot .toc-link{justify-self:start}
+    .bk-list .bdg{display:none}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+
+  /* F3 design.html 한정 — 박스 여백·줄바꿈 (2026-09-07). 긴 mono 토큰이 keep-all 로 잘리던 문제. */
+  svg foreignObject>.fo{padding:8px 14px;line-height:1.35}
+  svg foreignObject>.fo.left{padding:8px 14px}
+  svg foreignObject>.fo .t{overflow-wrap:anywhere;line-height:1.35}
+  svg foreignObject>.fo .s{overflow-wrap:anywhere;line-height:1.35;margin-top:3px}
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>F3 · supplier-client · 설계 확정본</span>
+      <h1 class="title">공급사 목록을<br><span class="hl">어떤 모양으로 core에 건네는가</span></h1>
+      <p class="lede">F3a가 조합기와 배선을 깔았다. 이번엔 그 위에 공급사 A·B를 실제로 얹고, <b>목록 포트</b>·<b>표준 목록 모델</b>·<b>실패 유형(D12)</b>을 <span class="term">core</span>에 처음 세운다. 재고·요금은 F5로 뗐다. 이 문서는 <b>고르기 위해 그렸고</b>, 여섯 카드가 닫힌 뒤 확정 표시로 바꿨다. 결정의 원본은 <span class="term">01-design.md</span>다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">STACK</span><span class="v">Java 25 · Boot 4.1.1 · Jackson 3.1.5 · reactor-core 3.8.7</span></div>
+        <div class="chip"><span class="k">모듈</span><span class="v">core.application ← supplier-client</span></div>
+        <div class="chip"><span class="k">상태</span><span class="v">⑩ 확정본 — 카드 8장 닫힘 (D-F3-1~8 + D-F0-6 정정) · 2026-09-07</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">확정된 범위<span class="hint">F3+F4 통합 · F5 분리</span></a></li>
+      <li><a href="#s2">구성도 — 무엇이 어디에 생기는가<span class="hint">패키지 제안</span></a></li>
+      <li><a href="#s3">D-F3-1 포트 시그니처<span class="hint">3안</span></a></li>
+      <li><a href="#s4">D-F3-2 포트 결과 형태<span class="hint">3안</span></a></li>
+      <li><a href="#s5">D-F3-3 실패는 어디서 유형이 되는가<span class="hint">3안 + D12 매핑도</span></a></li>
+      <li><a href="#s6">D-F3-4 ErrorCode 인터페이스 처분<span class="hint">확정 — 유지, 독립 enum</span></a></li>
+      <li><a href="#s7">D-F3-5 실제 소켓 테스트 방식<span class="hint">확정 — 더블 + k6</span></a></li>
+      <li><a href="#s8">D-F3-6 검색과 수집의 시간 예산<span class="hint">확정 — 조합기 빈 둘</span></a></li>
+      <li><a href="#s9">확정 시퀀스<span class="hint">fetchAll — A 성공, B E503</span></a></li>
+      <li><a href="#s10">뒤 feature로 넘기는 것</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">SCOPE</p><h2 class="sec">확정된 범위</h2></div>
+    </div>
+
+    <p class="lead">F3(클라이언트)과 F4(목록 어댑터·포트)를 <strong>하나로</strong> 한다. F3 혼자서는 A의 실패 본문을 어떻게 받을지 정할 수 없고, 그 소비자가 D12이기 때문이다. 재고·요금(F5)은 묶음 분할과 부분 실패 값 형태라는 <strong>자기만의 어려운 결정</strong>이 있어 뗐다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>결정</th><th>근거</th></tr></thead>
+        <tbody>
+          <tr><td>목록 포트 + 표준 목록 모델</td><td><strong>포함</strong> — <span class="term">core.application</span></td><td>module-split D-MS-4. F6이 바로 다음에 이 포트를 쓴다</td></tr>
+          <tr><td>내부 실패 유형 (D12)</td><td><strong>포함</strong> — 값 목록과 A·B·Throwable 대응표</td><td>F8 <span class="term">suppliers[].reason</span> 체계의 원본. 분류 체계는 이것 하나뿐</td></tr>
+          <tr><td>공급사별 HTTP Interface · 원본 DTO</td><td><strong>포함</strong> — 목록 메서드만</td><td>F3a 그룹 등록에 타입으로 얹힌다. 재고·요금 메서드는 F5가 같은 인터페이스에 추가</td></tr>
+          <tr><td>목록 번역기 A·B · Fetcher · 포트 어댑터</td><td><strong>포함</strong></td><td>F3a가 넘긴 계약 — <span class="term">Map&lt;Supplier, Fetcher&gt;</span>, 본문 블로킹 금지</td></tr>
+          <tr><td>실제 소켓 테스트 방식 · 타임아웃 초기값</td><td><strong>포함</strong> — 소켓 테스트 서버는 <strong>만들지 않는다</strong>(D-F3-5), 값은 설정(D-F3-6)</td><td>F3a가 못 닫고 F3으로 넘긴 두 가지. 실제 HTTP 경로는 k6 검증 계획으로</td></tr>
+          <tr><td>F0 <span class="term">ErrorCode</span> 인터페이스 재검토</td><td><strong>포함</strong> — D-F0-6 <strong>조건 문언 정정</strong>, 코드 무변경</td><td>공급사 실패 유형은 구현체 후보가 아니었다(D-F3-4). 두 번째 구현체 후보는 컨텍스트 domain의 코드 enum</td></tr>
+          <tr><td>재고·요금 포트·번역·묶음 분할</td><td><strong>제외 → F5</strong></td><td>어려운 결정이 전부 이쪽에 있다. 골격은 F3 것을 재사용</td></tr>
+          <tr><td>매핑 저장 · 역조회 · 응답 표기 · 재시도 · 캐시</td><td><strong>제외 → F6 · F7 · F8 · F9 · F10</strong></td><td>각 feature 소관</td></tr>
+          <tr><td>F3a 산출물 (조합기·그룹 등록·마스킹 필터·<span class="term">Outcome</span>)</td><td><strong>제외</strong> — <span class="term">main</span>에 병합된 PR #7 그대로 쓴다</td><td>F3a 코드를 고치는 것은 <span class="term">@ImportHttpServices</span>의 <span class="term">types</span> 한 줄뿐이다. 수집용 조합기는 빈을 하나 더 만든다(D-F3-6)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">DDD 적용 여부</span><strong>전술 패턴 미적용.</strong> 외부 API를 내부 모델로 번역하는 <strong>Adapter / ACL</strong>이고 불변식도 상태 전이도 없다. 새로 생기는 도메인 객체는 <strong>값 객체 셋</strong>이다 — 표준 목록 모델 <span class="term">CatalogProperty</span>·<span class="term">CatalogRoom</span>(record, 빈 코드·이름 거부 — DDD-4), 포트 결과 <span class="term">SupplierCatalogResult</span>(sealed), 실패 유형 <span class="term">SupplierErrorCode</span>(enum, <span class="term">ErrorCode</span>를 구현하지 않는다). 셋 다 <span class="term">core.application</span>에 산다 — Aggregate가 아니라 <strong>포트의 어휘</strong>이기 때문이다(LAY-7의 Result에 해당).</div>
+  </section>
+
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">LAYOUT</p><h2 class="sec">구성도 — 무엇이 어디에 생기는가</h2></div>
+    </div>
+
+    <p class="lead">위 레인이 <span class="term">core.application</span>, 아래 레인이 <span class="term">supplier-client</span>다. <strong>파란 실선이 F3이 새로 만드는 것</strong>, 회색 실선은 F3a가 이미 설계한 것, 회색 점선은 다른 feature 것이다. 아래 레인은 패키지 네 줄로 나뉜다 — 공통은 PR #7이 쓴 <span class="term">com.stay.property.infrastructure</span> 그대로이고, <strong>공급사 하나가 폴더 하나</strong>라는 F2의 교훈대로 공급사별 네 가지만 하위 패키지로 뺀다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 1120 860" role="img" aria-label="F3 구성도. 위 레인 core.application에 목록 포트, sealed 결과 타입, 표준 목록 모델 두 record, 실패 유형 enum이 새로 생기고 F1의 Supplier enum과 F6의 서비스가 점선으로 있다. 아래 레인 supplier-client는 네 줄이다. 첫 줄 공통 패키지에 포트 어댑터, 실패 분류기, Fetcher 인터페이스, 수집용 조합기 설정. 둘째 줄 supplier.a에 A Fetcher, A 번역기, A HTTP Interface, A DTO. 셋째 줄 supplier.b에 같은 네 가지. 넷째 줄은 F3a가 설계한 조합기, SupplierCall과 Outcome, 그룹 등록 설정, 마스킹 필터다">
+<rect x="8" y="30" width="1104" height="230" rx="18" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.2"/>
+<text class="svg-l" x="22" y="50" fill="#8B95A1">core.application — com.stay.property.application</text>
+<text class="svg-s" x="300" y="249" fill="#6B7684">포트·결과·모델·실패 유형이 전부 한 패키지에 — 이것들이 곧 포트의 어휘다. 리액티브 타입은 이 레인에 없다.</text>
+<rect x="8" y="274" width="1104" height="572" rx="18" fill="#F2F4F6" stroke="#E5E8EB" stroke-width="1.2"/>
+<text class="svg-l" x="22" y="294" fill="#8B95A1">supplier-client — com.stay.property.infrastructure (PR #7 과 같은 패키지) · 공급사별은 .supplier.a / .supplier.b</text>
+<text class="svg-s" x="22" y="835" fill="#6B7684">신규 공급사 C = supplier.c 폴더 하나(Fetcher · 번역기 · Api · DTO) + Supplier 값 하나 + types 한 줄 + yaml 그룹 하나.</text>
+<defs><marker id="c1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="24" y="64" width="250" height="78" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="24" y="64" width="250" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">«port» SupplierCatalogPort</div><div class="s">+ List&lt;SupplierCatalogResult&gt; fetchAll()</div></div></foreignObject>
+<rect x="290" y="64" width="250" height="78" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="290" y="64" width="250" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">sealed SupplierCatalogResult</div><div class="s">Fetched(supplier, properties)</div><div class="s">Failed(supplier, reason)</div></div></foreignObject>
+<rect x="556" y="64" width="250" height="78" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="556" y="64" width="250" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">record CatalogProperty</div><div class="s">code · name · List&lt;CatalogRoom&gt; rooms</div></div></foreignObject>
+<rect x="822" y="64" width="274" height="78" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="822" y="64" width="274" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">record CatalogRoom</div><div class="s">code · name (maxOccupancy 없음)</div></div></foreignObject>
+<rect x="290" y="156" width="250" height="74" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="290" y="156" width="250" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">enum Supplier (F1 · domain)</div><div class="s">A · B — 참조만</div></div></foreignObject>
+<rect x="556" y="156" width="250" height="74" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="556" y="156" width="250" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">CatalogSyncService (F6 예정)</div><div class="s">포트의 첫 호출자</div></div></foreignObject>
+<rect x="822" y="156" width="274" height="74" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="822" y="156" width="274" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">enum SupplierErrorCode</div><div class="s">D12 — 값 8개 (FIG. 05) · ErrorCode 구현 안 함</div></div></foreignObject>
+<text class="svg-s" x="24" y="320" fill="#6B7684">…infrastructure — 공통 (F3 신규)</text>
+<rect x="24" y="326" width="250" height="112" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="24" y="326" width="250" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">SupplierCatalogAdapter</div><div class="s">EnumMap&lt;Supplier, Fetcher&gt; 전체 → runAll(N건)</div></div></foreignObject>
+<rect x="290" y="326" width="250" height="112" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="290" y="326" width="250" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">FailureClassifier</div><div class="s">Throwable → SupplierErrorCode (1곳) · InvalidSupplierResponseException 포함</div></div></foreignObject>
+<rect x="556" y="326" width="250" height="112" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="556" y="326" width="250" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">«interface» SupplierCatalogFetcher</div><div class="s">supplier()</div><div class="s">call(): SupplierCall&lt;…&gt; — Mono.defer 로 조립</div></div></foreignObject>
+<rect x="822" y="326" width="274" height="112" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="822" y="326" width="274" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">CatalogFanOutProperties · SupplierCatalogConfig</div><div class="s">supplier.catalog.fan-out.* → 수집용 FanOutExecutor 빈 (D-F3-6)</div></div></foreignObject>
+<text class="svg-s" x="24" y="464" fill="#6B7684">…infrastructure.supplier.a</text>
+<rect x="24" y="470" width="250" height="94" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="24" y="470" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">SupplierACatalogFetcher</div><div class="s">api.hotels().map(translator::translate)</div></div></foreignObject>
+<rect x="290" y="470" width="250" height="94" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="290" y="470" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">ACatalogTranslator</div><div class="s">AHotelsResponse → List&lt;CatalogProperty&gt;</div></div></foreignObject>
+<rect x="556" y="470" width="250" height="94" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="556" y="470" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">«HTTP Interface» SupplierAApi</div><div class="s">@GetExchange hotels(): Mono&lt;AHotelsResponse&gt;</div></div></foreignObject>
+<rect x="822" y="470" width="274" height="94" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="822" y="470" width="274" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">A 원본 DTO (record)</div><div class="s">AHotelsResponse · AHotel · ARoomType — 실패 본문은 안 읽는다</div></div></foreignObject>
+<text class="svg-s" x="24" y="590" fill="#6B7684">…infrastructure.supplier.b</text>
+<rect x="24" y="596" width="250" height="94" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="24" y="596" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">SupplierBCatalogFetcher</div><div class="s">api.properties().map(translator::translate)</div></div></foreignObject>
+<rect x="290" y="596" width="250" height="94" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="290" y="596" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">BCatalogTranslator</div><div class="s">봉투 해체 · resultCode≠0000 → throw</div></div></foreignObject>
+<rect x="556" y="596" width="250" height="94" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="556" y="596" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">«HTTP Interface» SupplierBApi</div><div class="s">@GetExchange properties(): Mono&lt;BPropertiesResponse&gt;</div></div></foreignObject>
+<rect x="822" y="596" width="274" height="94" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="822" y="596" width="274" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue left"><div class="t">B 원본 DTO (record)</div><div class="s">BPropertiesResponse · BPropertiesData · BProperty · BRoom · SupplierBResultException</div></div></foreignObject>
+<text class="svg-s" x="24" y="716" fill="#6B7684">…infrastructure — F3a 것 (PR #7, 구현 완료)</text>
+<rect x="24" y="722" width="250" height="94" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.3"/>
+<foreignObject x="24" y="722" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">FanOutExecutor · FanOutPolicy</div><div class="s">runAll(calls) — 요청 순서 · 실패 warn 로그 (리뷰 #1)</div></div></foreignObject>
+<rect x="290" y="722" width="250" height="94" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.3"/>
+<foreignObject x="290" y="722" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">SupplierCall&lt;T&gt; · Outcome&lt;T&gt;</div><div class="s">Success | Failed(Throwable) · BudgetExceeded</div></div></foreignObject>
+<rect x="556" y="722" width="250" height="94" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.3"/>
+<foreignObject x="556" y="722" width="250" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">SupplierHttpClientConfig</div><div class="s">@ImportHttpServices(group = supplier-a | supplier-b) — F3이 types 만 채운다 (유일한 F3a 수정)</div></div></foreignObject>
+<rect x="822" y="722" width="274" height="94" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.3"/>
+<foreignObject x="822" y="722" width="274" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">MaskingExchangeFilter · FanOutProperties</div><div class="s">공급사 그룹에만 붙는다 (리뷰 #8) · 쿼리 값 마스킹</div></div></foreignObject>
+<line x1="149" y1="326" x2="149" y2="148" stroke="#3182F6" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#c1)"/>
+<text class="svg-s" x="157" y="238" fill="#1B64DA">implements</text>
+<line x1="274" y1="382" x2="288" y2="382" stroke="#3182F6" stroke-width="1.6" marker-end="url(#c1)"/>
+<line x1="540" y1="382" x2="554" y2="382" stroke="#3182F6" stroke-width="1.6" marker-end="url(#c1)"/>
+</svg>
+      </div>
+      <figcaption><b>그림 1.</b> 위 레인의 파란 상자 다섯이 <b>core에 처음 들어가는 공급사 어휘</b>다. 아래 레인은 줄이 곧 패키지이고, <b>둘째·셋째 줄이 같은 모양</b>이라는 점을 볼 것 — 공급사가 늘면 줄이 하나 는다. F3a 줄(넷째)은 PR #7에 구현된 그대로이며 이 문서가 건드리지 않는다.</figcaption>
+    </figure>
+
+    <div class="note"><span class="tag">패키지</span>PR #7이 F3a 클래스 8개를 <span class="term">com.stay.property.infrastructure</span>에 두었다(module-split 파일 트리를 따른 것). F3의 공통(어댑터·분류기·Fetcher 인터페이스)도 같은 패키지에 두고, 공급사별 네 가지(Fetcher·번역기·Api·DTO)만 <span class="term">…infrastructure.supplier.a</span> / <span class="term">…supplier.b</span>로 뺀다. 나누는 축은 "역할"이 아니라 <strong>"어느 공급사의 지식인가"</strong>다 — A 계약이 바뀌면 <span class="term">supplier.a</span> 한 폴더만 열면 된다(F2 D-F2-1과 같은 기준). 공통 클래스가 늘어 한 폴더가 답답해지면 그때 <span class="term">.supplier</span>로 내리는 것을 검토한다(PAT-2).</div>
+  </section>
+
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">DECISION</p><h2 class="sec">D-F3-1 포트 시그니처 — 확정: 안 A <span class="term">fetchAll()</span></h2></div>
+    </div>
+
+    <p class="lead">F3a의 조합기는 여러 호출을 한꺼번에 받도록 만들어졌다. 그래서 목록 포트도 <span class="term">fetchAll()</span>이 자연스러워 보이지만, <strong>목록 수집은 검색과 달리 지연이 중요하지 않고</strong> 호출자(F6 배치)는 공급사마다 따로 트랜잭션을 연다. 누가 병렬을 갖는지가 갈림길이다. PR #7이 더한 계약 5(같은 공급사가 여러 건)는 F5의 묶음 분할용이며, 목록 호출은 공급사당 1건이라 여기에는 걸리지 않는다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 02">
+        <svg viewBox="0 0 1120 568" role="img" aria-label="포트 시그니처 세 안 비교. 안 A는 fetchAll 하나로 두 공급사를 조합기에 한꺼번에 넣고 호출자는 결과 리스트를 순회한다. 안 B는 fetch(Supplier)로 공급사 하나씩 부르고 조합기에는 호출 1건만 들어가며 병렬은 호출자 몫이다. 안 C는 둘 다 둔다">
+<line x1="370" y1="30" x2="370" y2="560" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="750" y1="30" x2="750" y2="560" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<defs><marker id="c2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<text class="svg-l" x="180" y="22" text-anchor="middle" fill="#191F28">안 A — fetchAll() ✓ 채택</text>
+<text class="svg-l" x="560" y="22" text-anchor="middle" fill="#191F28">안 B — fetch(Supplier) ✗</text>
+<text class="svg-l" x="940" y="22" text-anchor="middle" fill="#191F28">안 C — 둘 다 ✗</text>
+<rect x="16" y="44" width="328" height="78" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="16" y="44" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">호출자 (F6)</div><div class="s">for (r : port.fetchAll()) upsert(r)</div><div class="s">한 트랜잭션? 공급사별?</div></div></foreignObject>
+<line x1="180" y1="122" x2="180" y2="144" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c2)"/>
+<rect x="16" y="146" width="328" height="92" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+<foreignObject x="16" y="146" width="328" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">«port» SupplierCatalogPort</div><div class="s">+ List&lt;SupplierCatalogResult&gt; fetchAll()</div><div class="s">크기 = 등록된 공급사 수 · 순서 = EnumMap 순서 (F3a 계약 1·4)</div></div></foreignObject>
+<line x1="180" y1="238" x2="180" y2="260" stroke="#15C47E" stroke-width="1.6" marker-end="url(#c2)"/>
+<rect x="16" y="262" width="328" height="78" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+<foreignObject x="16" y="262" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">SupplierCatalogAdapter</div><div class="s">runAll(fetchers 전체 → Call N건)</div><div class="s">공급사 간 병렬 = 어댑터 · F6은 공급사를 모른다</div></div></foreignObject>
+<rect x="16" y="354" width="328" height="172" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="16" y="354" width="328" height="172"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">공급사가 늘어도 F6이 안 바뀐다(등록된 Fetcher가 곧 대상) · A·B 동시 호출 · HTTP는 트랜잭션 밖, 갱신은 공급사별 트랜잭션 · 한 공급사 실패는 그 자리만 Failed</div><div class="t">단점</div><div class="s">F11이 공급사 하나만 다시 부르려면 그때 fetch(Supplier)를 추가해야 한다 (호출자가 생길 때, D-F1-8)</div></div></foreignObject>
+<rect x="396" y="44" width="328" height="92" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="396" y="44" width="328" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">호출자 (F6)</div><div class="s">step A: port.fetch(A) · step B: port.fetch(B)</div><div class="s">각자 트랜잭션</div></div></foreignObject>
+<line x1="560" y1="136" x2="560" y2="158" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c2)"/>
+<rect x="396" y="160" width="328" height="92" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="396" y="160" width="328" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">«port» SupplierCatalogPort</div><div class="s">+ SupplierCatalogResult fetch(Supplier supplier)</div><div class="s">결과 하나 — 성공이든 실패든</div></div></foreignObject>
+<line x1="560" y1="252" x2="560" y2="274" stroke="#F04452" stroke-width="1.6" marker-end="url(#c2)"/>
+<rect x="396" y="276" width="328" height="92" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="396" y="276" width="328" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">SupplierCatalogAdapter</div><div class="s">runAll(List.of(fetchers.get(s).call())) — 1건</div><div class="s">fan-out 조합기를 1건 래퍼로만 쓴다</div></div></foreignObject>
+<rect x="396" y="382" width="328" height="172" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="396" y="382" width="328" height="172"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">F11이 생기면 같은 메서드</div><div class="t">단점</div><div class="s">탈락 사유 — F6이 Supplier.values()를 돌아야 해 공급사 추가가 F6에 새고, enum엔 있는데 Fetcher가 없는 공급사가 런타임에 터진다 · 논블로킹 fan-out을 만들어 놓고 직렬로 부른다 · "트랜잭션 일치"는 fetchAll 뒤 공급사별 트랜잭션으로도 성립해 근거가 못 된다</div></div></foreignObject>
+<rect x="776" y="44" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="776" y="44" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">호출자 (F6 · F11)</div><div class="s">F6은 fetchAll, F11은 fetch(s)</div></div></foreignObject>
+<line x1="940" y1="104" x2="940" y2="126" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c2)"/>
+<rect x="776" y="128" width="328" height="78" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="776" y="128" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">«port» SupplierCatalogPort</div><div class="s">+ List&lt;SupplierCatalogResult&gt; fetchAll()</div><div class="s">+ SupplierCatalogResult fetch(Supplier)</div></div></foreignObject>
+<line x1="940" y1="206" x2="940" y2="228" stroke="#F04452" stroke-width="1.6" marker-end="url(#c2)"/>
+<rect x="776" y="230" width="328" height="78" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="776" y="230" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">SupplierCatalogAdapter</div><div class="s">경로 2개 · 테스트 2벌</div><div class="s">fetchAll = fetch를 돌리는 것과 같아진다</div></div></foreignObject>
+<rect x="776" y="322" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="776" y="322" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">어느 호출자든 맞는 메서드가 있다</div><div class="t">단점</div><div class="s">지금 호출자는 F6 하나 — 둘 중 하나는 호출자 없는 메서드(D-F1-8 기준 위반) · 선택 구현인 F11 때문에 지금 만드는 것</div></div></foreignObject>
+</svg>
+      </div>
+      <figcaption><b>그림 2.</b> 가운데 상자(어댑터)의 <b>runAll에 몇 건이 들어가는지</b>를 볼 것. 안 A만 N건이고 나머지는 1건이다. 1건이면 조합기의 fan-out은 놀지만 <b>perCall 타임아웃과 실패→값 변환은 그대로</b> 얻는다 — 조합기를 쓰는 이유가 병렬만은 아니다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">확정 — 안 A (사용자 결정 2026-09-07)</span><strong><span class="term">fetchAll()</span> 한 번.</strong> 처음 추천은 안 B였으나 다시 검토에서 근거 셋이 전부 약했다 — "공급사별 트랜잭션 일치"는 <span class="term">fetchAll</span> 뒤에 공급사별 트랜잭션을 열어도 성립하고(HTTP가 트랜잭션 밖으로 나가 오히려 낫다), "F11 재사용"은 선택 기능을 위해 지금 모양을 정하는 것이며, "수집은 지연이 요건이 아니다"는 직렬로 부를 이유가 못 된다. 안 A의 진짜 이점은 <strong>공급사가 늘어도 F6이 바뀌지 않는다</strong>는 것 — 대상은 등록된 Fetcher(<span class="term">EnumMap</span>)가 정의하고 F6은 공급사를 모른다. F3a 조합기를 만든 이유(동시 호출·상한)가 첫 호출자에서 그대로 쓰인다. F11이 생기면 그때 <span class="term">fetch(Supplier)</span>를 더한다(D-F1-8).</div>
+  </section>
+
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">DECISION</p><h2 class="sec">D-F3-2 포트 결과 형태 — 확정: 안 A sealed 값</h2></div>
+    </div>
+
+    <p class="lead">F4가 미결로 남긴 항목이다. F3a는 조합기 안에서 "실패는 <span class="term">Failed</span> 값"으로 닫았지만 그건 <span class="term">supplier-client</span> 안의 얘기이고, <strong>포트가 <span class="term">core</span>에 무엇을 돌려주는가</strong>는 여기서 처음 정한다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 03">
+        <svg viewBox="0 0 1120 470" role="img" aria-label="포트 결과 형태 세 안. 안 A는 sealed 결과 타입으로 성공과 실패를 값으로 돌려주고 호출자가 switch로 갈린다. 안 B는 목록을 돌려주고 실패는 예외를 던져 호출자가 try catch로 받는다. 안 C는 실패 시 빈 목록과 로그만 남겨 호출자가 실패를 구분할 수 없다">
+<line x1="370" y1="30" x2="370" y2="462" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="750" y1="30" x2="750" y2="462" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<text class="svg-l" x="180" y="22" text-anchor="middle" fill="#191F28">안 A — sealed 값</text>
+<text class="svg-l" x="560" y="22" text-anchor="middle" fill="#191F28">안 B — 목록 + 예외</text>
+<text class="svg-l" x="940" y="22" text-anchor="middle" fill="#191F28">안 C — 빈 목록 + 로그</text>
+<rect x="16" y="44" width="328" height="126" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+<foreignObject x="16" y="44" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">sealed interface SupplierCatalogResult</div><div class="s">record Fetched(Supplier, List&lt;CatalogProperty&gt;)</div><div class="s">record Failed(Supplier, SupplierErrorCode reason)</div><div class="s">+ SupplierCatalogResult fetch(Supplier)</div></div></foreignObject>
+<rect x="16" y="184" width="328" height="114" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="16" y="184" width="328" height="114"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">호출자 (F6)</div><div class="s">switch (port.fetch(A)) {</div><div class="s">  case Fetched f -&gt; upsert(f.properties());</div><div class="s">  case Failed f -&gt; log.warn(f.reason());</div><div class="s">}   // 빠뜨리면 컴파일 오류</div></div></foreignObject>
+<rect x="16" y="312" width="328" height="142" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="16" y="312" width="328" height="142"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">실패 처리를 잊을 수 없다 · F3a Outcome과 같은 문법이라 읽는 눈이 하나 · D10 "실패를 값으로"와 일관</div><div class="t">단점</div><div class="s">sealed 타입이 하나 더 생긴다 (Outcome은 Throwable, 이건 D12 유형 — 층이 달라 합칠 수 없다)</div></div></foreignObject>
+<rect x="396" y="44" width="328" height="96" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="396" y="44" width="328" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">List&lt;CatalogProperty&gt; fetch(Supplier)</div><div class="s">throws SupplierFetchFailedException</div><div class="s">  (Supplier, SupplierErrorCode reason)</div><div class="s">RuntimeException — 선언에 안 보인다</div></div></foreignObject>
+<rect x="396" y="154" width="328" height="146" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="396" y="154" width="328" height="146"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">호출자 (F6)</div><div class="s">try {</div><div class="s">  upsert(port.fetch(A));</div><div class="s">} catch (SupplierFetchFailedException e) {</div><div class="s">  log.warn(e.reason());   // 잊으면 배치가 죽는다</div><div class="s">}</div></div></foreignObject>
+<rect x="396" y="314" width="328" height="142" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="396" y="314" width="328" height="142"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">정상 경로 코드가 가장 짧다 · 결과 타입이 안 생긴다</div><div class="t">단점</div><div class="s">공급사 실패는 "예상되는" 결과인데 예외로 흐름을 제어 · @Transactional 안에서 던지면 롤백 의미가 섞인다 · catch를 빠뜨려도 컴파일이 통과</div></div></foreignObject>
+<rect x="776" y="44" width="328" height="78" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="776" y="44" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">List&lt;CatalogProperty&gt; fetch(Supplier)</div><div class="s">실패 시 빈 목록 + warn 로그</div><div class="s">호출자는 실패를 모른다</div></div></foreignObject>
+<rect x="776" y="136" width="328" height="96" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="776" y="136" width="328" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">호출자 (F6)</div><div class="s">upsert(port.fetch(A));</div><div class="s">// 비어 있으면 — 공급사가 정말 0건인가,</div><div class="s">// 503이었나? 구분할 길이 없다</div></div></foreignObject>
+<rect x="776" y="246" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="776" y="246" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">호출자 코드가 한 줄</div><div class="t">단점</div><div class="s">F6의 "목록에서 사라진 상품" 정책과 정면 충돌 — 503을 "전부 사라짐"으로 읽어 매핑을 비활성·삭제할 수 있다 · 실패 사유가 로그에만 남아 F8이 못 쓴다</div></div></foreignObject>
+</svg>
+      </div>
+      <figcaption><b>그림 3.</b> 가운데 줄(호출자 코드)을 볼 것. <b>안 A만 실패 분기를 빠뜨리면 컴파일이 실패</b>한다. 안 C의 위험은 이론이 아니다 — F6이 "목록에 없는 상품은 비활성"을 택하면 <b>공급사 장애 한 번에 매핑 전체가 비활성</b>된다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">확정 — 안 A (사용자 결정 2026-09-07)</span><strong>sealed 값.</strong> 사용자 요구 "요청마다 성공·실패를 알고 처리"가 곧 이 모양이다. <strong>B가 실패해도 B의 매핑은 지워지지 않는다</strong> — <span class="term">Failed(B)</span>는 빈 목록이 아니므로 F6의 "사라진 상품" 비교가 B에 대해 실행되지 않는다(README F6 "실패 시 기존 매핑 유지").  F3a 포트 계약 2("공급사 쪽 실패는 예외가 아니라 값")를 <span class="term">core</span> 경계에서도 같은 원칙으로 잇는다. <span class="term">Outcome</span>과 별개 타입인 이유는 층이 달라서다 — <span class="term">Outcome.Failed</span>는 <span class="term">Throwable</span>을 들고 <span class="term">supplier-client</span> 안에만 있고, <span class="term">SupplierCatalogResult.Failed</span>는 D12 유형을 들고 <span class="term">core</span>로 나간다. 우리 코드 버그(F3a hardStop 도달 등)는 값으로 포장하지 않고 <strong>예외 그대로 전파</strong>한다(F3a D-F3A와 같은 기준, CLN-6).</div>
+  </section>
+
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">DECISION</p><h2 class="sec">D-F3-3 실패는 어디서 유형이 되는가 — 확정: 안 A · 유형 8개</h2></div>
+    </div>
+
+    <p class="lead">A는 HTTP 상태로, B는 200 안의 <span class="term">resultCode</span>로, 타임아웃은 <span class="term">Throwable</span>로 실패를 말한다. 세 모양을 D12 유형 하나로 만드는 자리가 <strong>한 곳</strong>인지 <strong>세 곳</strong>인지가 갈림길이다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 04">
+        <svg viewBox="0 0 1120 650" role="img" aria-label="실패 분류 위치 세 안. 각 열은 HTTP 응답, 프록시와 필터, 번역기, 조합기 Outcome, 분류 다섯 단계의 세로 파이프라인이다. 안 A는 조합기 앞까지 모든 실패가 Throwable이고 조합기 뒤 분류기 한 곳에서만 유형이 된다. 안 B는 번역기가 Either를 반환해 B의 실패는 번역기에서, A 상태와 타임아웃은 뒤에서 분류돼 세 곳이 된다. 안 C는 WebClient 필터가 A 상태와 B 봉투를 읽어 즉시 유형 예외로 바꾸고 분류기는 우리 예외와 타임아웃만 다룬다">
+<line x1="370" y1="30" x2="370" y2="642" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="750" y1="30" x2="750" y2="642" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<defs><marker id="c4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<text class="svg-l" x="180" y="22" text-anchor="middle" fill="#191F28">안 A — 조합기 뒤 1곳</text>
+<text class="svg-l" x="560" y="22" text-anchor="middle" fill="#191F28">안 B — 번역기가 결과 타입</text>
+<text class="svg-l" x="940" y="22" text-anchor="middle" fill="#191F28">안 C — WebClient 필터에서</text>
+<rect x="16" y="44" width="328" height="74" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="44" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">① HTTP 응답</div><div class="s">A: 503 + {error} · B: 200 + E503 · 또는 소켓 타임아웃</div></div></foreignObject>
+<line x1="180" y1="118" x2="180" y2="140" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="16" y="142" width="328" height="74" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="142" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">② 프록시 기본 동작</div><div class="s">A: WebClientResponseException(503) · B: 봉투 그대로 통과</div></div></foreignObject>
+<line x1="180" y1="216" x2="180" y2="238" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="16" y="240" width="328" height="74" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+<foreignObject x="16" y="240" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">③ 번역기</div><div class="s">B: resultCode≠0000 → throw SupplierBResultException(code)</div></div></foreignObject>
+<line x1="180" y1="314" x2="180" y2="336" stroke="#15C47E" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="16" y="338" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.3"/>
+<foreignObject x="16" y="338" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">④ 조합기 (F3a)</div><div class="s">Failed(supplier, Throwable) — 종류를 모른다</div></div></foreignObject>
+<line x1="180" y1="398" x2="180" y2="420" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="16" y="422" width="328" height="74" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+<foreignObject x="16" y="422" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">⑤ FailureClassifier — 분류 1곳</div><div class="s">Throwable → SupplierErrorCode (FIG. 05 표 그대로)</div></div></foreignObject>
+<rect x="16" y="510" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="16" y="510" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">D12 표가 클래스 하나·Decision Table 테스트 하나 · 번역기는 "이 봉투가 성공인가"만 안다</div><div class="t">단점</div><div class="s">B 실패용 예외 클래스가 하나 생긴다 · 분류기가 A·B 예외 타입을 둘 다 안다</div></div></foreignObject>
+<rect x="396" y="44" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="396" y="44" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">① HTTP 응답</div><div class="s">같음</div></div></foreignObject>
+<line x1="560" y1="104" x2="560" y2="126" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="396" y="128" width="328" height="74" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="396" y="128" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">② 상태 핸들러 — 분류 ①</div><div class="s">A: onStatus에서 HTTP 상태 → SupplierErrorCode</div></div></foreignObject>
+<line x1="560" y1="202" x2="560" y2="224" stroke="#F04452" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="396" y="226" width="328" height="74" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="396" y="226" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">③ 번역기 — 분류 ②</div><div class="s">Either&lt;SupplierErrorCode, List&lt;CatalogProperty&gt;&gt; 반환</div></div></foreignObject>
+<line x1="560" y1="300" x2="560" y2="322" stroke="#F04452" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="396" y="324" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.3"/>
+<foreignObject x="396" y="324" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">④ 조합기</div><div class="s">Outcome&lt;Either&lt;…&gt;&gt; — 성공 안에 실패가 또 있다</div></div></foreignObject>
+<line x1="560" y1="384" x2="560" y2="406" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="396" y="408" width="328" height="60" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="396" y="408" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">⑤ 어댑터 — 분류 ③</div><div class="s">타임아웃·예산·연결 실패는 여기서 또</div></div></foreignObject>
+<rect x="396" y="482" width="328" height="112" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="396" y="482" width="328" height="112"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">번역기 단위 테스트에서 B 실패 분류까지 바로 보인다</div><div class="t">단점</div><div class="s">분류가 세 곳 · Success 안에 Failure가 든 이중 구조 · Either 타입을 새로 만든다</div></div></foreignObject>
+<rect x="776" y="44" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="776" y="44" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">① HTTP 응답</div><div class="s">같음</div></div></foreignObject>
+<line x1="940" y1="104" x2="940" y2="126" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="776" y="128" width="328" height="74" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="776" y="128" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">② ExchangeFilter — 분류 ①</div><div class="s">A 상태 · B 봉투를 필터가 미리 디코딩해 SupplierFailureException(유형)</div></div></foreignObject>
+<line x1="940" y1="202" x2="940" y2="224" stroke="#F04452" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="776" y="226" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="776" y="226" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">③ 번역기</div><div class="s">성공 봉투만 받는다</div></div></foreignObject>
+<line x1="940" y1="286" x2="940" y2="308" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="776" y="310" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.3"/>
+<foreignObject x="776" y="310" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">④ 조합기</div><div class="s">Failed(supplier, SupplierFailureException)</div></div></foreignObject>
+<line x1="940" y1="370" x2="940" y2="392" stroke="#6B7684" stroke-width="1.6" marker-end="url(#c4)"/>
+<rect x="776" y="394" width="328" height="60" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="776" y="394" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">⑤ 분류기 — 분류 ②</div><div class="s">우리 예외는 꺼내고, 타임아웃·연결 실패는 여기서</div></div></foreignObject>
+<rect x="776" y="468" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="776" y="468" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">번역기가 실패를 전혀 모른다</div><div class="t">단점</div><div class="s">B 봉투를 읽으려면 필터가 본문을 두 번 디코딩(필터·프록시) · 공급사 지식이 공통 필터에 들어가 supplier.b 폴더 밖으로 샌다 · 분류는 여전히 2곳</div></div></foreignObject>
+</svg>
+      </div>
+      <figcaption><b>그림 4.</b> <b>붉은 상자의 수</b>를 셀 것 — 안 A는 초록 하나(⑤), 안 B는 셋, 안 C는 둘이다. 안 A의 규칙은 한 문장이다: <b>"조합기 앞에서는 전부 <span class="term">Throwable</span>, 조합기 뒤에서 딱 한 번 유형이 된다."</b> A의 실패는 프록시가 이미 예외로 주고, B의 실패는 번역기가 예외로 바꿔 같은 모양으로 맞춘다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">확정 — 안 A · 유형 8개 (사용자 결정 2026-09-07)</span>규칙은 한 문장이다 — <strong>조합기 앞에서는 전부 <span class="term">Throwable</span>, 조합기 뒤 <span class="term">FailureClassifier</span> 한 곳에서만 유형이 된다.</strong> ①~④ 어디서 나든 예외 신호는 <span class="term">onErrorResume</span> 한 줄로 내려와 <span class="term">Failed</span>가 되므로 ⑤가 전부 받는다. 번역기의 책임은 "봉투를 해체하고, 성공이 아니면 던진다"까지다. A 실패는 프록시 기본 동작(4xx/5xx → <span class="term">WebClientResponseException</span>)을 그대로 쓰므로 상태 핸들러를 따로 짜지 않는다. <strong>보장이 성립하는 조건 둘</strong>: ① Fetcher의 <span class="term">call()</span>은 <span class="term">Mono.defer</span>로 모든 작업을 <span class="term">Mono</span> 안에 넣는다 — <span class="term">Mono</span>를 만드는 동안 던진 예외는 조합기 밖이라 못 잡는다(리뷰 확인 항목). ② 분류기는 <span class="term">getCause()</span> 사슬을 따라간다 — 연결 실패·소켓 타임아웃은 <span class="term">WebClientRequestException</span> 안에 감싸여 온다. <strong>분류기가 못 보는 것 하나</strong>: ④의 방어망 <span class="term">block(hardStop)</span>이 터지는 경우는 공급사 실패가 아니라 우리 결함이라 F3a 설계대로 예외 그대로 올라온다.</div>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 05">
+        <svg viewBox="0 0 1120 590" role="img" aria-label="D12 실패 유형 매핑도. 왼쪽 세 열은 실패의 출처인 A의 HTTP 상태, B의 resultCode, 그리고 Throwable이고 오른쪽 열이 내부 실패 유형 여덟 개다. 400과 E400은 INVALID_REQUEST, 401과 E401은 UNAUTHORIZED, 429와 E429는 RATE_LIMITED, 500과 E500은 SUPPLIER_ERROR, 503과 E503과 연결 실패는 UNAVAILABLE, perCall 타임아웃과 예산 초과는 TIMEOUT, 본문 해석 실패와 미지 코드와 번역 검증 실패는 INVALID_RESPONSE, 그 외는 UNEXPECTED다">
+<defs><marker id="c5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="16" y="40" width="240" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="40" width="240" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">400 INVALID_* · TOO_MANY_HOTEL_CODES</div></div></foreignObject>
+<rect x="286" y="40" width="240" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="286" y="40" width="240" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">E400</div></div></foreignObject>
+<rect x="850" y="40" width="254" height="60" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="850" y="40" width="254" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">INVALID_REQUEST</div></div></foreignObject>
+<rect x="16" y="112" width="240" height="42" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="112" width="240" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">401 UNAUTHORIZED</div></div></foreignObject>
+<rect x="286" y="112" width="240" height="42" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="286" y="112" width="240" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">E401</div></div></foreignObject>
+<rect x="850" y="112" width="254" height="42" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="850" y="112" width="254" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">UNAUTHORIZED</div></div></foreignObject>
+<rect x="16" y="166" width="240" height="42" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="166" width="240" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">429 RATE_LIMIT_EXCEEDED</div></div></foreignObject>
+<rect x="286" y="166" width="240" height="42" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="286" y="166" width="240" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">E429</div></div></foreignObject>
+<rect x="850" y="166" width="254" height="42" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="850" y="166" width="254" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">RATE_LIMITED</div></div></foreignObject>
+<rect x="16" y="220" width="240" height="42" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="220" width="240" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">500 INTERNAL_ERROR</div></div></foreignObject>
+<rect x="286" y="220" width="240" height="42" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="286" y="220" width="240" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">E500</div></div></foreignObject>
+<rect x="850" y="220" width="254" height="42" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="850" y="220" width="254" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SUPPLIER_ERROR</div></div></foreignObject>
+<rect x="16" y="274" width="240" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="274" width="240" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">503 SERVICE_UNAVAILABLE</div></div></foreignObject>
+<rect x="286" y="274" width="240" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="286" y="274" width="240" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">E503</div></div></foreignObject>
+<rect x="556" y="274" width="250" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="556" y="274" width="250" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">연결 실패 (WebClientRequestException)</div></div></foreignObject>
+<rect x="850" y="274" width="254" height="60" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="850" y="274" width="254" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">UNAVAILABLE</div></div></foreignObject>
+<rect x="556" y="346" width="250" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="556" y="346" width="250" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">TimeoutException(perCall) · BudgetExceededException</div></div></foreignObject>
+<rect x="850" y="346" width="254" height="60" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="850" y="346" width="254" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">TIMEOUT</div></div></foreignObject>
+<rect x="556" y="418" width="250" height="80" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="556" y="418" width="250" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">본문 해석 실패 · 미지 resultCode · 0000인데 data null · 번역 검증 실패</div></div></foreignObject>
+<rect x="850" y="418" width="254" height="80" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="850" y="418" width="254" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">INVALID_RESPONSE</div></div></foreignObject>
+<rect x="556" y="510" width="250" height="42" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="556" y="510" width="250" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">그 외 Throwable — ERROR 로그</div></div></foreignObject>
+<rect x="850" y="510" width="254" height="42" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="850" y="510" width="254" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">UNEXPECTED</div></div></foreignObject>
+<text class="svg-l" x="136" y="22" text-anchor="middle" fill="#8B95A1">A — HTTP 상태 (+ error)</text>
+<text class="svg-l" x="406" y="22" text-anchor="middle" fill="#8B95A1">B — 200 + resultCode</text>
+<text class="svg-l" x="681" y="22" text-anchor="middle" fill="#8B95A1">Throwable — 조합기·전송·번역</text>
+<text class="svg-l" x="977" y="22" text-anchor="middle" fill="#1B64DA">SupplierErrorCode (D12)</text>
+<line x1="256" y1="70" x2="844" y2="70" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#c5)"/>
+<line x1="256" y1="133" x2="844" y2="133" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#c5)"/>
+<line x1="256" y1="187" x2="844" y2="187" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#c5)"/>
+<line x1="256" y1="241" x2="844" y2="241" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#c5)"/>
+<line x1="256" y1="304" x2="844" y2="304" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#c5)"/>
+<line x1="806" y1="376" x2="844" y2="376" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#c5)"/>
+<line x1="806" y1="458" x2="844" y2="458" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#c5)"/>
+<line x1="806" y1="531" x2="844" y2="531" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#c5)"/>
+<text class="svg-s" x="16" y="578" fill="#6B7684">README F4 절의 다섯 유형(요청 오류·인증·한도 초과·장애·타임아웃)에 셋을 더했다 — 500과 503을 가르고(F9 재시도 대상이 다르다), 해석 실패와 분류 밖을 따로 둔다.</text>
+</svg>
+      </div>
+      <figcaption><b>그림 5.</b> <b>같은 줄에 있는 것이 같은 유형</b>이다. 오른쪽 마지막 붉은 상자(<span class="term">UNEXPECTED</span>)는 catch-all이 아니라 <b>"분류표에 없는 예외가 왔다"는 신호</b>이며 ERROR 로그를 동반한다 — F3a의 <span class="term">onErrorResume</span>이 이미 모든 <span class="term">Throwable</span>을 값으로 만들므로, 분류기에 기본 가지가 없으면 그 값이 갈 곳이 없다(CLN-6과 충돌하지 않는 이유).</figcaption>
+    </figure>
+
+    <div class="note warn"><span class="tag">고를 것</span>유형을 <strong>8개로 갈지, README의 5개로 갈지</strong>는 이 카드에서 함께 정한다. 8개를 추천하는 이유 — ① F9가 재시도 대상을 고를 때 503·429·TIMEOUT은 재시도하고 500은 판단이 갈리므로 <strong>500과 503이 한 값이면 F9가 못 가른다</strong> ② <span class="term">INVALID_RESPONSE</span>는 공급사 장애가 아니라 <strong>계약 불일치</strong>라 운영자가 봐야 할 곳이 다르다 ③ <span class="term">UNEXPECTED</span>는 우리 버그 후보다. 값이 늘어 F8 <span class="term">reason</span>이 길어지는 것 말고 비용은 없다.</div>
+  </section>
+
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">DECISION</p><h2 class="sec">D-F3-4 ErrorCode 인터페이스 처분 — 확정: 유지, 독립 enum <span class="term">SupplierErrorCode</span></h2></div>
+    </div>
+
+    <p class="lead">F0은 "<span class="term">ErrorCode</span>의 두 번째 구현체가 F4에서 오는지 보고, 안 오면 인터페이스를 없앤다"고 적어 뒀다. 답은 <strong>안 온다</strong>다 — <span class="term">SupplierErrorCode</span>는 자사 API 응답 코드가 아니라 <span class="term">suppliers[].reason</span> 값이라 성격이 다르다. 처음엔 "그러면 언제 없애느냐"로 세 안을 그렸는데, 협의에서 <strong>질문 자체가 잘못 세워졌다</strong>는 것이 드러났다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 06">
+        <svg viewBox="0 0 1120 436" role="img" aria-label="ErrorCode 인터페이스 처분 세 안 (전부 탈락). 안 A는 인터페이스를 지금 제거해 BusinessException이 CommonErrorCode를 직접 들고 일곱 파일을 고친다. 안 B는 인터페이스를 유지하고 두 번째 구현체가 없음만 기록한다. 안 C는 SupplierErrorCode가 ErrorCode를 구현해 자사 응답 코드 자리에 공급사 실패가 들어간다">
+<line x1="370" y1="30" x2="370" y2="392" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="750" y1="30" x2="750" y2="392" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<text class="svg-l" x="180" y="22" text-anchor="middle" fill="#191F28">안 A — 지금 제거</text>
+<text class="svg-l" x="560" y="22" text-anchor="middle" fill="#191F28">안 B — 유지, 기록만</text>
+<text class="svg-l" x="940" y="22" text-anchor="middle" fill="#191F28">안 C — SupplierErrorCode가 구현</text>
+<rect x="16" y="44" width="328" height="78" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+<foreignObject x="16" y="44" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">enum CommonErrorCode — 인터페이스 없음</div><div class="s">BusinessException(CommonErrorCode, message)</div><div class="s">ApiResponse.error(CommonErrorCode)</div></div></foreignObject>
+<rect x="16" y="136" width="328" height="108" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="136" width="328" height="108"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">고치는 파일 7개</div><div class="s">core 4 — ErrorCode 삭제 · CommonErrorCode · BusinessException · BadRequestException</div><div class="s">api-app 3 — ApiResponse · GlobalExceptionHandler · E2E 테스트</div></div></foreignObject>
+<rect x="16" y="258" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="16" y="258" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">OOP-6 위반이 사라진다 · Replace, Don't Deprecate</div><div class="t">단점</div><div class="s">F3 PR에 api-app 변경이 섞인다 (타입 치환뿐이지만 리뷰 범위가 는다)</div></div></foreignObject>
+<rect x="396" y="44" width="328" height="78" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="396" y="44" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">interface ErrorCode ← CommonErrorCode 만</div><div class="s">그대로 둔다</div></div></foreignObject>
+<rect x="396" y="136" width="328" height="74" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="396" y="136" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">고치는 파일 0개</div><div class="s">결정 카드에 "두 번째 구현체 없음 확인, 제거는 F7"만 적는다</div></div></foreignObject>
+<rect x="396" y="224" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="396" y="224" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">F3 PR이 supplier-client·core.application에만 머문다</div><div class="t">단점</div><div class="s">알면서 두는 죽은 추상화 — "나중에"가 CLN-10이 금지하는 방치</div></div></foreignObject>
+<rect x="776" y="44" width="328" height="78" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="776" y="44" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">enum SupplierErrorCode implements ErrorCode</div><div class="s">code() = name() · message() = 고정 문구</div></div></foreignObject>
+<rect x="776" y="136" width="328" height="74" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="776" y="136" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">고치는 파일 1개</div><div class="s">ApiResponse.error(SupplierErrorCode) 가 컴파일된다</div></div></foreignObject>
+<rect x="776" y="224" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="776" y="224" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">인터페이스가 살아남는다</div><div class="t">단점</div><div class="s">공급사 실패가 자사 응답의 code 자리에 들어갈 수 있게 된다 — D-F0-9가 막으려던 "누구 코드인지 모름"이 타입 수준에서 허용됨</div></div></foreignObject>
+<text class="svg-s" x="16" y="406" fill="#1B64DA">확정(D-F3-4): 셋 다 아니다 — 질문이 범주 착오였다. ErrorCode 는 core 것이고 클라이언트와 무관하므로 그대로 두고, 실패 유형은 독립 enum SupplierErrorCode 로 간다. 정리는</text>
+<text class="svg-s" x="16" y="424" fill="#4E5968">컨텍스트 전용 응답 코드가 처음 필요한 feature 에서.</text>
+</svg>
+      </div>
+      <figcaption><b>그림 6.</b> 세 안은 전부 "클라이언트 쪽 실패 유형이 <span class="term">ErrorCode</span>와 무슨 관계냐"를 묻고 있다. 협의 결과 그 질문 자체가 범주 착오였다 — 아래 각주가 확정이고, 세 열은 탈락 사유로만 남는다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">확정 — 셋 다 아님 (사용자 결정 2026-09-07)</span><strong><span class="term">ErrorCode</span>는 그대로, 실패 유형은 독립 enum.</strong> 처음 추천은 안 A(지금 제거)였다. 사용자가 "클라이언트에서 <span class="term">ErrorCode</span>를 쓰려 해서 생긴 문제 아니냐, 근본 이름은 도메인 모듈 것"이라고 짚었고, 다시 보니 <span class="term">ErrorCode</span>는 이미 <span class="term">core</span>에 있고 <span class="term">supplier-client</span> 참조가 0건이다. D-F0-6이 <strong>도메인 모듈 인터페이스의 존폐를 외부 경계 타입의 구현 여부에 건 것</strong>이 범주 착오였고, 그 조건 발동을 근거로 한 제거 추천도 같은 착오라 철회했다. 결론: F0 결정(인터페이스 유지)은 불변, D-F0-6의 조건 문언만 "컨텍스트 domain의 코드 enum이 두 번째 구현체 후보"로 정정, 지금은 동작하는 전체 기능이 우선이라 <span class="term">SupplierErrorCode</span>를 상속 없는 enum으로 만들고 네이밍·관계 정리는 컨텍스트 전용 응답 코드가 처음 필요한 feature(F7 후보)에서 한 번에 한다. F3의 <span class="term">ErrorCode</span> 관련 코드 변경은 0.</div>
+  </section>
+
+  <section id="s7" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">7</div>
+      <div><p class="sec-eyebrow">DECISION</p><h2 class="sec">D-F3-5 실제 소켓을 여는 테스트 — 확정: 만들지 않는다</h2></div>
+    </div>
+
+    <p class="lead">F3a는 웹 서버 없이 테스트 더블로 끝났다. F3은 다르다 — <strong>그룹 등록 프록시가 진짜 HTTP로 DTO를 받아 오는지</strong>, 503·지연·무응답에서 예측된 실패 값이 나오는지는 소켓을 열어야 보인다. <span class="term">supplier-client</span>에는 서버 스택이 없다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 07">
+        <svg viewBox="0 0 1120 432" role="img" aria-label="소켓 테스트 서버 세 안. 안 A는 JDK 내장 HttpServer로 새 의존성 없이 핸들러 코드로 상태 본문 지연 무응답을 만든다. 안 B는 Boot RANDOM_PORT로 supplier-client 테스트에 webmvc 스택을 추가하고 스텁 컨트롤러를 둔다. 안 C는 MockWebServer 새 의존성을 추가한다">
+<line x1="370" y1="30" x2="370" y2="388" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="750" y1="30" x2="750" y2="388" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<text class="svg-l" x="180" y="22" text-anchor="middle" fill="#191F28">안 A — JDK HttpServer</text>
+<text class="svg-l" x="560" y="22" text-anchor="middle" fill="#191F28">안 B — Boot RANDOM_PORT 스텁</text>
+<text class="svg-l" x="940" y="22" text-anchor="middle" fill="#191F28">안 C — MockWebServer</text>
+<rect x="16" y="44" width="328" height="92" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+<foreignObject x="16" y="44" width="328" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">com.sun.net.httpserver.HttpServer</div><div class="s">테스트 픽스처 SupplierStubServer — 포트 0 → 실제 포트</div><div class="s">base-url 은 @DynamicPropertySource 로 주입</div></div></foreignObject>
+<rect x="16" y="150" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="150" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">의존성 추가</div><div class="s">없음 — JDK 표준 모듈 (jdk.httpserver)</div></div></foreignObject>
+<rect x="16" y="224" width="328" height="156" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="16" y="224" width="328" height="156"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">상태·본문·지연·무응답을 핸들러 몇 줄로 · Spring 컨텍스트 없이도 프록시만 띄워 검증 가능 · 기동 수 ms</div><div class="t">단점</div><div class="s">핸들러·라이프사이클을 손으로 짠다(픽스처 1클래스) · HTTP/1.1 만 (공급사 계약도 1.1이라 지금은 충분)</div></div></foreignObject>
+<rect x="396" y="44" width="328" height="78" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="396" y="44" width="328" height="78"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">@SpringBootTest(webEnvironment = RANDOM_PORT)</div><div class="s">테스트 전용 @RestController 가 A·B 경로를 흉내</div></div></foreignObject>
+<rect x="396" y="136" width="328" height="74" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="396" y="136" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">의존성 추가</div><div class="s">testImplementation spring-boot-starter-webmvc(-test)</div></div></foreignObject>
+<rect x="396" y="224" width="328" height="142" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="396" y="224" width="328" height="142"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">저장소가 이미 아는 도구 (F0 E2E와 같은 계열)</div><div class="t">단점</div><div class="s">모듈에 없는 서버 스택이 테스트에만 들어온다 · 컨텍스트 기동이 테스트마다 수 초 · 무응답은 Thread.sleep 으로 흉내 — F3a 폐기본이 지적한 "블로킹 컨트롤러가 계측을 왜곡" 문제가 되살아난다</div></div></foreignObject>
+<rect x="776" y="44" width="328" height="60" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="776" y="44" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">okhttp3 MockWebServer</div><div class="s">enqueue(MockResponse) · setBodyDelay</div></div></foreignObject>
+<rect x="776" y="118" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="776" y="118" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">의존성 추가</div><div class="s">신규 — Boot 4 BOM 관리 여부부터 확인해야 한다</div></div></foreignObject>
+<rect x="776" y="192" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="776" y="192" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">지연·끊김 API 가 잘 갖춰져 있다 · 널리 쓰인다</div><div class="t">단점</div><div class="s">새 라이브러리 — "기존 의존성으로 되는지 먼저"(전역 규칙)에 걸린다 · 안 A로 같은 것을 만들 수 있으므로 근거가 서지 않는다</div></div></foreignObject>
+<text class="svg-s" x="16" y="402" fill="#1B64DA">확정(D-F3-5): 소켓 테스트 서버를 만들지 않는다 — 공급사는 테스트 더블로 응답을 설정하고, 실제 HTTP·타임아웃·503 은 api-app + F2 모의 서버를 띄워 k6 로 확인한다(실행은</text>
+<text class="svg-s" x="16" y="420" fill="#4E5968">호출자가 생기는 F6).</text>
+</svg>
+      </div>
+      <figcaption><b>그림 7.</b> 둘째 줄(의존성)에서 <b>안 A만 0</b>이지만, 확정은 셋 중 하나가 아니라 "소켓을 여는 자동 테스트를 두지 않는다"다. 세 열은 왜 스텁 서버가 필요 없는지의 배경으로 남는다 — 더블이 덮지 못하는 것은 아래 각주의 k6가 덮는다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">확정 — 소켓 테스트 서버 없음 (사용자 결정 2026-09-07)</span>추천은 안 A(JDK <span class="term">HttpServer</span>, 의존성 0)였고 클래스패스에 이미 있는 reactor-netty <span class="term">HttpServer</span>도 후보로 들었다. 사용자 결정은 <strong>공급사는 자동 테스트에서 무조건 테스트 더블로 응답을 설정해 검증</strong>하고, 실제 HTTP·타임아웃·503 경로는 <strong>api-app + F2 모의 서버를 띄운 뒤 k6로 우리 시나리오를 돌려</strong> 확인한다는 것. 더블만으로는 그룹 등록 프록시의 DTO 디코딩과 <span class="term">read-timeout</span> 발동이 자동 검증되지 않으므로 그 두 항목은 md 5.2 k6 검증 계획에 명시했다. F3에는 <span class="term">fetchAll()</span> 호출자가 없어 <strong>k6 실행 시점은 F6</strong>이다. 타임아웃 초기값 실측도 같은 방법으로 한다.</div>
+  </section>
+
+  <section id="s8" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">8</div>
+      <div><p class="sec-eyebrow">DECISION</p><h2 class="sec">D-F3-6 검색과 수집의 시간 예산 — 확정: 수집용 조합기 빈을 하나 더</h2></div>
+    </div>
+
+    <p class="lead">PR #7의 <span class="term">FanOutExecutor</span>는 생성자에서 정책 <strong>한 벌</strong>(<span class="term">supplier.fan-out.*</span>: max-concurrent 2 · per-call 2s · budget 5s, 자리표시자)을 받고 빈 하나로 등록된다. 그런데 이번에 처음 생기는 실제 호출자(목록 수집)는 검색과 요건이 다르다 — 검색은 사용자가 기다리고, 수집은 배치가 기다린다. 같은 3초로 둘 다를 재면 하나는 반드시 틀린다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 08">
+        <svg viewBox="0 0 1120 482" role="img" aria-label="시간 예산 세 안. 안 A는 PR 7의 정책 한 벌을 검색과 수집이 공유한다. 안 B는 수집용 정책을 따로 두고 그 정책으로 조합기 빈을 하나 더 만든다. 안 C는 수집이 조합기를 우회해 timeout과 block을 직접 쓴다">
+<line x1="370" y1="30" x2="370" y2="438" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="750" y1="30" x2="750" y2="438" stroke="#D1D6DB" stroke-width="1" stroke-dasharray="4 4"/>
+<text class="svg-l" x="180" y="22" text-anchor="middle" fill="#191F28">안 A — 한 벌 공유 (PR #7 그대로)</text>
+<text class="svg-l" x="560" y="22" text-anchor="middle" fill="#191F28">안 B — 수집 정책 별도 (조합기 빈 둘)</text>
+<text class="svg-l" x="940" y="22" text-anchor="middle" fill="#191F28">안 C — 수집은 조합기 우회</text>
+<rect x="16" y="44" width="328" height="94" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="16" y="44" width="328" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">supplier.fan-out.{max-concurrent, per-call, budget}</div><div class="s">FanOutExecutor 빈 1개 · 생성자 정책 1벌 — 검색·수집 공유</div></div></foreignObject>
+<rect x="16" y="152" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="16" y="152" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">F3a 코드 변경</div><div class="s">없음</div></div></foreignObject>
+<rect x="16" y="226" width="328" height="142" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="16" y="226" width="328" height="142"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">손잡이 3개 · 코드 변경 없음</div><div class="t">단점</div><div class="s">per-call 2s 가 목록 호출에도 걸린다 — 실제 규모 목록이면 수집이 잘리고, 수집에 맞춰 늘리면 검색 요청이 그만큼 매달린다. 어느 쪽으로 맞춰도 한쪽이 틀린다</div></div></foreignObject>
+<rect x="396" y="44" width="328" height="142" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+<foreignObject x="396" y="44" width="328" height="142"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green left"><div class="t">supplier.catalog.fan-out.{max-concurrent, per-call, budget}</div><div class="s">CatalogFanOutProperties → FanOutPolicy (F3 신규) — fetchAll 이 N건이라 세 값 전부</div><div class="s">FanOutExecutor 빈 하나 더 (catalogFanOutExecutor) — 조합기는 "정책 한 벌을 든 인스턴스"라 클래스 무변경</div></div></foreignObject>
+<rect x="396" y="200" width="328" height="74" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="396" y="200" width="328" height="74"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">F3a 코드 변경</div><div class="s">없음 — 빈 등록은 F3 신규 SupplierCatalogConfig 에서 · 어댑터는 @Qualifier 로 받는다</div></div></foreignObject>
+<rect x="396" y="288" width="328" height="142" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="396" y="288" width="328" height="142"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">용도마다 정직한 값 · 조합기 클래스·테스트 무변경 · PR #7을 건드리지 않는다</div><div class="t">단점</div><div class="s">빈이 둘이라 주입 자리에 이름을 붙인다 · supplier.fan-out.* 가 "검색용"이라는 뜻이 이름에 없다(F5에서 search 로 개명 후보) · 손잡이 6개</div></div></foreignObject>
+<rect x="776" y="44" width="328" height="60" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="776" y="44" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red left"><div class="t">catalog 어댑터: mono.timeout(30s).block()</div><div class="s">조합기는 검색(F5)만 쓴다</div></div></foreignObject>
+<rect x="776" y="118" width="328" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3"/>
+<foreignObject x="776" y="118" width="328" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">F3a 코드 변경</div><div class="s">없음 — 대신 수집용 타임아웃 프로퍼티가 따로</div></div></foreignObject>
+<rect x="776" y="192" width="328" height="126" rx="12" fill="#F9FAFB" stroke="#E5E8EB" stroke-width="1.3"/>
+<foreignObject x="776" y="192" width="328" height="126"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey left"><div class="t">장점</div><div class="s">PR #7 그대로</div><div class="t">단점</div><div class="s">실패→값 변환·경과 시간·warn 로그를 조합기 밖에서 한 번 더 짠다 — F3a 가 만든 것을 복제 · 정상 경로가 두 갈래라 검증이 두 벌</div></div></foreignObject>
+<text class="svg-s" x="16" y="452" fill="#1B64DA">확정(D-F3-6): 안 B, 빈 둘 형태. 초기값(설정이지 결정이 아님) — 그룹 connect 1s · read 45s / 검색 supplier.fan-out 2 · 4s · 5s / 수집 supplier.catalog.fan-out 2 ·</text>
+<text class="svg-s" x="16" y="470" fill="#4E5968">30s · 40s. 오버로드는 정책이 private 5곳에 퍼져 있어 탈락.</text>
+</svg>
+      </div>
+      <figcaption><b>그림 8.</b> 셋째 줄을 볼 것 — <b>안 A는 값이 틀리고 안 C는 코드가 겹친다</b>. 안 B는 빈 둘 형태로 바꾸면 둘째 줄(F3a 수정)도 0이 되어, 세 안 중 유일하게 값과 코드가 모두 정직하다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">확정 — 안 B, 빈 둘 형태 (사용자 결정 2026-09-07)</span>수집용 정책을 따로 두되 <strong>F3a 코드는 건드리지 않는다.</strong> 처음엔 <span class="term">runAll(calls, policy)</span> 오버로드로 그렸으나 코드를 다시 보니 정책이 private 메서드 다섯 곳에 퍼져 있었다. 조합기는 "정책 한 벌을 든 인스턴스"로 설계돼 있으므로 <span class="term">supplier.catalog.fan-out.*</span>을 읽는 <span class="term">CatalogFanOutProperties</span>로 <strong><span class="term">FanOutExecutor</span> 빈을 하나 더</strong> 만들고 어댑터가 이름으로 받는다. 초기값(근거는 외부 문헌이 아니라 자사 응답 목표): 그룹 <span class="term">connect 1s</span> · <span class="term">read 45s</span>(뒷그물 — 두 용도 중 긴 쪽보다 커야 소켓이 조합기보다 먼저 끊지 않는다) / 검색 <span class="term">supplier.fan-out</span> 2 · 4s · 5s(사용자가 2s는 짧다고 해 per-call을 budget 바로 아래로, 캐싱 전제, F5 재산정) / 수집 <span class="term">supplier.catalog.fan-out</span> 2 · 30s · 40s(오래 걸려도 다 받는 것이 중요, 사용자가 늘림 허용). 전부 <strong>설정이지 결정이 아니며</strong> k6로 실측 후 바꾼다. 재시도는 F9에서 부등식과 함께.</div>
+</section>
+
+  <section id="s9" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">9</div>
+      <div><p class="sec-eyebrow">SEQUENCE</p><h2 class="sec">확정 시퀀스 — fetchAll() 에서 A는 성공, B는 200 + E503</h2></div>
+    </div>
+
+    <p class="lead">카드 1~3이 확정된 모양으로 호출 1건은 이렇게 흐른다. <strong>실패가 값이 되는 자리(④)와 유형이 되는 자리(⑤)가 다르다</strong>는 것, 그리고 <span class="term">Mono</span>가 어댑터를 넘어가지 않는다는 것을 볼 것. A의 정상 경로와 B의 실패 경로가 같은 <span class="term">runAll</span> 안에서 나란히 흐르고, 결과 두 칸이 요청 순서로 돌아온다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 09">
+        <svg viewBox="0 0 1120 562" role="img" aria-label="fetchAll 호출 1건의 순서. 호출자가 어댑터를 부르면 어댑터는 등록된 Fetcher 전부에서 SupplierCall을 얻어 수집용 조합기에 두 건을 넘긴다. 조합기가 구독하면 A와 B 프록시가 동시에 GET을 보낸다. A는 200 목록이 와서 Success가 되고, B는 200에 E503 봉투가 와서 번역기가 예외를 던지고 조합기가 그것을 Failed 값으로 흡수한다. 어댑터는 분류기로 예외를 UNAVAILABLE로 바꿔 Fetched A와 Failed B를 요청 순서로 호출자에게 돌려준다">
+<defs><marker id="c9" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="452" y="226" width="620" height="150" rx="14" fill="#F4F9FF" stroke="#CFE4FF" stroke-width="1.3"/>
+<text class="svg-l" x="466" y="246" fill="#1B64DA">Mono 구간 — timeout(perCall) 안</text>
+<rect x="16" y="34" width="150" height="60" rx="12" fill="#FFFFFF" stroke="#B0B8C1" stroke-width="1.3" stroke-dasharray="5 4"/>
+<foreignObject x="16" y="34" width="150" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">호출자</div><div class="s">F6 · 테스트</div></div></foreignObject>
+<line x1="91" y1="94" x2="91" y2="542" stroke="#B0B8C1" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="196" y="34" width="196" height="60" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="196" y="34" width="196" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SupplierCatalogAdapter</div></div></foreignObject>
+<line x1="294" y1="94" x2="294" y2="542" stroke="#3182F6" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="422" y="34" width="196" height="60" rx="12" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.3"/>
+<foreignObject x="422" y="34" width="196" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">FanOutExecutor</div><div class="s">F3a</div></div></foreignObject>
+<line x1="520" y1="94" x2="520" y2="542" stroke="#8B95A1" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="656" y="34" width="196" height="60" rx="12" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+<foreignObject x="656" y="34" width="196" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">Fetcher A · B</div><div class="s">+ 번역기 A · B</div></div></foreignObject>
+<line x1="754" y1="94" x2="754" y2="542" stroke="#3182F6" stroke-width="1.2" stroke-dasharray="4 4"/>
+<rect x="890" y="34" width="196" height="60" rx="12" fill="#FFF0F0" stroke="#F04452" stroke-width="1.3"/>
+<foreignObject x="890" y="34" width="196" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">프록시 A · B</div><div class="s">→ 공급사 A · B</div></div></foreignObject>
+<line x1="988" y1="94" x2="988" y2="542" stroke="#F04452" stroke-width="1.2" stroke-dasharray="4 4"/>
+<line x1="91" y1="116" x2="288" y2="116" stroke="#6B7684" stroke-width="1.8" marker-end="url(#c9)"/>
+<text class="svg-s" x="189" y="110" text-anchor="middle" fill="#4E5968">① fetchAll()</text>
+<line x1="294" y1="146" x2="748" y2="146" stroke="#3182F6" stroke-width="1.8" marker-end="url(#c9)"/>
+<text class="svg-s" x="521" y="140" text-anchor="middle" fill="#3182F6">② fetchers.values() 마다 call()  — 아직 네트워크 없음</text>
+<line x1="748" y1="166" x2="300" y2="166" stroke="#3182F6" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#c9)"/>
+<text class="svg-s" x="524" y="182" text-anchor="middle" fill="#3182F6">[SupplierCall(A, hotels().map(translateA)), SupplierCall(B, properties().map(translateB))]</text>
+<line x1="294" y1="216" x2="514" y2="216" stroke="#3182F6" stroke-width="1.8" marker-end="url(#c9)"/>
+<text class="svg-s" x="404" y="210" text-anchor="middle" fill="#3182F6">③ catalogFanOutExecutor.runAll([callA, callB])  — 수집용 빈</text>
+<line x1="520" y1="278" x2="982" y2="278" stroke="#F04452" stroke-width="1.8" marker-end="url(#c9)"/>
+<text class="svg-s" x="751" y="272" text-anchor="middle" fill="#F04452">subscribe ×2 → GET /a/v1/hotels · GET /b/api/properties (키 마스킹 로그)</text>
+<rect x="974" y="286" width="28" height="30" rx="7" fill="#FFF0F0" stroke="#F04452" stroke-width="1.2"/>
+<line x1="982" y1="328" x2="760" y2="328" stroke="#F04452" stroke-width="1.8" marker-end="url(#c9)"/>
+<text class="svg-s" x="871" y="322" text-anchor="middle" fill="#F04452">A: 200 items[] → Success(A) · B: 200 {resultCode: "E503"}</text>
+<rect x="740" y="336" width="28" height="30" rx="7" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+<text class="svg-s" x="776" y="350" fill="#1B64DA">B: map(translateB): resultCode≠0000</text>
+<text class="svg-s" x="776" y="366" fill="#1B64DA">→ throw SupplierBResultException("E503")</text>
+<rect x="506" y="396" width="28" height="30" rx="7" fill="#FFFFFF" stroke="#8B95A1" stroke-width="1.2"/>
+<text class="svg-s" x="548" y="408" fill="#4E5968">④ B만 onErrorResume → Failed(B, SupplierBResultException, elapsed) + warn 로그</text>
+<text class="svg-s" x="548" y="424" fill="#4E5968">take(budget) · collectList() · block(hardStop) · reconcile — 1건 그대로</text>
+<line x1="514" y1="446" x2="312" y2="446" stroke="#8B95A1" stroke-width="1.8" marker-end="url(#c9)"/>
+<text class="svg-s" x="413" y="440" text-anchor="middle" fill="#8B95A1">[Success(A, 목록), Failed(B, 예외)] — 요청 순서</text>
+<rect x="280" y="458" width="28" height="30" rx="7" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+<text class="svg-s" x="334" y="470" fill="#1B64DA">⑤ Failed 만 classifier.classify(cause) → UNAVAILABLE  (분류는 여기서 딱 한 번)</text>
+<text class="svg-s" x="334" y="486" fill="#1B64DA">warn 로그: supplier=B reason=UNAVAILABLE  (원인·경과는 조합기가 이미 남겼다)</text>
+<line x1="288" y1="516" x2="97" y2="516" stroke="#6B7684" stroke-width="1.8" marker-end="url(#c9)"/>
+<text class="svg-s" x="192" y="510" text-anchor="middle" fill="#4E5968">⑥ [Fetched(A, 목록), Failed(B, UNAVAILABLE)]</text>
+</svg>
+      </div>
+      <figcaption><b>그림 9.</b> ②에서 <b>네트워크가 열리지 않는다</b>는 것이 F3a가 넘긴 "본문 블로킹 금지" 계약의 실체다 — <span class="term">call()</span>은 <span class="term">Mono</span>를 조립만 하고, 구독은 ③ 안에서 <span class="term">timeout(perCall)</span>이 붙은 뒤에 일어난다. ④와 ⑤가 다른 참여자에 있는 것이 D-F3-3 안 A다.</figcaption>
+    </figure>
+  </section>
+
+  <section id="s10" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">10</div>
+      <div><p class="sec-eyebrow">HANDOFF</p><h2 class="sec">뒤 feature로 넘기는 것 — 그리고 F3a에 되돌리는 것</h2></div>
+    </div>
+
+    <div class="cols">
+      <div class="col">
+        <h3>병합된 F3a(#7)에서 이어받는 것 — F3a 수정 요청 없음</h3>
+        <ul>
+          <li><strong>패키지</strong> — <span class="term">com.stay.property.infrastructure</span> 그대로. 공급사별만 <span class="term">.supplier.a</span> / <span class="term">.supplier.b</span>.</li>
+          <li><strong>그룹 등록</strong> — <span class="term">SupplierHttpClientConfig</span>의 <span class="term">@ImportHttpServices</span>에 <span class="term">types</span>만 채운다. T-10 프로브 인터페이스는 실제 <span class="term">SupplierAApi</span>로 바꿔 정식 테스트로 승격(02-implementation의 제안).</li>
+          <li><strong>계약</strong> — 반환 순서 = 요청 순서(인덱스), 같은 공급사 여러 건 허용, 묶음 분할·한도 yaml은 어댑터 몫(D-F3A-12~14). 조합기가 실패·잘림을 <span class="term">warn</span>으로 이미 남기므로 어댑터는 <strong>유형(reason)</strong>만 한 줄 더 남긴다.</li>
+          <li><strong>reactor.netty DEBUG 유출</strong> — 자격 증명이 쿼리에 실릴 때만 발생. A·B는 <span class="term">X-Api-Key</span> 헤더(<span class="term">default-header</span>)로 보내므로 해당 없음. 설계 문서에 확인 항목으로만 남긴다.</li>
+          <li><strong>예산 정책</strong> — 수집용 <span class="term">FanOutExecutor</span> 빈을 하나 더 만든다(D-F3-6). 조합기 클래스·테스트는 무변경.</li>
+          <li><strong>타임아웃 값</strong> — md 3.5의 초기값도 자리표시자. F6에서 api-app + F2 모의 서버를 띄우고 k6로 실측해 조정한다(md 5.2).</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h3>F5 · F6 · F8 · F9</h3>
+        <ul>
+          <li><strong>F5</strong> — <span class="term">SupplierAApi</span>·<span class="term">SupplierBApi</span>에 재고·요금 메서드 추가, DTO 3종, 묶음 분할(한도는 <span class="term">supplier.&lt;공급사&gt;.*</span> yaml, D-F3A-14), 묶음 단위 실패 값 형태, <span class="term">supplier.fan-out.*</span>을 <span class="term">search</span>로 개명할지 판단.</li>
+          <li><strong>F6</strong> — <span class="term">fetchAll()</span> 한 번 → 결과를 <span class="term">Supplier</span>별로 나눠 공급사별 트랜잭션으로 upsert. <span class="term">Fetched</span>일 때만 갱신·"사라진 상품" 비교, <span class="term">Failed</span>는 reason 로그 + 기존 매핑 유지. md 5.2의 k6 시나리오를 여기서 실행한다.</li>
+          <li><strong>F8</strong> — <span class="term">suppliers[].reason</span> = <span class="term">SupplierErrorCode.name()</span>. 값 체계는 여기서 끝났다.</li>
+          <li><strong>F9</strong> — 재시도 대상 유형: <span class="term">UNAVAILABLE</span>·<span class="term">RATE_LIMITED</span>·<span class="term">TIMEOUT</span>. <span class="term">SUPPLIER_ERROR</span>(500)는 F9가 판단. 부등식 우변에 ×(1 + 최대 재시도).</li>
+          <li><strong>F7</strong> — 컨텍스트 전용 응답 코드가 처음 필요한지 확인하고, 필요하면 <span class="term">ErrorCode</span>·<span class="term">CommonErrorCode</span>·<span class="term">SupplierErrorCode</span>의 네이밍·관계를 그때 한 번에 정리한다(D-F3-4·D-F0-6 정정).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    결정의 원본은 <b>docs/features/supplier-client/01-design.md</b> 다 (2026-09-07 확정).<br>
+    이 문서는 그 결정을 고르기 위한 그림이며, 여기에만 있는 결정은 두지 않는다.
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>
