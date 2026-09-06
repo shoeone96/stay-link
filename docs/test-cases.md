@@ -58,3 +58,29 @@
 **실측 수치는 이 파일에 두지 않는다** (설계 5.1). 두 서버를 띄워 확인한 응답값·부하 결과의 자리는 `docs/features/mock-supplier-server/02-implementation.md` 한 곳이다 — 같은 숫자를 두 파일에 두면 한쪽만 고쳐져 어긋난다.
 
 **한계**: 이 수단은 사람이 실행해야 하고, 실행을 잊으면 아무것도 막지 못한다. 자동으로 도는 안전망과 같지 않다.
+
+## webclient-config (2026-09-07, fix-2 갱신)
+
+요약: 총 15 · 통과 15 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 41 · 통과 41 · 실패 0 · 건너뜀 0)
+
+공급사가 아직 하나도 없어 **웹 서버를 띄우지 않는다.** 호출은 전부 테스트 더블이고(`Mono.delay`·`Mono.never`·구독 카운터), 필터는 `ExchangeFunction` 스텁, 그룹 등록은 서버 없는 컨텍스트로 확인한다. 실제 소켓을 여는 방식은 F3이 정한다.
+
+| # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
+|---|---|---|---|---|---|
+| T-01 | `OutcomeTest#create_preservesSupplierAndSplitsIntoTwoBranches` | supplier-client | 성공·실패를 만들고 `default` 절 없는 switch 로 갈라 → 공급사가 보존되고 두 갈래로 갈린다 | ✅ | 높음 — sealed 계약(D-F3A-6)을 컴파일 시점으로 고정한다. 세 번째 구현이 붙거나 nullable 2필드 record 로 되돌리면 이 switch 가 먼저 깨진다 |
+| T-02 | `FanOutExecutorTest#runAll_withConcurrencyLimit_neverSubscribesBeyondLimit` | supplier-client | 상한 1로 두 건 → 최대 동시 구독 수 1 | ✅ | 높음 — 이 기능의 존재 이유(바깥 호출에 상한)를 지키는 유일한 테스트. 상한 인자를 256으로 바꾸는 변이를 넣자 이 테스트만 `expected: 1 but was: 2` 로 실패했다 |
+| T-03 | `FanOutExecutorTest#runAll_whenOneCallExceedsPerCall_failsOnlyThatCall` | supplier-client | A는 즉시 응답, B는 끝나지 않음, `per-call` 100ms → B만 `Failed(TimeoutException)`, A는 `Success` | ✅ | 높음 — 부분 실패의 핵심 계약. `timeout` 이 빠지면 Red 가 방어망까지 흘러가 그대로 드러난다 |
+| T-04 | `FanOutExecutorTest#runAll_whenOneCallErrors_absorbsCauseIntoValue` | supplier-client | B가 예외 신호 → 예외가 밖으로 안 나오고 원인이 **그대로**(감싸지 않고) 실패 값에 담긴다 | ✅ | 중간 — 흡수 대상이 타임아웃뿐이 아님을 고정한다. 원인을 감싸면 F4가 실패를 유형으로 갈라 볼 수 없게 되므로 그 회귀도 막는다. Red 없이 통과했다(T-03 사이클의 `onErrorResume` 이 이미 덮음) |
+| T-05 | `FanOutExecutorTest#runAll_whenBudgetExpires_keepsArrivedAndFillsMissing` | supplier-client | 정책을 `budget < per-call` 로 뒤집고 B를 끝나지 않게 → A의 결과는 남고 B는 `Failed(BudgetExceededException)` | ✅ | 높음 — D-F3A-3·4를 동시에 지킨다. 예산을 `take` 대신 `block` 으로 표현하면 A의 결과까지 사라지고, `reconcile` 이 없으면 B가 조용히 빠진다 |
+| T-06 | `FanOutExecutorTest#runAll_alwaysReturnsOneOutcomePerCall` (Parameterized 3) | supplier-client | 전부 도착 / 한 곳 상한 초과 / 한 곳 예산에 잘림 → 세 경우 모두 결과 수 = 호출 수 | ✅ | 높음 — 포트 계약 1번을 세 경로에서 한꺼번에 건다. F4·F6·F7이 여기에 기댄다. Red 없이 통과했다(T-05의 `reconcile` 이 이미 채움) |
+| T-07 | `FanOutExecutorTest#runAll_withNoCalls_returnsEmptyList` | supplier-client | 호출 목록이 빔 → 빈 리스트(예외 아님) | ✅ | 중간 — 빈 목록 전용 분기 없이도 체인이 즉시 완료함을 고정한다. `take(Duration)` 이 빈 소스를 지나가지 못하는 형태로 바뀌면 여기서 잡힌다 |
+| T-08 | `FanOutPropertiesTest#bind_withInconsistentValues_failsAtStartup` (Parameterized 3) | supplier-client | `budget == per-call` / `budget < per-call` / `max-concurrent = 0` → 컨텍스트 기동 실패, 실패 메시지에 어긋난 **키 이름**이 들어 있다 | ✅ | 높음 — 예산 부등식의 최소 조건(D-F3A-8)을 요청 시점이 아니라 기동 시점으로 끌어온다. 키 이름까지 보므로 "아무 이유로든 실패"로는 통과하지 않는다 |
+| T-09 | `MaskingExchangeFilterTest#filter_withCredentialHeader_masksKeyAndKeepsOriginalOut` | supplier-client | 인증 헤더를 단 요청을 스텁으로 보냄 → 로그에 `X-Api-Key=***`, 원본 값은 어느 줄에도 없음 | ✅ | 높음 — 완료 기준의 마지막 항목이자 유출 회귀 차단. "디버깅 편하게 뒷자리만 남기자"는 수정이 들어오면 즉시 실패한다 |
+| T-10 | `SupplierHttpClientConfigTest#loadContext_injectsGroupClientByType` | supplier-client | 서버 없이 컨텍스트를 띄우고 그룹에 확인용 `@HttpExchange` 를 얹음 → 그 인터페이스가 **타입으로** 주입된다 | ✅ | 중간 — 쓰는 쪽이 레지스트리를 몰라도 된다는 D-F3A-2의 전제를 실행으로 고정한다. 등록기가 인터페이스마다 빈을 만들어 준다는 조사 결론이 실제로 성립하는지를 본다 |
+| T-11 | `FanOutExecutorTest#runAll_withSameSupplierTwice_fillsMissingSlotInRequestOrder` | supplier-client | **같은 공급사로 2건**(첫 건은 끝나지 않음, 둘째는 즉시 도착) → 결과 2건, 0번 자리가 `Failed(BudgetExceededException)`, 1번 자리가 그 값의 `Success`. 즉 **완료 순서가 아니라 요청 순서** | ✅ | 높음 — 계약 1·4·5를 한꺼번에 건다(D-F3A-12·13). `Supplier` 차집합으로 판정하면 결과가 **예외 없이 1건으로 줄어들고**(추가 전 Red 가 정확히 그 상태였다), 완료 순서로 돌려주면 순서가 뒤집힌다. **순서 계약을 지키는 유일한 테스트다** — 완료 순서 변이를 넣었을 때 T-03·T-05는 통과하고 이것만 실패했다 |
+
+- 만들지 않은 것(TDD-8, 설계 §5): `SupplierCall` 접근자(단순 record), 그룹 프로퍼티 타임아웃의 실제 적용(프레임워크 동작 — 실제 소켓 검증은 F3), `FanOutPolicy.hardStop()` 단독 테스트(값 계산뿐이고 T-03·T-05의 Red 가 실제로 그 시각에 터졌다).
+- Red 없이 통과한 것 3건(T-04·T-06·T-07)은 직전 사이클의 구현이 이미 덮은 행동이다. 표에 그대로 적어 둔다 — 없는 Red 를 지어내지 않는다(TDD-6).
+- fix-2에서 바뀐 것(설계 갱신 반영): T-11이 새로 들어왔고, `describe` 헬퍼가 성공을 `"Success:<값>"` 으로 만들어 어느 자리에 어느 값이 놓였는지까지 본다. T-03·T-05의 `containsExactlyInAnyOrder` 는 `containsExactly` 로 좁혔다 — 순서를 정하지 않던 옛 계약에 맞춘 단언이라 그대로 두면 계약보다 약하게 남는다.
+- 테스트가 태우지 않는 갈래: 방어망(`block(hardStop)`)이 실제로 터지는 경로. 앞의 상한이 걸려 있으면 도달하지 않는 자리라 재현하려면 조합기 자체를 고장 내야 하고, 그러면 "고장 낸 코드"를 검증하는 테스트가 된다. `ERROR` 로그와 예외 전파는 코드 리뷰로 본다.
+- `api-app` 의 컴포넌트 스캔이 `runtimeOnly` 로만 의존하는 `supplier-client` 의 설정을 집어 오는지는 **임시 프로브로 실측하고 프로브를 삭제**했다. 결과와 근거는 `docs/features/webclient-config/02-implementation.md` 에 있다. F3 이 실제 공급사 인터페이스를 얹을 때 정식 테스트로 승격할 것을 제안한다.
