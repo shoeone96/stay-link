@@ -12,7 +12,7 @@
                                                                             │
 [F1 property-mapping] ──────────────────────────┐                           │
                                                  ├─→ [F6 catalog-sync] ─────┤
-[F2 mock-supplier-server] → [F3 supplier-client] ┤                          │
+[F3a webclient-config] ───→ [F3 supplier-client] ┤                          │
                                      │           └─→ [F4 catalog-adapter]───┤
                                      │                                      │
                                      └─→ [F5 availability-adapter] → [F7 stay-search-api]
@@ -24,7 +24,9 @@
                                                           └─→ [F11 unmapped-code-recovery] (선택)
 ```
 
-- F1·F2는 서로 독립이라 어느 쪽을 먼저 해도 된다. F1을 먼저 두는 이유는 외부 의존 없이 도메인·DB 경계를 닫아 JPA DDL 전략(이연)을 가장 먼저 확정할 수 있어서다.
+- **F2(모의 공급사 서버)는 흐름의 선행이 아니라 F3~F5의 로컬 확인 도구**라서 그림에서 뺐다. 이미 병합됐고, F3a·F3의 테스트는 F2 없이 돌아가야 한다.
+- **F3a는 F3의 앞부분**이다 — 공급사와 무관한 공통 HTTP 배선을 먼저 깔고, 그 위에 공급사별 클라이언트(F3)를 얹는다.
+- F1과 F3a는 서로 독립이라 어느 쪽을 먼저 해도 된다. F1을 먼저 두는 이유는 외부 의존 없이 도메인·DB 경계를 닫아 JPA DDL 전략(이연)을 가장 먼저 확정할 수 있어서다.
 - F7이 첫 번째 end-to-end 지점이다. F7까지가 "흐름 하나가 끊김 없이 동작"하는 최우선 요건이고, F8~F10은 그 위에 얹는 견고성이다.
 - 마무리(README·테스트 정리)는 feature가 아니라 상시 작업이며 맨 아래에 따로 둔다.
 - 각 feature는 `main`에서 딴 `feature/f<N>-<feature>` 브랜치에서 진행하고(예: `feature/f1-property-mapping`), 끝나면 `pr` 스킬로 `main` PR을 만든다. 규칙 원본은 `CLAUDE.md` 「브랜치·PR」.
@@ -35,7 +37,8 @@
 |---|---|---|---|---|---|
 | F0 | `api-response` | 조회 1 파생(자사 API 응답·오류 본문) | 완료(병합) | 2026-09-04 | 2026-09-04 |
 | F1 | `property-mapping` | 사전작업 1(스키마) 구현화 | 완료(병합) | 2026-09-03 | 2026-09-04 |
-| F2 | `mock-supplier-server` | 사전작업 2 | PR | 2026-09-05 | 2026-09-05 |
+| F2 | `mock-supplier-server` | 사전작업 2 | 완료(병합) | 2026-09-05 | 2026-09-05 |
+| F3a | `webclient-config` | 사전작업 3 앞부분(공통 HTTP 배선) | 설계중 | - | - |
 | F3 | `supplier-client` | 사전작업 3 | 대기 | - | - |
 | F4 | `supplier-catalog-adapter` | 사전작업 4 (목록) | 대기 | - | - |
 | F5 | `supplier-availability-adapter` | 사전작업 4 (재고·요금) | 대기 | - | - |
@@ -102,20 +105,41 @@
 
 > 2026-09-05: 1프로세스·단일 포트로 구현했던 첫 시도를 커밋 전에 폐기했다. 사유는 `docs/ai-history.md` 55번.
 
+## F3a. `webclient-config` — 공통 HTTP 배선
+
+> **범위는 아직 확정 전이다.** 아래 「열린 논점」 두 개를 사용자와 닫은 뒤 `01-design.md`를 쓴다.
+> 조사·검증 근거는 `docs/features/webclient-config/client-wiring-research.html`(출처 22건 검증, PASS 21 / FAIL 1).
+
+- **목적**: 공급사와 무관한 공통 HTTP 호출 배선. 공급사별 클라이언트(F3)가 이 위에 얹힌다. 존재 이유는 "호출을 편하게"가 아니라 **바깥으로 나가는 호출에 상한을 두는 것**이다.
+- **사는 곳**: `supplier-client` 모듈. 이 feature가 그 모듈의 첫 코드이며, **`core` 의존을 추가하는 것도 여기서** 한다(`module-split` 설계가 "F3a 병합 시 추가"로 남겨 둔 자리).
+- **포함**
+  - 공급사별 클라이언트 인스턴스 생성 — `WebClient.Builder`를 **`clone()`** 해서 공급사마다 갈라 놓고, `WebClientAdapter` → `HttpServiceProxyFactory`로 HTTP Interface 프록시를 만든다. **Boot 3.5에는 자동 등록이 없어 수동 배선이 유일한 길이다**
+  - 커넥터 구성 — connect / read 타임아웃. `spring.http.reactiveclient.*`는 **전역이라 공급사별 차등에 쓸 수 없다**
+  - fan-out 조합기 — `Flux.fromIterable(...).flatMap(fn, maxConcurrent).collectList().block(예산)`. **동시 호출 상한을 인자로 주는 것이 이 선택의 이유**이며, 리액티브 타입은 이 안에서 소멸한다
+  - 요청 응답 로깅 필터 — 인증 키 마스킹 포함
+  - 타임아웃 값과 동시 호출 상한을 담는 `@ConfigurationProperties`, 기동 시 순서 검증
+- **제외**: 공급사별 HTTP Interface와 원본 DTO(F3), 실패 판정(F3·F4), 표준 모델 변환(F4·F5), 커넥션 풀 튜닝, 검색 유스케이스의 실제 fan-out 호출(F7)
+- **선행**: `module-split`. F2는 필요 없다 — **테스트가 F2 없이 돌아가야 한다**
+- **열린 논점 (범위 확정 시 닫는다)**
+  - **재시도(`retryWhen`)를 F3a에 넣을지, F9로 미룰지.** 요구 조건이 지목한 세 축이 타임아웃·재시도·병렬 호출 제어인데, 이 셋이 호출 한 건의 체인에 나란히 붙는다. 떼어 놓으면 부자연스럽다
+  - **부분 실패 표현 타입을 F3a가 정의할지.** `onErrorResume`의 fallback은 **반드시 값**이어야 한다(`Mono.empty()`를 쓰면 그 공급사가 조용히 사라지거나 조합 전체가 취소된다). 표현 타입이 없으면 조합기가 반쪽이 되므로, "조합 도구만 만들고 실패 정책은 F8" 이라는 선이 그어지지 않을 수 있다. 정의한다면 그 타입은 `core`에 산다
+- **닫아야 할 결정(구현 후)**
+  - 타임아웃 값과 동시 호출 상한의 실측 보정 — F2 모의 서버로 구현 직후 측정
+- **완료 기준**: 타임아웃 계층이 각각 정해진 시간 안에 호출을 자르고, 호출 N건을 한꺼번에 넣어도 **서버가 동시에 보는 요청 수가 상한을 넘지 않으며**, 호출 1건마다 인증 키가 가려진 로그가 남는다.
+- **미리 확인한 걸림돌**: `supplier-client`에는 `@SpringBootApplication`도 서블릿 스택도 없다. 실제 HTTP를 쏘는 테스트를 그 모듈에서 돌리려면 테스트 전용 부트스트랩 설정(`persistence`의 `PersistenceTestConfig`에 해당하는 것)과 웹 서버 선택을 F3a가 함께 정해야 한다.
+
 ## F3. `supplier-client` — 공급사 HTTP 클라이언트
 
-- **목적**: WebClient 기반 공급사 호출 계층과 타임아웃 계층. 응답을 공급사별 원본 DTO로 받는 데까지.
+- **목적**: 공급사별 호출 인터페이스와 원본 DTO. F3a가 깐 배선 위에 공급사 A·B를 얹는다.
+- **사는 곳**: `supplier-client` 모듈. `core`의 `com.stay.property.application`이 소유한 포트를 구현한다(`module-split` D-MS-4).
 - **포함**
-  - 공급사별 WebClient 인스턴스 (base URL·API key 설정 분리)
-  - 타임아웃 계층: connect / response(read) / 호출 전체 예산 — 값과 근거 확정 (이연 항목)
+  - 공급사별 HTTP Interface — F3a의 프록시 팩토리로 인스턴스를 만든다. **A와 B는 실패 표현이 달라 인터페이스가 서로 다르다**(하나를 N번 찍어낼 수 없다)
   - 공급사별 원본 응답 DTO (목록·재고요금·실패 본문) — 어댑터(F4·F5)의 입력
   - A는 4xx/5xx를, B는 200 + `resultCode != "0000"`을 각각 "실패 응답"으로 구분해 어댑터에 넘길 수 있는 형태
-- **제외**: 표준 모델 변환(F4·F5), retry/circuit(F9), 병렬 fan-out(F7)
-- **선행**: F2 (로컬 확인용). 단위 테스트는 F2 없이 돌아가야 한다
+- **제외**: 공통 HTTP 배선·타임아웃·조합기(F3a), 표준 모델 변환(F4·F5), circuit(F9), 병렬 fan-out 호출(F7)
+- **선행**: **F3a.** F2는 로컬 확인용이며 단위 테스트는 F2 없이 돌아가야 한다
 - **닫아야 할 결정**
-  - 클라이언트 테스트 방식: 새 의존성(MockWebServer·WireMock) vs 기존 의존성만으로 가능한지 먼저 검토
-  - 타임아웃 값 3종과 근거 — `tech-research` 필요 시 사용
-  - Reactor `Mono`를 그대로 노출할지, 클라이언트 경계에서 block 할지 (확정 스택: Virtual Thread 서빙 + Reactor는 fan-out 제어용)
+  - ~~클라이언트 테스트 방식~~ · ~~타임아웃 값~~ · ~~`Mono` 노출 여부~~ — **F3a에서 닫는다**
 - **완료 기준**: 정상·장애·무응답 3모드 각각에서 클라이언트가 예측된 결과(DTO / 실패 DTO / 타임아웃)를 정해진 시간 안에 돌려준다.
 
 ## F4. `supplier-catalog-adapter` — 목록 어댑터 + 도메인 포트
@@ -246,7 +270,7 @@
 
 ## 구조 변경 (feature 번호 없음)
 
-- **`module-split`** — 단일 모듈이던 `stay-link`를 `core`(domain+application)·`persistence`(JPA)·`supplier-client`(WebClient, 아직 비어 있음)·`api-app`(presentation) 4개 Gradle 모듈로 분리. F3(`supplier-client`)·F4·F5·F6부터는 이 구조 위에서 진행한다 — 설계·근거는 `docs/features/module-split/01-design.md` 참조. `batch-app`은 F6 설계 시 별도로 만든다.
+- **`module-split`** — 단일 모듈이던 `stay-link`를 `core`(domain+application)·`persistence`(JPA)·`supplier-client`(WebClient, 아직 비어 있음)·`api-app`(presentation) 4개 Gradle 모듈로 분리. F3(`supplier-client`)·F4·F5·F6부터는 이 구조 위에서 진행한다 — 설계·근거는 `docs/features/module-split/01-design.md` 참조. `batch-app`은 F6 설계 시 별도로 만든다. **`supplier-client`는 아직 비어 있고 `core` 의존도 없다 — 그 모듈의 첫 코드와 `core` 의존 선언은 F3a가 넣는다.**
 
 ## 마무리 (feature 아님, 상시)
 

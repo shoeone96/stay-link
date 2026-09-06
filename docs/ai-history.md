@@ -347,6 +347,46 @@
 - **AI 답변 요약과 결정**: `feature-design` 절대 원칙에 12~15번 추가(범위 확정 체크포인트·설계 스케치 대상을 "구현 차단 결정"에서 "이번 범위 전체"로 확장·정반합 협의·⑨ 저장 후 세션 종료) — 이에 맞춰 워크플로우 ②⑤⑨⑩⑪ 순서도 다시 썼다(그림으로 협의를 끝낸 뒤 md 저장, ⑩은 새로 그리지 않고 표시만 확정으로 바꿈). `dev-cycle`은 통째로 없앨지, 이름·역할만 바꿀지 사용자가 재차 물어, "원칙 8개 중 순수 오케스트레이션은 1개뿐이고 나머지 7개(단일 작성자·커밋 전 검사 등)는 체크포인트제에서도 그대로 필요하다"는 근거로 삭제 대신 `dev-checkpoint`로 개명하고 ③단계만 컴포넌트 단위 체크포인트제로 바꾸는 안을 제시 → 사용자 확정. `CLAUDE.md`엔 새 섹션 "설계 상호작용 (2026-09-06)"으로 스킬을 가리키는 두세 줄만 추가.
 - **부수 결정**: 이 과정에서 나온 stay-link 모듈 구조(`domain`·`persistence`·`supplier-client`·`api-app`, `batch-app`은 F6 설계 시 생성)와 그 설계 협의 과정(`toss-design` 스킬로 그림 2장 제작·확인)은 `chore/module-split` 브랜치에서 별도로 진행하며, `01-design.md`를 사후 작성하기로 했다(이 커밋과는 분리).
 
+### 61. F3a 전면 롤백 — 새 설계 원칙으로 처음부터 다시 (2026-09-06)
+- **요구(사용자)**: `chore/module-split`을 보고 F3a에서 해야 할 일을 미리 확인 → 최신 `main`을 rebase 로 가져와 재검토 → **"설계도 다시 해야 하니 문서를 포함해 전체를 지우고 `main` 기준으로 새로 시작"**. 하네스를 고친 이유 자체가 "그림이 전혀 안 잡힌 채로 작업이 진행돼 의도와 다르게 된 게 너무 많았기" 때문이고, 그래서 **고친 기준으로 처음부터 다시** 하고 싶다는 것.
+- **사전 점검에서 확인한 것**: `chore/module-split`은 커밋이 0개이고 작업물이 공유 체크아웃의 워킹 트리에만 있다. 디스크는 `domain`·`infrastructure`·`api-app` 3모듈이지만 60번이 확정한 구조는 **`domain`·`persistence`·`supplier-client`·`api-app`**(`batch-app`은 F6)이라 중간 상태다. 폐기된 F3a 설계는 산출물 5개를 단일 모듈 `com.stay.common.http`에 두는 전제였고, 모듈이 갈리면 3장(레이어 배치)과 `LAY-6` 근거가 통째로 성립하지 않는다.
+- **폐기 판단을 굳힌 결함 하나**: 폐기본은 T-01~T-06의 테스트 방식을 "F0의 `ApiResponseE2ETest`가 이미 쓰는 패턴"이라고 적었는데, **F0은 `@AutoConfigureMockMvc`라 실제 소켓을 열지 않는다.** WebClient 대상 테스트에는 쓸 수 없어 `RANDOM_PORT`가 저장소에 처음 들어오는 셈이었고, 설계가 "이미 있는 패턴"으로 잘못 근거를 댄 자리였다. 게다가 분리된 모듈에 webflux만 있으면 웹 타입이 리액티브가 되어, 지연·조각 응답을 만드는 테스트 컨트롤러의 블로킹 코드가 이벤트 루프를 막아 동시 수 계측이 왜곡된다.
+- **수행**: `rebase main` 후 `reset --hard main`(`f187e3e`). `01-design.md`·`connector-reference.html`·`fanout-composition.html`과 상태표·`CLAUDE.md`·ai-history 변경까지 **전부 폐기**했다(폐기 커밋 `7aef6d3`). 앞선 판본의 폐기(구 60번)에서는 조사 HTML 2종을 남겼지만, 이번에는 그 문서들도 "그림 없이 텍스트로 결론을 먼저 굳힌" 흐름의 산물이라 함께 지운다. 저장소 밖 임시 경로에 사본만 두었고 저장소에는 남기지 않는다.
+- **다시 시작하는 기준**: 개편된 `feature-design` 원칙 12~15 — 범위 확정을 보고→수정→확정 체크포인트로, 설계 스케치 대상을 **이번 범위에서 새로 생기는 것 전체**로 넓혀 md 저장 **전에** 그림으로 협의(정반합), 저장 후 세션 종료. 구현은 `dev-checkpoint`의 컴포넌트 단위 체크포인트제.
+- **선행 조건**: 모듈 구조가 확정·커밋되기 전에는 F3a 설계를 다시 쓰지 않는다. 배치·설정 위치·테스트 부트스트랩이 전부 모듈 경계에 달려 있다.
+- **결정**: 브랜치를 `main` 상태로 되돌렸다. 다음은 모듈 구조 확정.
+
+### 62. F3a 재시작 — 클라이언트 생성 구조·fan-out 조합 레퍼런스 조사 (2026-09-06)
+- **요구(사용자)**: 폐기본 사본까지 삭제(결정을 흐릴 수 있으므로) → 모듈 기본 구조는 다른 곳에서 하고 여기서는 **`supplier-client` → `domain` 의존**만 전제로 클라이언트 생성 구조를 서치·설계할 것. 외부에서 받은 조언 하나를 참고 자료로 제시.
+- **외부 조언의 요지**: fan-out은 non-blocking이 맞고 vthread+blocking은 피해야 한다 — RestTemplate 배제 이유가 "동기라서"가 아니라 "제어 수단이 약해서"이므로 `block()`으로만 소비하면 그 조건의 의도와 어긋난다. 구현은 `Mono.zip` + `timeout` + `retryWhen` + `onErrorResume`, MVC 유지·경계에서 1회 block. vthread는 `synchronized` pinning 리스크도 있다.
+- **조사·검증 (`tech-research`)**: `tech-reference-scout` 탐색 → `reference-verifier` 독립 검증. 출처 22건 중 **PASS 21 / FAIL 1**.
+- **버전 사실 (설계를 가르는 것)**: **Boot 3.5.x / Framework 6.2.x에는 HTTP Interface 클라이언트 자동 등록이 없다 — 전부 수동 배선.** `@ImportHttpServices`는 `Since 7.0`(6.2.11 자바독 경로는 404), `spring.http.serviceclient.*`는 Boot 4.x, Boot 3.5 「Calling REST Services」 전문에 `HttpExchange` 문자열 0건. Boot 3.5의 `spring.http.reactiveclient.*` 타임아웃은 **전역**이라 공급사별 차등에 못 쓴다.
+- **조언에 대한 판정 3건**: ① vthread pinning — **근거가 낡았다.** JEP 491(Status `Closed/Delivered`, **Release 24**)이 `synchronized` pinning을 제거했고 이 프로젝트는 Java 25다. vthread executor를 쓰지 않는 이유는 pinning이 아니라 "동시 호출 상한을 직접 만들어야 하고 제어 로직이 코드에 안 드러나서"다. ② `Mono.zip` — **부분적으로만 맞다.** 전 오버로드에 concurrency 인자가 없어 '병렬 호출 제어' 축을 표현할 자리가 없고, 자바독상 **"오류 또는 빈 완료"가 모두 나머지 소스 취소 사유**라 `onErrorResume`의 fallback을 `Mono.empty()`로 두면 부분 실패 흡수 코드가 오히려 전체를 취소시킨다. ③ "vthread+block = RestTemplate 멀티스레드" — 부분적으로 맞다. 다만 `block()`의 carrier 점유 여부는 **공식 문서에서 확인 못 했고 추측하지 않는다**(결정에 영향 없음).
+- **결론 (조사 기준)**: 클라이언트는 **공급사별 `@Bean` 수동 배선**(`builder.clone()` → `WebClientAdapter` → `HttpServiceProxyFactory`), 설정은 `@ConfigurationProperties` Map 바인딩. 동적 등록안은 **A·B의 실패 표현이 달라 인터페이스가 갈리므로 루프로 찍어낼 수 없다**는 이유로 탈락. fan-out은 **`Flux.fromIterable(...).flatMap(fn, maxConcurrent).collectList()`** — 요구 조건이 지목한 세 축(타임아웃·재시도·병렬 제어)이 전부 인자와 연산자로 드러나는 유일한 조합. `flatMap` 기본 동시성은 `Queues.SMALL_BUFFER_SIZE` = **256**이라 사실상 무제한이므로 상한을 명시하는 것 자체가 답이다.
+- **정직하게 병기할 사실 둘**: ① **Spring 공식 「Synchronous Use」의 예시는 `Mono.zip(...).block()`이고 `flatMap`·concurrency 언급이 없다.** 다만 같은 문서가 "merely one example"이라고 스스로 한정한다. ② 같은 페이지 마지막 문장이 "you should never have to block in a Spring MVC or Spring WebFlux controller"다 — 우리는 컨트롤러가 아니라 인프라 어댑터에서 block 하고 가상 스레드로 서빙하지만, 이 긴장은 문서가 해소해 주지 않는 **프로젝트 판단**이다.
+- **출처로 뒷받침되지 않는 것**: "`Mono`를 인프라 모듈 안에만 두고 모듈 경계에서 소멸시킨다"를 직접 서술한 1·2차 출처는 **없다.** 의존 역전(포트는 domain, 구현은 supplier-client)은 AWS 규범 가이드·microservices.io가 뒷받침하지만, 리액티브 타입 차단은 이 프로젝트의 규약으로 적는다.
+- **FAIL 1건 처리**: 9번(`HttpServiceClientProperties`)은 페이지에 `spring.http.serviceclient` 문자열이 없어 **내용 불일치 FAIL**. 주장을 "Boot 4.0.0부터 존재하는 클래스"로 낮추고 마이너 고정 URL로 바꾸면 살릴 수 있다. 7번(공식 블로그)도 **블로그 시점 접두사와 현재 GA 접두사가 달라** 프로퍼티 이름 근거로 쓰지 않는다. "Boot 3.5에는 없다"는 핵심 결론은 4·8번이 직접 뒷받침하므로 흔들리지 않는다.
+- **새로 열린 범위 질문**: `onErrorResume`의 fallback이 **값이어야** 하므로, F3a가 실패 표현 타입을 만들지 않으면 조합기가 반쪽이 된다. 폐기본은 부분 실패를 F8로 미뤘는데 **그 선이 그어지지 않는 자리**다. 재시도(`retryWhen`)도 체인 한 자리에 모이므로 F9로 쪼개는 게 부자연스럽다.
+- **결정**: 조사 완료. 범위 확정과 설계는 `feature-design`에서 그림으로 협의한다.
+
+### 63. module-split 병합 반영 — 계획 문서 갱신 (2026-09-06)
+- **요구(사용자)**: `chore/module-split`을 병합했으니 `main`을 받아 rebase 하고, 그 기반으로 계획 문서를 다시 갱신할 것.
+- **수행**: `origin/main`이 `177e757`(PR #5 병합)로 올라가 이 브랜치를 fast-forward. 이 브랜치에 고유 커밋이 없어 rebase가 아니라 ff로 끝났고 작업 중인 문서 변경은 그대로 유지됐다.
+- **확정된 모듈 구조**: **`core`**(domain+application) · `persistence` · `supplier-client` · `api-app`. 앞서 디스크에서 봤던 `infrastructure` 3모듈 안은 중간 상태였고, 최종은 `persistence`와 `supplier-client`가 갈린 4모듈이다. `api-app`은 두 어댑터를 **`runtimeOnly`로만** 의존해 구체 클래스 import를 컴파일 단계에서 막는다(D-MS-5).
+- **F3a에 직접 걸리는 사실 셋**: ① `supplier-client`는 **아직 비어 있고 `core` 의존도 없다** — module-split 설계가 "F3a 병합 시 추가"로 남긴 자리다. ② `SupplierClient` 포트의 소유는 `core`의 **`application` 패키지**다(D-MS-4 — Aggregate 불변식이 아니라 유스케이스 오케스트레이션이라서). ③ 그 모듈에는 `@SpringBootApplication`도 서블릿 스택도 없어, 실제 HTTP를 쏘는 테스트를 돌리려면 테스트 전용 부트스트랩(`persistence`의 `PersistenceTestConfig`에 해당)과 웹 서버 선택을 F3a가 함께 정해야 한다.
+- **계획 문서 갱신 (`docs/features/README.md`)**: 상태표에 F2를 `완료(병합)`으로 바꾸고 **F3a 행을 `설계중`으로 추가**. 흐름 그림에서 F2 자리를 F3a로 교체하고(F2는 흐름의 선행이 아니라 F3~F5의 확인 도구라서), F3a 절을 새로 넣고, F3 절을 "F3a 위에 얹는 공급사별 인터페이스"로 다시 썼다. 구조 변경 절에는 supplier-client의 첫 코드와 `core` 의존을 F3a가 넣는다고 명시했다.
+- **F3a 절에 확정으로 적지 않은 것**: 범위가 아직 사용자 확정 전이라 **열린 논점 두 개를 그대로 노출**했다 — 재시도를 F3a에 넣을지, 부분 실패 표현 타입을 F3a가 정의할지. 조사 결과상 `onErrorResume`의 fallback이 값이어야 하므로 "조합 도구만 만들고 실패 정책은 F8"이라는 선이 안 그어질 수 있다는 이유도 함께 적었다.
+- **결정**: 문서 갱신 완료(미커밋). 다음은 `feature-design`의 범위 확정 체크포인트.
+
+### 64. Spring Boot 버전 라인 조사와 판단 번복 (2026-09-06)
+- **요구(사용자)**: 타임아웃 설정을 위해 `@Bean` 수동 배선 대신 Boot 4로 올리는 건 어떤지 / Flux 사용 시 로깅이 안 된다고 들었는데 확인이 필요하다 / 사용하는 쪽에서는 인터페이스 기반 메서드 호출로 확실히 쓸 수 있어야 한다 — 셋을 조사해 달라. 이어서 "Boot 4가 불안정한가, LTS가 아닌가", "버전 차이를 알고 싶다", 마지막으로 "올리는 걸 포함해서 진행하자".
+- **내 첫 입장과 그 오류**: 3.5 유지를 권하며 근거 셋을 들었는데 **첫 번째가 틀렸다** — "Boot 4의 선언적 등록이 블로킹 `RestClient` 전용일 수 있다"는 추측이었고, 실제로는 `HttpServiceGroup.ClientType`에 `WEB_CLIENT`가 있고 Boot 4의 `ReactiveHttpServiceClientAutoConfiguration`·`PropertiesWebClientHttpServiceGroupConfigurer`가 **그룹마다 별도 `ClientHttpConnector`를 만든다.** 즉 4.x에서는 공급사별 차등 타임아웃이 선언적으로 된다. 두 번째로 **Jackson 3 이행 비용을 과장**했다 — 공급사 DTO는 아직 0개라 그 비용의 대부분이 아직 쓰지 않은 코드에 대한 것이었다.
+- **검증 통과한 버전 사실 (PASS 5/5)**: `api.spring.io`의 `ossSupportEndDate` 필드값 그대로 — **3.5.x는 2026-06-30에 OSS 패치가 끊겼고**(support 플래그 `extended`, 상용 유지보수는 2032-06-30), 4.0.x는 2026-12-31, 4.1.x는 2027-07-31이다. 현재 GA는 3.5.16 / 4.0.8 / 4.1.1이며 `current:true`는 4.1.1 하나. 3.5.16 릴리스 공지(2026-06-25)에 **"This is the last OSS release of the 3.5.x generation"**과 **"upgrade to 4.0.x or 4.1.x at your earliest convenience"**가 글자 그대로 있다. "3.5가 마지막 마이너라 유지보수가 연장된다"는 것은 **상용 한정**이며 OSS는 오히려 4.0보다 6개월 먼저 끝났다 — 내가 이 둘을 혼동해 잘못 전달했었다.
+- **Boot 4가 주지 않는 것**: `HttpClientSettingsProperties`·`HttpClientProperties`의 그룹 키는 `base-url`·`default-header`·`apiversion`·`redirects`·`connect-timeout`·`read-timeout`·`cookie-handling`·`ssl.bundle`뿐이다. **동시 호출 상한도 재시도도 없다** — 둘 다 4.x에서도 Reactor 연산자로 직접 짠다. 즉 업그레이드해도 F3a의 본체는 그대로 남는다.
+- **판단 번복과 재번복**: 사용자가 업그레이드 포함으로 결정했고 나도 동의했으나, 커밋 전 검사를 하려고 저장소 밖 체크리스트를 열면서 **일정 제약이 매우 촉박하다는 사실**을 그제야 알았다. F3a는 아직 설계 문서조차 없는 상태다. 그래서 **업그레이드 권고를 다시 철회**하고, 3.5로 F3a를 끝낸 뒤 README에 "3.5의 전역 타임아웃 한계 때문에 수동 배선했고 Boot 4의 그룹별 설정이 이를 대체한다"를 근거로 적는 안을 제시했다. 사용자 확인 대기.
+- **내가 낸 사고 (기록용)**: 이번 세션에 쓴 문서 3개에 **금지어가 8건** 들어가 있었다. 요구 조건을 설명하면서 자연스럽게 반복해 쓴 단어들이다. 커밋 전 검사에서 잡아 전부 중립 표현으로 바꾸고 재검사 0건을 확인했다 — push 전에 걸렸다. **문서를 쓰는 중에도 이 단어들을 의식해야 한다**는 것이 교훈이다.
+- **결정**: 대기 — 일정 확인 후 버전 방향 확정.
+
 ### 65. Spring Boot 4.1.1 업그레이드 (2026-09-06)
 - **요구(사용자)**: 버전 사실을 보고 "올리는 걸 포함해서 진행하자" → 시간이 촉박한 것은 본인이 관리할 테니 "너무 신경 쓰지 말고 쭉 진행" 하라고 위임.
 - **판단 근거**: 3.5.x는 2026-06-30에 OSS 패치가 끊긴 라인이고(검증 PASS), 3.5.16 릴리스 공지가 4.0/4.1로 올리라고 명시한다. 그리고 저장소를 실측하니 **비용이 내가 앞서 말한 것보다 훨씬 작았다** — `com.fasterxml.jackson` 명시 import **0건**(Jackson 3 이행 대상이 사실상 없음), 본체 자바 파일 20여 개, 공급사 DTO 0개. 지금이 가장 싼 시점이라는 판단이 성립했다.
