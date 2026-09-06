@@ -4,7 +4,8 @@
 
 ## 확정 기술 스택 (2026-09-01)
 
-- Java 25 (LTS) + Spring Boot 3.5.x + Gradle (Kotlin DSL)
+- Java 25 (LTS) + Spring Boot 4.1.x + Gradle (Kotlin DSL)
+- **Boot 4.1로 올린 이유 (2026-09-06)**: 3.5.x는 2026-06-30에 OSS 패치가 끊겼고 3.5.16 릴리스 공지가 4.0/4.1로 올리라고 명시한다. 덤으로 공급사별 차등 타임아웃을 그룹 프로퍼티로 선언할 수 있게 된다(3.5의 `spring.http.reactiveclient.*`는 전역이라 불가). 다만 **동시 호출 상한과 재시도는 4.x에도 없어** Reactor 연산자로 직접 짠다
 - 동시성 모델: Spring MVC + Virtual Thread(요청 서빙) + WebClient(Supplier 병렬 fan-out은 Reactor 연산자로 제어)
 - WebFlux 전면 도입은 하지 않음 — 근거는 README·설계 문서에 기록
 - DB: MySQL 8.4 — 로컬 실행은 `compose.yaml` + spring-boot-docker-compose(bootRun 시 자동 기동·연결), 테스트는 H2 in-memory
