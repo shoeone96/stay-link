@@ -267,3 +267,289 @@ round 1 의 3번 커밋(`feat: 공급사 호출에 동시 실행·시간 상한�
 것을 제안한다. 아직 커밋하지 않았고 같은 클래스의 같은 메서드를 고친 것이라, 따로 떼면
 "방금 만든 것을 바로 고치는" 히스토리가 된다. 이미 커밋한 뒤라면 별도로 낸다 —
 `fix: 같은 공급사 호출이 여러 건일 때 결과가 조용히 누락되지 않게 한다`.
+
+## fix-1 — PR #7 리뷰 반영 (2026-09-07 04:27)
+
+status: 완료
+
+`03-review.md` round-1 의 error 1건 · warn 7건을 전부 처리했다. 미처리 0건.
+
+### 처리한 위반
+
+| 위반 ID(규칙 ID · 파일) | 처리 | 미처리 사유 |
+|---|---|---|
+| #1 error · CLN-9 · D-F3A-10 · `FanOutExecutor` | 실패를 값으로 바꾸는 **바로 그 자리**에서 기록한다. `toArrival` 의 `onErrorResume` → `warn supplier · callIndex · cause · elapsedMs`, `reconcile` 의 빈 자리 채우기 → `warn supplier · callIndex · budget · waitedMs`. 필터가 아니라 조합기에 둔 이유는 아래 「층 분담」 | — |
+| #2 warn · CLN-4 · DDD-1 · `Outcome` | `supplier()` 자바독을 갱신된 계약대로 다시 썼다 — "이 값은 식별자가 아니다. 식별은 위치로 한다" | — |
+| #3 warn · CLN-9 · `MaskingExchangeFilter` | URL 을 `scheme://host[:port]/path?이름=***` 로 만든다. 쿼리는 **이름만 남기고 값을 전부** 지운다. 아래 「쿼리 마스킹을 왜 이름 목록이 아니라 전량으로」 | — |
+| #4 warn · CLN-6 · `FanOutExecutor` | 방어망 로그가 원인을 단정하지 않는다. 메시지를 "값을 내지 못했다"로 바꾸고 `cause="<예외 원문>"` 을 필드로 실었으며, 두 가지 원인(방어망 초과 / 블로킹 불가 스레드)을 주석과 문구에 함께 적었다 | — |
+| #5 warn · CLN-1 · `FanOutExecutor` | 예산에 잘린 자리의 `elapsed` 에 `policy.budget()` 대신 **`runAll` 시작부터 잰 실제 대기 시간**을 넣는다. 값의 의미(호출 하나의 경과가 아니라 호출자가 기다린 시간)는 `Outcome.Failed` 자바독에 못 박았다 | — |
+| #6 warn · CLN-10 · `BudgetExceededException` | `supplier()` 접근자와 필드를 삭제했다. 공급사 값은 메시지에 남아 있고, 읽는 쪽은 `Outcome.Failed.supplier()` 를 쓴다 | — |
+| #7 warn · TST-1 · `FanOutExecutorTest` | T-02 를 `@CsvSource({"2, 1", "3, 2"})` 로 파라미터화했다. `k=2`·호출 3건이 들어와 상한 경계가 실제로 태워진다 | — |
+| #8 warn · CLN-4 · `SupplierHttpClientConfig` | `WebClientCustomizer` 를 **`WebClientHttpServiceGroupConfigurer`** 로 바꿔 `filterByName(supplier-a, supplier-b)` 로 좁혔다. 아래 「설계 문구와 달라진 점」 | — |
+
+### 층 분담 — 왜 필터가 아니라 조합기가 기록하나 (#1)
+
+`timeout` 과 `take(Duration)` 은 상류를 **취소**시킨다. 취소는 오류 신호가 아니므로 필터의
+`doOnError` 가 불리지 않고, 필터에 `doOnCancel` 을 붙여도 그 층에는 **취소 이유를 알 근거가
+없다** — 호출당 상한인지 전체 예산인지 아니면 호출자가 끊은 것인지 구분할 수 없어 모르는 것을
+추측해 적게 된다. 원인을 아는 자리는 둘뿐이고 둘 다 조합기 안이다.
+
+- **필터** = "나간 호출" (시작 · 완료 · HTTP 오류)
+- **조합기** = "잘린 호출" (호출당 상한 초과 · 예산 초과)
+
+기록 형식은 D-F3A-10 이 정한 구조화 로그를 따라 `키=값` 필드로 남긴다 — `supplier` ·
+`callIndex` · `cause`(타입) · `elapsedMs`/`waitedMs` · `budget`. 나중에 응답의 실패 표기와
+로그를 대조할 수 있어야 하기 때문이다.
+
+**원인은 타입만 싣는다.** `cause.getMessage()` 를 실으면 HTTP 오류 예외의 메시지에 요청 URL 이
+통째로 들어 있어 쿼리에 실린 자격 증명이 그대로 로그에 남는다. 원인 전체는 `Outcome.Failed`
+값으로 넘어가므로 실패 유형 번역과 응답 표기 쪽에서 쓸 수 있다.
+
+### 쿼리 마스킹을 왜 이름 목록이 아니라 전량으로 (#3)
+
+리뷰가 제시한 두 안 중 어느 쪽도 고르지 않고 **셋째 안**으로 갔다.
+
+| 안 | 문제 |
+|---|---|
+| URL 을 `scheme://host/path` 로 줄인다 | 어떤 파라미터를 보냈는지가 통째로 사라진다 |
+| 알려진 키 이름만 가린다 | 어떤 이름이 자격 증명인지는 공급사마다 다르고 지금 공급사가 0곳이라 목록을 만들 근거가 없다. 목록에 없는 이름 하나로 조용히 새기 시작한다 |
+| **이름은 남기고 값을 전부 가린다** (채택) | 어떤 이름이든 값이 새지 않고, 어떤 파라미터를 보냈는지는 그대로 보인다 |
+
+값이 필요한 조사는 공급사가 실재할 때 대상 파라미터를 알고 나서 따로 붙이는 것이 맞다.
+
+YAGNI 와 부딪히는지에 대한 판단: **부딪히지 않는다.** 이것은 없는 기능을 미리 만드는 일이 아니라
+**이미 쓰고 있는 로그 한 줄의 안전 속성**이다. 아래 실측이 보여 주듯 수정 전에는 실제로 새고
+있었고, 유출은 되돌릴 수 없으며 로그는 수집기로 흘러간다.
+
+사용자 정보(`user:password@host`)도 실리지 않도록 호스트를 `authority` 가 아니라 `host`·`port` 로
+조립한다.
+
+### 설계 문구와의 관계 (#8) — 설계가 정정됐다
+
+`01-design.md` 3장이 `MaskingExchangeFilter` 를 "`WebClientCustomizer` 로 그룹에 붙는다"로
+적었는데, **`WebClientCustomizer` 빈은 컨텍스트의 모든 `WebClient.Builder` 에 적용된다.** 즉 그
+문장의 수단과 범위가 서로 맞지 않았고, 코드는 수단 쪽을 따르고 있었다.
+
+그래서 **범위 쪽을 지켰다.** `WebClientHttpServiceGroupConfigurer` 로 바꾸면 문장이 말하는
+"그룹에 붙는다"가 실제로 성립한다. 결정 카드는 이 수단을 다루지 않으므로(D-F3A-2·10 어디에도
+없다) 결정 뒤집기가 아니라 3장 문구의 수단 표기가 낡은 것으로 봤다.
+
+**설계 쪽에서도 같은 판단이 내려졌다.** `01-design.md` 3장이 2026-09-07 에 정정되어 수단이
+`WebClientHttpServiceGroupConfigurer` 로 바뀌었고 "범위가 설계의 뜻이고 수단은 그 뜻을 지키는
+쪽"이라는 문장이 붙었다. 코드와 설계가 다시 일치하므로 되돌릴 것이 없다.
+
+### 실제로 돌려서 확인한 것 — 실제 소켓 · 실제 Netty · 실제 필터
+
+로그 수정은 단언만으로는 부족해서 **임시 프로브**를 만들어 태웠다. JDK 의
+`com.sun.net.httpserver` 로 실제 포트를 열고 `/fast`(즉시 200)와 `/hang`(응답하지 않음) 두 곳을
+둔 뒤, 진짜 Netty 커넥터를 쓰는 `WebClient` 에 필터를 얹어 `FanOutExecutor` 로 호출했다.
+요청에는 인증 헤더(`X-Api-Key`)와 **쿼리 파라미터(`api_key`)** 를 함께 실었다. 확인 후 프로브는
+삭제했다.
+
+**① 수정 전 — 잘린 호출에 "시작"만 있고 끝이 없다**
+
+```
+=== CASE A: 호출당 상한 초과 (per-call 200ms) ===
+PROBE-OUTCOME A Success {"ok":true}
+PROBE-OUTCOME B Failed TimeoutException elapsed=206ms
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 GET http://localhost:52609/fast?api_key=test-key&codes=P-001 headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 GET http://localhost:52609/hang?api_key=test-key&codes=P-001 headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 완료 GET http://localhost:52609/fast?api_key=test-key&codes=P-001 status=200 elapsed=128ms
+PROBE-LEAK 원본 키가 로그에 있는가 = true
+```
+
+`/hang` 은 **시작 줄만 있고 완료도 실패도 없다.** 리뷰 #1 의 주장이 실제 소켓에서 그대로
+재현됐다. 그리고 `api_key=test-key` 가 URL 에 원문으로 찍혀 리뷰 #3 도 가설이 아니라 **지금
+새고 있는 상태**임이 드러났다.
+
+**② 수정 후 — 두 종류의 잘림이 각각 남는다**
+
+```
+=== CASE A: 호출당 상한 초과 (per-call 200ms) ===
+PROBE-OUTCOME A Success {"ok":true}
+PROBE-OUTCOME B Failed TimeoutException elapsed=205ms
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:52780/fast?api_key=***&codes=*** headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:52780/hang?api_key=***&codes=*** headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 완료 method=GET url=http://localhost:52780/fast?api_key=***&codes=*** status=200 elapsedMs=117
+PROBE-LOG [WARN] FanOutExecutor | 공급사 호출 실패 supplier=B callIndex=1 cause=TimeoutException elapsedMs=205
+PROBE-LEAK-COUNT com.stay=0 / INFO이상=0 / 전체=2
+
+=== CASE B: 예산 초과 (budget 400ms, per-call 5s) ===
+PROBE-OUTCOME A Success {"ok":true}
+PROBE-OUTCOME B Failed BudgetExceededException elapsed=403ms
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:52780/fast?api_key=***&codes=*** headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:52780/hang?api_key=***&codes=*** headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 완료 method=GET url=http://localhost:52780/fast?api_key=***&codes=*** status=200 elapsedMs=2
+PROBE-LOG [WARN] FanOutExecutor | 공급사 호출이 예산에 잘렸다 supplier=B callIndex=1 budget=PT0.4S waitedMs=403
+PROBE-LEAK-COUNT com.stay=0 / INFO이상=0 / 전체=2
+```
+
+두 잘림이 서로 다른 문구·필드로 남고, 어느 공급사 몇 번째 호출인지가 로그만으로 재구성된다.
+`elapsed=403ms`(#5 수정분)가 예산 `400ms` 와 거의 같은 것은 이 경우 두 값이 실제로 비슷해서지
+예산 값을 그대로 넣어서가 아니다 — 동시 호출 상한 때문에 구독조차 안 된 호출이면 이 값만
+움직인다.
+
+**③ 우리 로그에는 원본 키가 없다 — 다만 완전한 0은 아니다**
+
+`PROBE-LEAK-COUNT com.stay=0 / INFO이상=0 / 전체=2`. 우리가 쓰는 줄(`com.stay.*`)에는 0건이고,
+운영 기본 레벨인 `INFO` 이상에서도 0건이다. 남은 2건의 정체는 이것이다.
+
+```
+PROBE-LEAK [DEBUG] reactor.netty.http.client.HttpClientConnect | [84da6d01-1, ...] Handler is being applied: {uri=http://localhost:52780/fast?api_key=test-key&codes=P-001, method=GET}
+```
+
+**reactor-netty 자신의 DEBUG 로그**다. 우리 필터 바깥이라 필터로는 막을 수 없고, 기본 레벨이
+`INFO` 라 평소에는 찍히지 않는다. 조사한다고 `reactor.netty` 를 `DEBUG` 로 올리는 순간 인증 키가
+그대로 남는다 — 아래 「남은 이슈」에 올린다.
+
+**④ 그룹 한정 configurer 로 바꾼 뒤에도 필터가 붙는가**
+
+`SupplierHttpClientConfig` 를 그대로 올린 컨텍스트에 확인용 `@HttpExchange` 를 그룹에 얹고
+실제 서버를 불러 확인했다.
+
+```
+PROBE-GROUP-BODY {"ok":true}
+PROBE-GROUP-LOG 공급사 호출 시작 method=GET url=http://localhost:52853/hotels headers=[]
+PROBE-GROUP-LOG 공급사 호출 완료 method=GET url=http://localhost:52853/hotels status=200 elapsedMs=103
+```
+
+그룹 프로퍼티의 `base-url` 이 붙고 필터도 붙은 실제 호출이 나갔다 돌아왔다.
+
+**프로브를 정식 테스트로 승격할지에 대한 의견**: 이 절과 다음 절의 프로브 셋 다 **F3 에서** 승격을 권한다. 지금 올리면
+01 의 테스트 리스트 밖 테스트가 되고, 무엇보다 두 프로브 모두 **실제 소켓을 여는 방식**인데 그
+방식을 정하는 것이 F3 몫으로 남아 있다(01 7장). 특히 첫 번째 프로브는 "잘린 호출이 흔적을
+남기는가"를 지키는 유일한 수단이라 회귀 가치가 높다.
+
+
+### 실물 모의 공급사 서버 상대 재확인 (2026-09-07 04:47)
+
+앞의 확인은 프로브가 직접 띄운 JDK `com.sun.net.httpserver` 상대였다. 실제 소켓·실제 Netty·실제
+필터는 태워졌지만 **실물 공급사 서버 상대의 확인은 아니었다.** 띄워 둔 모의 서버 위에서 한 번 더
+돌렸다. 프로브는 확인 후 삭제했다.
+
+| 대상 | 상태 | 엔드포인트 |
+|---|---|---|
+| `mock-supplier-a` | `NORMAL` — 정상 응답 | `http://localhost:9091/a/v1/hotels` |
+| `mock-supplier-b` | `NO_RESPONSE` — 응답하지 않음 | `http://localhost:9092/b/api/properties` |
+
+두 서버 모두 인증 헤더는 `X-Api-Key`. 프로브를 돌리기 전 `curl` 로 상태를 확인했다 —
+A 는 `200`(0.0055s), B 는 5초 제한에 걸려 `000`(응답 없음)이었다.
+
+아래는 한 번의 실행에서 나온 출력 전체다. 값은 전부 이 출력에서 가져왔다.
+
+```
+=== CASE 1: 인증 헤더 · per-call 1s · budget 5s (B 무응답) ===
+PROBE-SIZE 요청 2건 → 결과 2건
+PROBE-OUTCOME A Success body={"items":[{"hotelCode":"A-3201","hotelName":"Haeundae Blue H...(377자)
+PROBE-OUTCOME B Failed TimeoutException elapsed=1002ms
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:9091/a/v1/hotels headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:9092/b/api/properties headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 완료 method=GET url=http://localhost:9091/a/v1/hotels status=200 elapsedMs=131
+PROBE-LOG [WARN] FanOutExecutor | 공급사 호출 실패 supplier=B callIndex=1 cause=TimeoutException elapsedMs=1002
+PROBE-LEAK-COUNT com.stay=0 / INFO이상=0 / 전체=0
+
+=== CASE 2: 인증 헤더 · per-call 5s · budget 400ms (예산에 잘림) ===
+PROBE-SIZE 요청 2건 → 결과 2건
+PROBE-OUTCOME A Success body={"items":[{"hotelCode":"A-3201","hotelName":"Haeundae Blue H...(377자)
+PROBE-OUTCOME B Failed BudgetExceededException elapsed=402ms
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:9091/a/v1/hotels headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:9092/b/api/properties headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 완료 method=GET url=http://localhost:9091/a/v1/hotels status=200 elapsedMs=5
+PROBE-LOG [WARN] FanOutExecutor | 공급사 호출이 예산에 잘렸다 supplier=B callIndex=1 budget=PT0.4S waitedMs=402
+PROBE-LEAK-COUNT com.stay=0 / INFO이상=0 / 전체=0
+
+=== CASE 3: 인증 키를 쿼리로 · per-call 1s · budget 5s ===
+PROBE-SIZE 요청 2건 → 결과 2건
+PROBE-OUTCOME A Success body={"items":[{"hotelCode":"A-3201","hotelName":"Haeundae Blue H...(377자)
+PROBE-OUTCOME B Failed TimeoutException elapsed=1005ms
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:9091/a/v1/hotels?api_key=***&codes=*** headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 시작 method=GET url=http://localhost:9092/b/api/properties?api_key=***&codes=*** headers=[X-Api-Key=***]
+PROBE-LOG [INFO] MaskingExchangeFilter | 공급사 호출 완료 method=GET url=http://localhost:9091/a/v1/hotels?api_key=***&codes=*** status=200 elapsedMs=6
+PROBE-LOG [WARN] FanOutExecutor | 공급사 호출 실패 supplier=B callIndex=1 cause=TimeoutException elapsedMs=1005
+PROBE-LEAK [DEBUG] reactor.netty.http.client.HttpClientConnect | [ac522c54-3, L:/127.0.0.1:53411 - R:localhost/127.0.0.1:9091] Handler is being applied: {uri=http://localhost:9091/a/v1/hotels?api_key=test-key&codes=P-001, method=GET}
+PROBE-LEAK [DEBUG] reactor.netty.http.client.HttpClientConnect | [166f3a38-1, L:/127.0.0.1:53414 - R:localhost/127.0.0.1:9092] Handler is being applied: {uri=http://localhost:9092/b/api/properties?api_key=test-key&codes=P-001, method=GET}
+PROBE-LEAK-COUNT com.stay=0 / INFO이상=0 / 전체=2
+```
+
+**① 한 곳이 죽어도 나머지는 그대로 내려온다 (포트 계약 3)**
+
+세 경우 모두 `요청 2건 → 결과 2건`이고, A 는 실제 카탈로그 본문(377자)을 받았다. B 가 응답을 아예
+주지 않는 상태에서도 A 의 결과가 사라지지 않는다. 계약 1(크기)·3(부분 실패)이 실물에서 성립한다.
+
+**② 잘린 호출이 로그에 남는다**
+
+두 잘림이 서로 다른 자리에서 다른 문구로 남는다.
+
+- 호출당 상한 초과 → `[WARN] FanOutExecutor | 공급사 호출 실패 supplier=B callIndex=1 cause=TimeoutException elapsedMs=1002`
+- 예산 초과 → `[WARN] FanOutExecutor | 공급사 호출이 예산에 잘렸다 supplier=B callIndex=1 budget=PT0.4S waitedMs=402`
+
+두 경우 모두 필터에는 B 의 **시작 줄만** 있고 완료도 실패도 없다 — 취소는 오류 신호가 아니라는
+사실이 실물에서도 그대로다. 조합기가 기록하지 않았다면 B 가 왜 빠졌는지는 어디에도 없다.
+
+`elapsedMs=1002`(상한 1s)와 `waitedMs=402`(예산 400ms)가 각각 설정값 바로 뒤에 찍힌 것이 값이
+실측이라는 근거다.
+
+**③ 우리 로그에 인증 키 원본이 없다**
+
+CASE 1·2 는 `com.stay=0 / INFO이상=0 / 전체=0` — **reactor-netty DEBUG 를 포함해 전체 0건**이다.
+키가 헤더에만 있고 필터가 헤더 값을 지웠기 때문이다.
+
+**④ 쿼리에 키를 실어도 우리 줄에는 남지 않는다 — 그리고 앞서 본 예외의 조건이 좁혀졌다**
+
+CASE 3 은 `url=...?api_key=***&codes=***` 로 값이 전부 지워졌다. 이름(`api_key`·`codes`)은 남아
+어떤 파라미터를 보냈는지는 보인다 — 셋째 안이 실물에서 의도대로 동작한다.
+
+남은 2건은 앞 절에서 본 것과 같은 **reactor-netty 자신의 DEBUG 로그**다. 다만 이번 실행이
+조건을 좁혀 준다 — **CASE 1·2 에서는 0건이고 CASE 3 에서만 2건**이다. 즉 이 유출은 로그 레벨을
+DEBUG 로 올리는 것만으로 생기는 것이 아니라 **자격 증명이 쿼리에 실렸을 때** 생긴다.
+공급사가 키를 헤더로 받으면 해당 없고, 쿼리로 받는 공급사가 붙는 순간 `reactor.netty` 레벨이
+문제가 된다. 「남은 이슈」의 그 항목을 이 조건으로 읽으면 된다.
+
+### 전체 테스트 결과
+
+- 총 42 · 통과 42 · 실패 0 · 건너뜀 0 (근거: `./gradlew clean build` 후 `*/build/test-results/test/*.xml`)
+- 이 기능 몫은 16건. T-02 가 파라미터 2행이 되어 fix-2 시점의 15건에서 하나 늘었다.
+
+### 변경 파일
+
+| 파일 | 구분 |
+|---|---|
+| `supplier-client/src/main/java/com/stay/property/infrastructure/FanOutExecutor.java` | 수정 — #1 실패 로그, #4 방어망 문구, #5 실제 대기 시간 |
+| `supplier-client/src/main/java/com/stay/property/infrastructure/MaskingExchangeFilter.java` | 수정 — #3 URL 마스킹, 구조화 필드, 층 분담 자바독 |
+| `supplier-client/src/main/java/com/stay/property/infrastructure/Outcome.java` | 수정 — #2 `supplier()` 자바독, #5 `elapsed` 의미 명시 |
+| `supplier-client/src/main/java/com/stay/property/infrastructure/BudgetExceededException.java` | 수정 — #6 접근자·필드 삭제 |
+| `supplier-client/src/main/java/com/stay/property/infrastructure/SupplierHttpClientConfig.java` | 수정 — #8 그룹 한정 configurer |
+| `supplier-client/src/test/java/com/stay/property/infrastructure/FanOutExecutorTest.java` | 수정 — #7 T-02 파라미터화 |
+| `docs/features/webclient-config/02-implementation.md` | 수정 — 이 섹션 |
+| `docs/test-cases.md` | 수정 — T-02 갱신, 요약 수치 |
+
+### 설계 이탈 요청
+
+없음. #8 은 3장 문구의 **수단 표기**와 달라진 것이었고, 설계 쪽이 같은 방향으로 정정되어
+지금은 코드와 01 이 일치한다(위 「설계 문구와의 관계」). 결정 카드는 어느 것도 이 수단을
+정하지 않았다.
+
+### 남은 이슈
+
+- **공급사가 인증 키를 쿼리로 받고 `reactor.netty` 가 `DEBUG` 이면 키가 로그에 남는다.**
+  실측으로 확인했고(위 ③·④), 실물 서버 재확인에서 조건이 좁혀졌다 — 키가 헤더에만 있으면
+  `DEBUG` 에서도 0건이고, 쿼리에 실렸을 때만 reactor-netty 자신의 줄에 남는다. 우리 필터 바깥이라
+  코드로 막을 수 없고 로깅 설정으로 다뤄야 한다 — 공급사가 실재하는 F3 에서 `reactor.netty` 레벨
+  고정 여부를 정할 항목으로 올린다.
+- fix-2 의 남은 이슈 넷(블로킹 금지 계약 · 타임아웃 값 미실측 · 예산 부등식 최소 조건 · 묶음이
+  늘면 부등식 우변이 커진다)은 그대로다.
+- **`INFO` 로 호출 1건마다 두 줄이 남는다.** 묶음 분할로 호출 수가 늘면 로그량이 호출 수에
+  비례해 커진다. 지금은 소비자가 없어 수집기 비용을 판단할 근거가 없고, 줄이려면 완료 줄을
+  `debug` 로 내리는 선택지가 있다 — 실제 트래픽이 생기는 F7 이후에 볼 항목이다.
+
+### 커밋 단위 제안
+
+리뷰 반영이므로 성격별로 나눈다.
+
+1. `fix: 잘린 공급사 호출이 로그에 남게 한다` — `FanOutExecutor`(#1·#4·#5) · `Outcome`(#5 자바독) ·
+   `MaskingExchangeFilter`(층 분담 자바독)
+2. `fix: 로그에 남는 URL 에서 쿼리 값과 사용자 정보를 가린다` — `MaskingExchangeFilter`(#3)
+3. `refactor: 로깅 필터를 공급사 그룹에만 붙이고 죽은 접근자를 지운다` — `SupplierHttpClientConfig`(#8) ·
+   `BudgetExceededException`(#6) · `Outcome`(#2 자바독)
+4. `test: 동시 호출 상한을 경계 양쪽에서 태운다` — `FanOutExecutorTest`(#7)
+5. `docs: 리뷰 반영 결과와 실측 로그를 남긴다` — `02-implementation.md` · `docs/test-cases.md`

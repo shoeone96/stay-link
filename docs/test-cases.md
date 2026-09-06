@@ -59,16 +59,16 @@
 
 **한계**: 이 수단은 사람이 실행해야 하고, 실행을 잊으면 아무것도 막지 못한다. 자동으로 도는 안전망과 같지 않다.
 
-## webclient-config (2026-09-07, fix-2 갱신)
+## webclient-config (2026-09-07, fix-1 갱신 — PR #7 리뷰 반영)
 
-요약: 총 15 · 통과 15 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 41 · 통과 41 · 실패 0 · 건너뜀 0)
+요약: 총 16 · 통과 16 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 42 · 통과 42 · 실패 0 · 건너뜀 0)
 
 공급사가 아직 하나도 없어 **웹 서버를 띄우지 않는다.** 호출은 전부 테스트 더블이고(`Mono.delay`·`Mono.never`·구독 카운터), 필터는 `ExchangeFunction` 스텁, 그룹 등록은 서버 없는 컨텍스트로 확인한다. 실제 소켓을 여는 방식은 F3이 정한다.
 
 | # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
 |---|---|---|---|---|---|
 | T-01 | `OutcomeTest#create_preservesSupplierAndSplitsIntoTwoBranches` | supplier-client | 성공·실패를 만들고 `default` 절 없는 switch 로 갈라 → 공급사가 보존되고 두 갈래로 갈린다 | ✅ | 높음 — sealed 계약(D-F3A-6)을 컴파일 시점으로 고정한다. 세 번째 구현이 붙거나 nullable 2필드 record 로 되돌리면 이 switch 가 먼저 깨진다 |
-| T-02 | `FanOutExecutorTest#runAll_withConcurrencyLimit_neverSubscribesBeyondLimit` | supplier-client | 상한 1로 두 건 → 최대 동시 구독 수 1 | ✅ | 높음 — 이 기능의 존재 이유(바깥 호출에 상한)를 지키는 유일한 테스트. 상한 인자를 256으로 바꾸는 변이를 넣자 이 테스트만 `expected: 1 but was: 2` 로 실패했다 |
+| T-02 | `FanOutExecutorTest#runAll_withConcurrencyLimit_neverSubscribesBeyondLimit` (Parameterized 2) | supplier-client | 호출 2건·상한 1 / 호출 3건·상한 2 → 최대 동시 구독 수가 각각 정확히 1·2 | ✅ | 높음 — 이 기능의 존재 이유(바깥 호출에 상한)를 지키는 유일한 테스트. 상한 인자를 256으로 바꾸는 변이에 실패한다. `k=1` 만 태우던 fix-1 이전에는 `concatMap` 치환 변이를 못 잡아 "직렬"만 확인하는 상태였고, `k=2` 행을 더해 상한 경계를 실제로 태운다(리뷰 #7) |
 | T-03 | `FanOutExecutorTest#runAll_whenOneCallExceedsPerCall_failsOnlyThatCall` | supplier-client | A는 즉시 응답, B는 끝나지 않음, `per-call` 100ms → B만 `Failed(TimeoutException)`, A는 `Success` | ✅ | 높음 — 부분 실패의 핵심 계약. `timeout` 이 빠지면 Red 가 방어망까지 흘러가 그대로 드러난다 |
 | T-04 | `FanOutExecutorTest#runAll_whenOneCallErrors_absorbsCauseIntoValue` | supplier-client | B가 예외 신호 → 예외가 밖으로 안 나오고 원인이 **그대로**(감싸지 않고) 실패 값에 담긴다 | ✅ | 중간 — 흡수 대상이 타임아웃뿐이 아님을 고정한다. 원인을 감싸면 F4가 실패를 유형으로 갈라 볼 수 없게 되므로 그 회귀도 막는다. Red 없이 통과했다(T-03 사이클의 `onErrorResume` 이 이미 덮음) |
 | T-05 | `FanOutExecutorTest#runAll_whenBudgetExpires_keepsArrivedAndFillsMissing` | supplier-client | 정책을 `budget < per-call` 로 뒤집고 B를 끝나지 않게 → A의 결과는 남고 B는 `Failed(BudgetExceededException)` | ✅ | 높음 — D-F3A-3·4를 동시에 지킨다. 예산을 `take` 대신 `block` 으로 표현하면 A의 결과까지 사라지고, `reconcile` 이 없으면 B가 조용히 빠진다 |
@@ -82,5 +82,7 @@
 - 만들지 않은 것(TDD-8, 설계 §5): `SupplierCall` 접근자(단순 record), 그룹 프로퍼티 타임아웃의 실제 적용(프레임워크 동작 — 실제 소켓 검증은 F3), `FanOutPolicy.hardStop()` 단독 테스트(값 계산뿐이고 T-03·T-05의 Red 가 실제로 그 시각에 터졌다).
 - Red 없이 통과한 것 3건(T-04·T-06·T-07)은 직전 사이클의 구현이 이미 덮은 행동이다. 표에 그대로 적어 둔다 — 없는 Red 를 지어내지 않는다(TDD-6).
 - fix-2에서 바뀐 것(설계 갱신 반영): T-11이 새로 들어왔고, `describe` 헬퍼가 성공을 `"Success:<값>"` 으로 만들어 어느 자리에 어느 값이 놓였는지까지 본다. T-03·T-05의 `containsExactlyInAnyOrder` 는 `containsExactly` 로 좁혔다 — 순서를 정하지 않던 옛 계약에 맞춘 단언이라 그대로 두면 계약보다 약하게 남는다.
+- fix-1에서 바뀐 것(PR #7 리뷰 반영): T-02가 `@CsvSource` 2행이 됐다(#7). 나머지 7건은 프로덕션 코드·주석 수정이라 테스트 목록이 바뀌지 않았다 — 다만 T-09의 기대는 그대로 통과한다(필터 로그 형식이 `method=`·`url=` 구조화 필드로 바뀌었어도 `X-Api-Key=***` 는 그대로다).
+- **자동 테스트가 덮지 않는 것 — 로그 내용.** 조합기가 잘린 호출을 기록하는지(#1), URL 쿼리 값이 가려지는지(#3), 그룹 한정 configurer가 실제 그룹 호출에 필터를 붙이는지(#8)는 **임시 프로브로 실제 소켓·실제 Netty를 태워 확인하고 프로브를 삭제**했다. 로그 원문은 `docs/features/webclient-config/02-implementation.md` 「실제로 돌려서 확인한 것」과 「실물 모의 공급사 서버 상대 재확인」에 있다(후자는 띄워 둔 `mock-supplier-a` 정상 · `mock-supplier-b` 무응답 상태에서 실제로 부른 결과다). 실제 소켓을 여는 테스트 방식이 F3 몫이라(01 7장) 지금 정식 테스트로 올리지 않았고, F3에서 승격을 권한다.
 - 테스트가 태우지 않는 갈래: 방어망(`block(hardStop)`)이 실제로 터지는 경로. 앞의 상한이 걸려 있으면 도달하지 않는 자리라 재현하려면 조합기 자체를 고장 내야 하고, 그러면 "고장 낸 코드"를 검증하는 테스트가 된다. `ERROR` 로그와 예외 전파는 코드 리뷰로 본다.
 - `api-app` 의 컴포넌트 스캔이 `runtimeOnly` 로만 의존하는 `supplier-client` 의 설정을 집어 오는지는 **임시 프로브로 실측하고 프로브를 삭제**했다. 결과와 근거는 `docs/features/webclient-config/02-implementation.md` 에 있다. F3 이 실제 공급사 인터페이스를 얹을 때 정식 테스트로 승격할 것을 제안한다.

@@ -38,7 +38,7 @@
 | F0 | `api-response` | 조회 1 파생(자사 API 응답·오류 본문) | 완료(병합) | 2026-09-04 | 2026-09-04 |
 | F1 | `property-mapping` | 사전작업 1(스키마) 구현화 | 완료(병합) | 2026-09-03 | 2026-09-04 |
 | F2 | `mock-supplier-server` | 사전작업 2 | 완료(병합) | 2026-09-05 | 2026-09-05 |
-| F3a | `webclient-config` | 사전작업 3 앞부분(공통 HTTP 배선) | 설계중 | - | - |
+| F3a | `webclient-config` | 사전작업 3 앞부분(공통 HTTP 배선) | PR | 2026-09-07 | 2026-09-07 |
 | F3 | `supplier-client` | 사전작업 3 | 대기 | - | - |
 | F4 | `supplier-catalog-adapter` | 사전작업 4 (목록) | 대기 | - | - |
 | F5 | `supplier-availability-adapter` | 사전작업 4 (재고·요금) | 대기 | - | - |
