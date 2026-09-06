@@ -14,6 +14,11 @@ import reactor.core.publisher.Mono;
 /**
  * 여러 공급사 호출을 한꺼번에 내보내고 결과를 값으로 모으는 조합기. 존재 이유는 호출을 편하게
  * 하는 것이 아니라 바깥으로 나가는 호출에 상한을 두는 것이다.
+ *
+ * <p><b>실패를 값으로 흡수하는 것과 기록하는 것은 별개다.</b> 흡수만 하고 기록하지 않으면
+ * 부분 응답이 내려간 뒤 어느 공급사가 왜 빠졌는지 로그에서 재구성할 수 없다. 상한이 걸린 호출은
+ * 상류가 <b>취소</b>되어 {@link MaskingExchangeFilter} 까지 오류 신호가 가지 않으므로, 그 기록은
+ * 취소 이유를 아는 이 클래스가 남긴다.
  */
 public class FanOutExecutor {
 
@@ -42,7 +47,9 @@ public class FanOutExecutor {
      * 않는다 — 결과 타입에 식별자를 더하면 그 값을 받는 쪽의 모양까지 바뀌기 때문이다.
      */
     public <T> List<Outcome<T>> runAll(List<SupplierCall<T>> calls) {
-        return reconcile(calls, awaitArrived(calls));
+        long startedAt = System.nanoTime();
+        List<Arrival<T>> arrived = awaitArrived(calls);
+        return reconcile(calls, arrived, elapsedSince(startedAt));
     }
 
     /**
@@ -64,11 +71,17 @@ public class FanOutExecutor {
                     .collectList()
                     .block(policy.hardStop());
         } catch (IllegalStateException cause) {
+            // 이 타입은 두 가지를 뜻한다 — 방어망 시간을 넘겼거나, 블로킹이 허용되지 않는 스레드에서
+            // runAll 을 불렀거나. 어느 쪽인지는 예외 메시지에만 있으므로 원인을 단정하지 않고 함께 싣는다.
             log.error(
-                    "조합 체인이 방어망 {} 안에 끝나지 않았다. 호출 {}건, 예산 {} — 설정이나 조합기 자체의 결함이다",
-                    policy.hardStop(),
+                    "조합 체인이 값을 내지 못했다 calls={} maxConcurrent={} perCall={} budget={} hardStop={} cause=\"{}\""
+                            + " — 공급사 장애가 아니라 우리 설정·코드의 결함이다",
                     calls.size(),
+                    policy.maxConcurrent(),
+                    policy.perCall(),
                     policy.budget(),
+                    policy.hardStop(),
+                    cause.getMessage(),
                     cause);
             throw cause;
         }
@@ -83,22 +96,34 @@ public class FanOutExecutor {
      * 공급사 집합의 차집합으로 판정하면 두 건 중 한 건만 도착해도 나머지를 도착한 것으로 보고
      * 채우지 않아, 결과 수가 호출 수보다 적어진다.
      */
-    private <T> List<Outcome<T>> reconcile(List<SupplierCall<T>> calls, List<Arrival<T>> arrived) {
+    private <T> List<Outcome<T>> reconcile(
+            List<SupplierCall<T>> calls, List<Arrival<T>> arrived, Duration waited) {
         Map<Integer, Outcome<T>> arrivedByIndex =
                 arrived.stream().collect(Collectors.toMap(Arrival::index, Arrival::outcome));
         return IntStream.range(0, calls.size())
-                .mapToObj(index -> outcomeAt(index, arrivedByIndex, calls.get(index)))
+                .mapToObj(index -> outcomeAt(index, arrivedByIndex, calls.get(index), waited))
                 .toList();
     }
 
-    private <T> Outcome<T> outcomeAt(int index, Map<Integer, Outcome<T>> arrivedByIndex, SupplierCall<T> call) {
+    private <T> Outcome<T> outcomeAt(
+            int index, Map<Integer, Outcome<T>> arrivedByIndex, SupplierCall<T> call, Duration waited) {
         Outcome<T> arrived = arrivedByIndex.get(index);
-        return arrived != null ? arrived : budgetExceeded(call.supplier());
+        return arrived != null ? arrived : budgetExceeded(call.supplier(), index, waited);
     }
 
-    private <T> Outcome<T> budgetExceeded(Supplier supplier) {
-        return new Outcome.Failed<>(
-                supplier, new BudgetExceededException(supplier, policy.budget()), policy.budget());
+    /**
+     * 예산에 잘린 자리를 채운다. {@code waited} 는 이 호출 하나의 소요가 아니라 <b>호출자가 기다린
+     * 전체 시간</b>이다 — 동시 호출 상한 때문에 구독조차 되지 않았을 수 있어 이 호출만의 경과는
+     * 존재하지 않는다.
+     */
+    private <T> Outcome<T> budgetExceeded(Supplier supplier, int index, Duration waited) {
+        log.warn(
+                "공급사 호출이 예산에 잘렸다 supplier={} callIndex={} budget={} waitedMs={}",
+                supplier,
+                index,
+                policy.budget(),
+                waited.toMillis());
+        return new Outcome.Failed<>(supplier, new BudgetExceededException(supplier, policy.budget()), waited);
     }
 
     /**
@@ -112,13 +137,29 @@ public class FanOutExecutor {
                     return call.mono()
                             .timeout(policy.perCall())
                             .<Outcome<T>>map(value -> new Outcome.Success<>(call.supplier(), value))
-                            .onErrorResume(cause -> Mono.just(failed(call, cause, startedAt)))
+                            .onErrorResume(cause -> Mono.just(failed(call, index, cause, startedAt)))
                             .map(outcome -> new Arrival<>(index, outcome));
                 });
     }
 
-    private static <T> Outcome<T> failed(SupplierCall<T> call, Throwable cause, long startedAt) {
-        return new Outcome.Failed<>(call.supplier(), cause, Duration.ofNanos(System.nanoTime() - startedAt));
+    /**
+     * 실패를 값으로 바꾸면서 기록도 남긴다. 원인은 <b>타입만</b> 싣는다 — HTTP 오류 예외의 메시지에는
+     * 요청 URL 이 통째로 들어 있어 쿼리에 실린 자격 증명이 그대로 로그에 남기 때문이다. 원인 전체는
+     * {@link Outcome.Failed} 값으로 넘어가므로 실패 유형 번역과 응답 표기에서 쓸 수 있다.
+     */
+    private static <T> Outcome<T> failed(SupplierCall<T> call, int index, Throwable cause, long startedAt) {
+        Duration elapsed = elapsedSince(startedAt);
+        log.warn(
+                "공급사 호출 실패 supplier={} callIndex={} cause={} elapsedMs={}",
+                call.supplier(),
+                index,
+                cause.getClass().getSimpleName(),
+                elapsed.toMillis());
+        return new Outcome.Failed<>(call.supplier(), cause, elapsed);
+    }
+
+    private static Duration elapsedSince(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt);
     }
 
     /**
