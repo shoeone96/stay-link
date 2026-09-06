@@ -244,6 +244,10 @@
 
 ---
 
+## 구조 변경 (feature 번호 없음)
+
+- **`module-split`** — 단일 모듈이던 `stay-link`를 `core`(domain+application)·`persistence`(JPA)·`supplier-client`(WebClient, 아직 비어 있음)·`api-app`(presentation) 4개 Gradle 모듈로 분리. F3(`supplier-client`)·F4·F5·F6부터는 이 구조 위에서 진행한다 — 설계·근거는 `docs/features/module-split/01-design.md` 참조. `batch-app`은 F6 설계 시 별도로 만든다.
+
 ## 마무리 (feature 아님, 상시)
 
 - **README** — 프로젝트 설명(본인 말로 재서술), 실행 방법(compose·모의 서버·검색 예시), 설계 결정 요약(D1~D12), WebFlux 미도입 근거, 버리는 선택의 근거(날짜별 요금 분해·세금 분리·maxOccupancy 저장·병합), "신규 Supplier 추가 시 고칠 것" 확장 예시
