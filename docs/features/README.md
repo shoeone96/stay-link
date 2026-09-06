@@ -1,7 +1,7 @@
 # Feature 목록
 
 > 2026-09-03 작성. `docs/todolist.md`와 확정 설계(`list-api-integration-design.html` D1~D5, `availability-api-integration-design.html` D6~D12)를
-> 기능 개발 단위로 쪼갠 목록이다. 한 번에 하나씩 `/feature-design <feature>` → `/dev-cycle <feature>` 순서로 진행하고,
+> 기능 개발 단위로 쪼갠 목록이다. 한 번에 하나씩 `/feature-design <feature>` → `/dev-checkpoint <feature>` 순서로 진행하고,
 > 산출물은 `docs/features/<feature>/01-design.md · 02-implementation.md · 03-review.md`에 쌓는다.
 > 진행하면서 상태·범위가 바뀌면 이 파일을 갱신한다.
 
@@ -248,7 +248,7 @@
 
 - **README** — 프로젝트 설명(본인 말로 재서술), 실행 방법(compose·모의 서버·검색 예시), 설계 결정 요약(D1~D12), WebFlux 미도입 근거, 버리는 선택의 근거(날짜별 요금 분해·세금 분리·maxOccupancy 저장·병합), "신규 Supplier 추가 시 고칠 것" 확장 예시
   - 미결: 27번 자체 보유 상품 — 구현하지 않고 README 확장 예시 한 단락으로만 다룰지 사용자 결정 대기
-- **테스트 정리** — `docs/test-cases.md`는 각 feature의 dev-cycle에서 누적되므로 마지막에 레이어별(도메인 단위 / 어댑터 통합 / 핵심 플로우) 커버리지 공백만 점검
+- **테스트 정리** — `docs/test-cases.md`는 각 feature의 dev-checkpoint에서 누적되므로 마지막에 레이어별(도메인 단위 / 어댑터 통합 / 핵심 플로우) 커버리지 공백만 점검
 - **추후 고려사항** (구현하지 않음) — supplier 호출 수 절감, 목록 대표 가격 노출: `todolist.md` 참조
 
 ## 관련 문서
@@ -257,4 +257,4 @@
 - `docs/list-api-integration-design.html` — D1~D5, 필드 매칭 7쌍, 스키마
 - `docs/availability-api-integration-design.html` — D6~D12, 필드 매칭 11쌍, 정규화 규칙, 응답 형태, 이연 항목
 - `docs/supplier-response-comparison.html` — A·B 샘플 JSON (모의 서버·어댑터 테스트 데이터 원본)
-- `.claude/skills/feature-design/SKILL.md`, `.claude/skills/dev-cycle/SKILL.md` — 진행 절차
+- `.claude/skills/feature-design/SKILL.md`, `.claude/skills/dev-checkpoint/SKILL.md` — 진행 절차

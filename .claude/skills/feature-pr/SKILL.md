@@ -2,9 +2,9 @@
 name: feature-pr
 description: |
   feature 브랜치(`feature/f<N>-<feature>`)의 작업을 origin `main`으로 향하는 GitHub PR로 만들고, 생성 직후 feature-reviewer의 리뷰를 PR 코멘트로 붙이는 스킬.
-  "PR 올려줘", "PR 만들어줘", "PR 생성", "/feature-pr <feature>" 요청 시 사용. dev-cycle이 끝나고 커밋이 완료된 뒤에만 실행한다.
+  "PR 올려줘", "PR 만들어줘", "PR 생성", "/feature-pr <feature>" 요청 시 사용. dev-checkpoint이 끝나고 커밋이 완료된 뒤에만 실행한다.
   재리뷰만 필요하면 `/feature-pr <feature> review`.
-  경계 — 구현·수정은 dev-cycle / 커밋은 사용자 지시로 메인 세션 / 브랜치 생성은 feature-design / 브랜치·PR 명명 규칙 원본은 프로젝트 CLAUDE.md 「브랜치·PR」.
+  경계 — 구현·수정은 dev-checkpoint / 커밋은 사용자 지시로 메인 세션 / 브랜치 생성은 feature-design / 브랜치·PR 명명 규칙 원본은 프로젝트 CLAUDE.md 「브랜치·PR」.
 argument-hint: [feature 폴더명] [review]
 ---
 
@@ -14,7 +14,7 @@ argument-hint: [feature 폴더명] [review]
 
 ## 리뷰가 여기 있는 이유 (2026-09-04 변경)
 
-구현 중에 리뷰 루프를 돌리면 개발이 계속 끊긴다. `dev-cycle`은 설계대로 끝까지 구현만 하고, 리뷰는 **PR이 생긴 뒤 코멘트로 한 번에** 받는다. 수정이 필요하면 `/dev-cycle <feature> fix`로 돌아간다.
+구현 중에 리뷰 루프를 돌리면 개발이 계속 끊긴다. `dev-checkpoint`은 설계대로 끝까지 구현만 하고, 리뷰는 **PR이 생긴 뒤 코멘트로 한 번에** 받는다. 수정이 필요하면 `/dev-checkpoint <feature> fix`로 돌아간다.
 
 ## 절대 원칙 (위반 시 즉시 중단)
 
@@ -29,7 +29,7 @@ argument-hint: [feature 폴더명] [review]
 
 ## 워크플로우
 
-1. ① **입력 확인** — `$ARGUMENTS`의 feature로 `docs/features/README.md` 상태표에서 번호 `N`을 찾고 브랜치명 `feature/f<N>-<feature>`를 만든다. `docs/features/<feature>/01-design.md`·`02-implementation.md`·`docs/test-cases.md` 해당 섹션을 Read 한다(본문 재료). `02`의 최신 status가 `완료`가 아니면 중단하고 `/dev-cycle <feature>`를 안내한다.
+1. ① **입력 확인** — `$ARGUMENTS`의 feature로 `docs/features/README.md` 상태표에서 번호 `N`을 찾고 브랜치명 `feature/f<N>-<feature>`를 만든다. `docs/features/<feature>/01-design.md`·`02-implementation.md`·`docs/test-cases.md` 해당 섹션을 Read 한다(본문 재료). `02`의 최신 status가 `완료`가 아니면 중단하고 `/dev-checkpoint <feature>`를 안내한다.
 2. ② **사전 점검** — 병렬 실행:
    ```bash
    git branch --show-current
@@ -55,7 +55,7 @@ argument-hint: [feature 폴더명] [review]
 7. ⑦ **사후 검증** — `gh pr view <PR#> --json title,body` 결과에 원칙 1·2 grep. 매치되면 `gh pr edit`로 즉시 수정 후 재검증.
 8. ⑧ **리뷰 코멘트** — 아래 「리뷰 코멘트 게시」 절차를 수행한다.
 9. ⑨ **기록 커밋·push** — `docs/features/README.md` 상태표의 해당 행 상태를 `PR` 로 갱신하고 ai-history에 PR 생성(URL 포함)과 리뷰 결과 요약을 기록한 뒤, **feature 브랜치에서** 상태표·ai-history·`03-review.md` 세 파일만 커밋하고 push 한다(PR에 자동 반영). 커밋 메시지는 `docs: [F<N>] <feature> PR 기록 (상태표·ai-history·리뷰)` 형태로 하고, 커밋 전 원칙 1·2의 grep을 메시지·세 파일에 적용한다. 병합 후 `main`에 직접 커밋할 문서 변경을 남기지 않는 것이 목적이다.
-10. ⑩ **종료** — PR URL과 리뷰 통계를 반환한다. error가 있으면 **"`/dev-cycle <feature> fix`로 반영 → 커밋·push → `/feature-pr <feature> review`로 재리뷰"** 를 안내한다. 병합은 사용자가 GitHub에서 하며, 병합 후 상태표를 `완료(병합)`(구현 열에 병합일)으로 바꾸는 일은 다음 feature 브랜치의 첫 커밋(`feature-design`의 요구사항 접수 단계)에서 한다고 안내한다.
+10. ⑩ **종료** — PR URL과 리뷰 통계를 반환한다. error가 있으면 **"`/dev-checkpoint <feature> fix`로 반영 → 커밋·push → `/feature-pr <feature> review`로 재리뷰"** 를 안내한다. 병합은 사용자가 GitHub에서 하며, 병합 후 상태표를 `완료(병합)`(구현 열에 병합일)으로 바꾸는 일은 다음 feature 브랜치의 첫 커밋(`feature-design`의 요구사항 접수 단계)에서 한다고 안내한다.
 
 ## 리뷰 코멘트 게시 (⑧, `/feature-pr <feature> review`도 이것만 실행)
 
@@ -113,6 +113,6 @@ argument-hint: [feature 폴더명] [review]
 ## 하지 않는 것
 
 - ⑨ 문서 커밋 외의 커밋, rebase·force push (원칙 4·5)
-- 구현·수정·설계 문서 수정 (dev-cycle·feature-design 소관). 리뷰 지적을 이 스킬이 직접 고치지 않는다
+- 구현·수정·설계 문서 수정 (dev-checkpoint·feature-design 소관). 리뷰 지적을 이 스킬이 직접 고치지 않는다
 - 리뷰 판정 자체 (feature-reviewer 소관 — 이 스킬은 게시만 한다)
 - 병합 (사용자가 GitHub에서 수행), 병합 후 `main` 직접 커밋 (상태표 `완료(병합)` 전환은 다음 feature 브랜치에서)

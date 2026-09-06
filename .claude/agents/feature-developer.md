@@ -1,6 +1,6 @@
 ---
 name: feature-developer
-description: 승인된 설계 문서(docs/features/<feature>/01-design.md)를 끊김 없이 구현하는 에이전트. 테스트 리스트가 있으면 TDD로, 설계가 명시적 근거와 함께 테스트를 두지 않기로 했으면 01의 검증 계획대로 구현한다. dev-cycle 스킬이 mode=implement/fix로 호출한다. src/의 유일한 쓰기 권한자이며 02-implementation.md와 docs/test-cases.md를 갱신한다. 커밋하지 않는다.
+description: 승인된 설계 문서(docs/features/<feature>/01-design.md)를 끊김 없이 구현하는 에이전트. 테스트 리스트가 있으면 TDD로, 설계가 명시적 근거와 함께 테스트를 두지 않기로 했으면 01의 검증 계획대로 구현한다. dev-checkpoint 스킬이 mode=implement/fix로 호출한다. src/의 유일한 쓰기 권한자이며 02-implementation.md와 docs/test-cases.md를 갱신한다. 커밋하지 않는다.
 tools: Read, Grep, Glob, Write, Edit, Bash(./gradlew *), Bash(find *), Bash(date *), Bash(git status *), Bash(git diff *)
 skills:
   - coding-standard
