@@ -12,30 +12,30 @@
   - [x] 통화·날짜 경계 — 공급사 공통 규약 그대로 (currency 전달, 체크아웃일 숙박 미포함)
   - [x] 2단계 매핑 스키마 — `property`(id, supplier, supplier_property_code, property_name) / `room`(id, property_id, supplier_room_code, room_name), 각각 UNIQUE 제약으로 내부 식별자 안정성 보장
   - [x] 저장 vs 실시간 경계 확정 (주기 수집 = 매핑+이름 / 실시간 fan-out = 요금·재고)
-- [ ] **2. supplier 모듈 생성 + mock supplier API 2종**
-  - [ ] 두 공급사의 응답 포맷을 서로 다르게 구성 (필드명·요금 표현·구조)
-- [ ] **3. supplier 연동 클라이언트 설정**
-  - [ ] WebClient + 타임아웃 계층 (connect / response / 전체 예산)
-- [ ] **4. 어댑터 생성 및 적용**
-  - [ ] 공급사별 어댑터 → 표준 모델 변환 (필드 매핑은 코드 기반)
-  - [ ] 도메인 포트 경계 정의
-- [ ] **5. 저장/업데이트 주기 설정** (정적 데이터만)
-  - [ ] 기동 1회 + 주기 갱신, 매핑 실패 시 정책
+- [x] **2. supplier 모듈 생성 + mock supplier API 2종** → F2 `mock-supplier-server` (2026-09-05 병합). 독립 모듈 `mock-supplier-a`·`mock-supplier-b`
+  - [x] 두 공급사의 응답 포맷을 서로 다르게 구성 (필드명·요금 표현·구조)
+- [x] **3. supplier 연동 클라이언트 설정** → F3a `webclient-config` + F3 `supplier-client` (2026-09-07 병합)
+  - [x] WebClient + 타임아웃 계층 (connect / response / 전체 예산) — 값은 실측 전 자리표시자, F9에서 묶음 수·재시도와 함께 재산정
+- [x] **4. 어댑터 생성 및 적용** → 목록은 F3(F4 흡수), 재고·요금은 F5 `supplier-availability-adapter` (2026-09-07 병합)
+  - [x] 공급사별 어댑터 → 표준 모델 변환 (필드 매핑은 코드 기반)
+  - [x] 도메인 포트 경계 정의 — `core.application` 소유 `SupplierCatalogPort`·`SupplierAvailabilityPort`
+- [x] **5. 저장/업데이트 주기 설정** (정적 데이터만) → F6 `catalog-sync` (2026-09-07 병합)
+  - [x] 외부 스케줄러 one-shot 하루 1회(기동 시 상주 아님), 공급사별 트랜잭션 격리, 실패·0건은 건너뛰고 잡 실패로 알림
 
 ## 조회 작업
 
-- [ ] **1. 조회 설계** (자사 API 스펙 포함)
-- [ ] **2. 조회 aggregator** (병렬 fan-out)
-- [ ] **3. 부분 실패 + resilience fallback**
-  - [ ] 일부 공급사 실패/타임아웃 시 부분 결과 + 실패 표시 반환
-- [ ] **4. resilience retry / circuit** (필요시 rate limiter)
+- [ ] **1. 조회 설계** (자사 API 스펙 포함) → F7 `stay-search-api` 진행 중
+- [ ] **2. 조회 aggregator** (병렬 fan-out) → F7. 조합기·묶음 분할·포트는 F3a·F5에서 완성, 유스케이스만 남음
+- [ ] **3. 부분 실패 + resilience fallback** → F8 `partial-failure`
+  - [ ] 일부 공급사 실패/타임아웃 시 부분 결과 + 실패 표시 반환 — 실패를 값으로 모으는 골격(`Outcome`·`FailedChunk`·실패 유형 8개)은 F3a·F3·F5에 있고 응답 표기만 남음
+- [ ] **4. resilience retry / circuit** (필요시 rate limiter) → F9 `supplier-resilience` 진행 중
   - [ ] 공급사별 인스턴스 분리, 백오프 + 지터
-- [ ] **5. 캐싱** (single-flight + soft TTL)
+- [ ] **5. 캐싱** (single-flight + soft TTL) → F10 `search-cache`
 
 ## 마무리
 
-- [ ] README·설계 근거 문서화 (WebFlux 미도입 근거, 결정 요약)
-- [ ] 테스트 정리 (도메인 단위 / 어댑터 통합 / 핵심 플로우)
+- [ ] README·설계 근거 문서화 (WebFlux 미도입 근거, 결정 요약) — 2026-09-07 중간 점검 판 작성. F7~F10 병합 시마다 갱신
+- [ ] 테스트 정리 (도메인 단위 / 어댑터 통합 / 핵심 플로우) — `docs/test-cases.md`에 기능별 누적 중(188건). 핵심 플로우 커버리지 점검은 F7 이후
 
 ## 추후 고려사항 (지금은 구현하지 않음 — 2026-09-03)
 
