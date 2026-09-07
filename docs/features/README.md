@@ -45,7 +45,7 @@
 | F6 | `catalog-sync` | 사전작업 5 | 완료(병합) | 2026-09-07 | 2026-09-07 |
 | F7 | `stay-search-api` | 조회 1 + 2 — F8을 흡수 (2026-09-07) | 완료(병합) | 2026-09-07 | 2026-09-07 |
 | F8 | `partial-failure` | 조회 3 | F7에 통합 (2026-09-07) | - | - |
-| F9 | `supplier-resilience` | 조회 4 | 설계중 | - | - |
+| F9 | `supplier-resilience` | 조회 4 | PR | 2026-09-07 | 2026-09-07 |
 | F10 | `search-cache` | 조회 5 | 대기 | - | - |
 | F11 | `unmapped-code-recovery` | D11 비동기 트랙 (선택) | 대기 | - | - |
 
