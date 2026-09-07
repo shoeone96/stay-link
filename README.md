@@ -31,16 +31,27 @@ Java 25와 Docker가 필요합니다. MySQL은 `compose.yaml`로 자동 기동�
 ### 2. 목록을 수집해 매핑을 채웁니다
 
 ```bash
-./gradlew :batch-app:bootRun --args='--spring.docker.compose.lifecycle-management=start-only'
+./gradlew :batch-app:bootRun --args='syncDate=2026-09-07 --spring.docker.compose.lifecycle-management=start-only'
 ```
 
-`start-only`를 주는 이유는 배치가 끝나면서 MySQL 컨테이너를 내리면 방금 저장한 매핑이 사라지기
-때문입니다. 이어서 앱을 띄울 때 같은 컨테이너를 재사용합니다.
+인자 두 개가 각각 이유를 갖습니다.
+
+- **`syncDate`** — 배치는 이 날짜 하나로 실행을 식별합니다. 같은 값으로 두 번 돌리면
+  `JobInstanceAlreadyCompleteException`으로 거부됩니다. 하루 한 번이라는 주기가 파라미터로 드러나
+  있고, 그래서 같은 날 재실행이 조용히 중복되지 않습니다.
+- **`start-only`** — 배치가 끝나면서 MySQL 컨테이너를 내리면 방금 저장한 매핑이 사라집니다. 이어서
+  앱을 띄울 때 같은 컨테이너를 재사용합니다.
 
 ### 3. 앱을 띄웁니다
 
 ```bash
 ./gradlew :api-app:bootRun           # 8080
+```
+
+jar로 직접 띄운다면 **시간대를 명시**해야 합니다 — 아래 「과거 날짜 거부의 기준 시각」 참조.
+
+```bash
+java -Duser.timezone=Asia/Seoul -jar api-app/build/libs/api-app-0.0.1-SNAPSHOT.jar
 ```
 
 ### 4. 검색합니다
@@ -49,12 +60,24 @@ Java 25와 Docker가 필요합니다. MySQL은 `compose.yaml`로 자동 기동�
 curl "http://localhost:8080/api/v1/stays/search?checkIn=2026-09-10&checkOut=2026-09-13&adults=2&children=0"
 ```
 
-한쪽 공급사를 고장 내고 다시 부르면 부분 실패가 보입니다.
+한쪽 공급사를 고장 내고 다시 부르면 부분 실패가 보입니다. 고장 제어는 **쿼리 파라미터**로 받습니다.
 
 ```bash
-curl -X POST "http://localhost:9091/control/mode" \
-  -H 'Content-Type: application/json' -d '{"endpoint":"AVAILABILITY","mode":"ERROR"}'
+# B(9092)의 재고·요금만 장애로 — 검색은 200이고 A 결과만 담깁니다
+curl -X POST "http://localhost:9092/control/mode?value=error&endpoint=availability"
+curl "http://localhost:8080/api/v1/stays/search?checkIn=2026-09-10&checkOut=2026-09-13&adults=2&children=0"
+
+# A도 내리면 502 ALL_SUPPLIERS_FAILED
+curl -X POST "http://localhost:9091/control/mode?value=error&endpoint=availability"
+
+# 원복
+curl -X POST "http://localhost:9091/control/mode?value=normal&endpoint=all"
+curl -X POST "http://localhost:9092/control/mode?value=normal&endpoint=all"
 ```
+
+`value`는 `normal` · `error` · `delay` · `no-response`, `endpoint`는 `all` · `catalog` ·
+`availability`입니다. 지연 폭은 `delayMillis`로 조절합니다 — `value=delay&delayMillis=6000`이면
+호출당 예산 4초를 넘겨 그 공급사만 잘리는 것을 볼 수 있습니다.
 
 ---
 
@@ -109,13 +132,19 @@ curl -X POST "http://localhost:9091/control/mode" \
 **문서를 손으로 쓰지 않습니다. 컨트롤러 테스트가 만듭니다.**
 
 ```bash
-./gradlew :api-app:copyApiSpec        # 테스트를 돌려 api-docs/openapi3.json 생성
 python3 -m http.server 8000 -d api-docs
 # http://localhost:8000
+
+./gradlew :api-app:copyApiSpec        # 코드가 바뀌면 스펙을 다시 만듭니다
 ```
 
 앱 서버는 띄우지 않아도 됩니다. 다만 뷰어가 스펙 파일을 `fetch`하므로 `file://`로 열면 브라우저가
 막습니다 — 위처럼 정적 서버로 엽니다.
+
+`api-docs/openapi3.json`은 **생성물이지만 커밋합니다.** 저장소를 웹에서 읽는 사람에게는 스펙이 곧
+API 계약인데, 무시 목록에 넣으면 빌드를 돌려 보기 전까지 빈 뷰어만 보이기 때문입니다. 대신 코드와
+어긋날 수 있으므로 **컨트롤러 테스트가 이 파일의 진짜 원본**이고, `copyApiSpec`으로 언제든 다시
+만들어 대조할 수 있습니다.
 
 **왜 애노테이션 방식이 아닌가.** 두 가지입니다.
 
@@ -127,6 +156,40 @@ python3 -m http.server 8000 -d api-docs
 ---
 
 ## 설계 결정과 근거
+
+### 목록은 언제 가져오는가 — 외부 스케줄러가 하루 한 번 (D-F6-19)
+
+목록과 재고·요금은 **성격이 다릅니다.** 목록은 계약·온보딩 속도로 움직이는 정적 콘텐츠이고,
+재고·요금은 부를 때마다 값이 달라지는 동적 데이터입니다. 그래서 저장 여부와 호출 시점이 갈립니다.
+
+| | 숙소 목록 | 재고·요금 |
+|---|---|---|
+| 언제 부르나 | **하루 한 번, 배치가** | **검색 요청마다** |
+| 저장하나 | 매핑 테이블에 저장 | 저장하지 않음 |
+| 왜 | 자주 바뀌지 않고, 무엇을 물어볼지 미리 알아야 검색이 성립합니다 | 저장하는 순간 낡습니다 |
+
+**`@Scheduled`를 쓰지 않고 외부 스케줄러가 one-shot으로 띄웁니다.** `@Scheduled`는 앱이 상주해야
+하는데, 그러면 인스턴스를 늘릴 때 같은 배치가 중복 실행됩니다. 배치를 별도 실행 대상으로 떼어 두면
+스케줄러가 하나만 띄우면 되고, 실패는 종료 코드로 기계가 감지합니다.
+
+**하루 한 번으로 충분한 근거**는 이 배치가 증분이 아니라 **전체 상태 대조**라는 점입니다. 하루를
+놓쳐도 다음 실행이 그날의 전체 목록으로 맞춰 놓기 때문에 누락이 누적되지 않습니다. 다만 **실행
+시각 자체는 공식 근거를 찾지 못해 임의로 정한 값**이고, 문서에 그렇게 적어 두었습니다.
+
+목록 갱신 주기 사이에 공급사가 상품을 추가하면 검색 응답에 우리 매핑에 없는 코드가 올 수 있습니다.
+그 항목만 결과에서 빼고 로그에 남깁니다 — 한 항목 때문에 검색 전체가 실패하지 않습니다.
+
+### 과거 날짜 거부의 기준 시각
+
+`checkIn`이 오늘 이전이면 400입니다. 이 "오늘"은 **JVM 기본 시간대**로 정해집니다.
+
+기준을 코드에 박지 않고 실행 설정에 둔 이유는, 값을 주입하는 장치(`Clock`)를 넣어서 얻는 것이
+자정 경계 테스트 하나뿐이었고 그 케이스는 애초에 만들지 않기로 했기 때문입니다. 대신 **시간대를
+실행 설정에 못박습니다** — `bootRun`은 `-Duser.timezone=Asia/Seoul`을 이미 넘기고, jar로 띄울 때는
+같은 값을 직접 줘야 합니다.
+
+이걸 빠뜨리면 조용히 깨집니다. 서버가 UTC로 뜨면 **KST 00~09시 사이에 "오늘" 날짜 검색이 400으로
+거절됩니다.** 매일 9시간짜리 결함이고 로그만 봐서는 원인이 드러나지 않습니다.
 
 ### 요금 — 기간 총액 하나로 (D6)
 

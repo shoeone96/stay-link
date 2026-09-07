@@ -7,7 +7,9 @@ import com.stay.property.domain.Supplier;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.commons.logging.Log;
@@ -81,6 +83,7 @@ public class SearchStaysUseCase {
     private static Collected collect(StayMappingIndex index, List<SupplierAvailabilityResult> results) {
         List<StayItem> items = new ArrayList<>();
         List<SupplierOutcome> outcomes = new ArrayList<>();
+        Map<Supplier, SupplierAvailabilityResult> resultsBySupplier = new LinkedHashMap<>();
         List<String> excludedCodes = new ArrayList<>();
         for (SupplierAvailabilityResult result : results) {
             for (AvailabilityOffer offer : result.offers()) {
@@ -88,9 +91,10 @@ public class SearchStaysUseCase {
                 item.ifPresentOrElse(items::add, () -> excludedCodes.add(codeOf(result.supplier(), offer)));
             }
             outcomes.add(new SupplierOutcome(result.supplier(), statusOf(result)));
+            resultsBySupplier.put(result.supplier(), result);
         }
         items.sort(DISPLAY_ORDER);
-        return new Collected(items, outcomes, results, excludedCodes);
+        return new Collected(items, outcomes, resultsBySupplier, excludedCodes);
     }
 
     /**
@@ -173,7 +177,7 @@ public class SearchStaysUseCase {
     private record Collected(
             List<StayItem> items,
             List<SupplierOutcome> outcomes,
-            List<SupplierAvailabilityResult> results,
+            Map<Supplier, SupplierAvailabilityResult> resultsBySupplier,
             List<String> excludedCodes) {
 
         StaySearchResult toResult() {
@@ -186,7 +190,10 @@ public class SearchStaysUseCase {
          * 후보가 전부 우리 쪽이다.
          */
         boolean allFailed() {
-            return outcomes.stream().allMatch(outcome -> outcome.status() == SupplierStatus.FAILED);
+            // 비어 있으면 공허참이 되어 아무도 실패하지 않은 검색이 502 로 나간다. 포트 계약에는 결과가
+            // 비어 있지 않다는 보장이 없고, "부른 곳이 없다"는 "전부 실패했다"가 아니다 (D-F7-15).
+            return !outcomes.isEmpty()
+                    && outcomes.stream().allMatch(outcome -> outcome.status() == SupplierStatus.FAILED);
         }
 
         boolean hasFailure() {
@@ -211,12 +218,17 @@ public class SearchStaysUseCase {
         /**
          * 공급사마다 상태·항목 수를, 실패가 있으면 사유까지 붙인다. 사유({@link SupplierErrorCode})가
          * 응답이 아니라 이 줄에 남는 것이 「공급사별 성공률·타임아웃 비율」을 산출할 재료다 (§3.8).
+         *
+         * <p>상태는 <b>응답과 같은 {@code outcomes} 를 읽는다.</b> 원본에서 다시 판정하면 같은 사실이
+         * 두 벌이 되어, 판정이 바뀌는 날 응답과 로그가 어긋난다 (OOP-3). 원본에서 가져오는 것은
+         * {@code outcomes} 에 없는 항목 수와 실패 사유뿐이다.
          */
         private String suppliersPart() {
             StringBuilder part = new StringBuilder();
-            for (SupplierAvailabilityResult result : results) {
+            for (SupplierOutcome outcome : outcomes) {
+                SupplierAvailabilityResult result = resultsBySupplier.get(outcome.supplier());
                 part.append(" supplier%s=%s(%d)"
-                        .formatted(result.supplier(), statusOf(result), result.offers().size()));
+                        .formatted(outcome.supplier(), outcome.status(), result.offers().size()));
                 if (!result.failures().isEmpty()) {
                     part.append(reasonsOf(result));
                 }

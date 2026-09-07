@@ -19,10 +19,17 @@ import { check } from 'k6';
 const APP_BASE_URL = __ENV.APP_BASE_URL || 'http://localhost:8080';
 const SEARCH_PATH = __ENV.APP_SEARCH_PATH || '/api/v1/stays/search';
 
-// 모의 서버 시드 기준 검산이 되는 구간이다 — 09-11·09-12 가 주말이라 할증이 걸리고,
-// A OCN-DBL 435,600 / B R-201 453,600 · 양쪽 bookableRooms 1 이 나온다 (01-design.md §1).
-const CHECK_IN = __ENV.CHECK_IN || '2026-09-10';
-const CHECK_OUT = __ENV.CHECK_OUT || '2026-09-13';
+// 기본값은 **실행일 기준 상대 날짜**다. 고정 날짜를 박으면 그날이 지난 뒤 checkIn 이 과거가 되어
+// @FutureOrPresent 에 걸려 전부 400 이 되고, 이 스크립트가 잡으려던 갈래(날짜 직렬화)를 검사하지
+// 못한 채 실패한다. 시드 검산값(A 435,600 / B 453,600)은 주말 할증이 걸리는 특정 구간에서만 나오므로
+// CHECK_IN·CHECK_OUT 을 명시적으로 넘길 때만 대조한다 — 아래 체크는 값이 아니라 계약을 본다.
+const isoDaysFromToday = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+const CHECK_IN = __ENV.CHECK_IN || isoDaysFromToday(3);
+const CHECK_OUT = __ENV.CHECK_OUT || isoDaysFromToday(6);
 const ADULTS = __ENV.ADULTS || '2';
 const CHILDREN = __ENV.CHILDREN || '0';
 

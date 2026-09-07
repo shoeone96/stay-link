@@ -45,6 +45,10 @@ dependencies {
 // 루트로 맞춘다 — 실행 절차에 인자가 붙지 않는다.
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
     workingDir = rootProject.projectDir
+    // 과거 날짜 거부(@FutureOrPresent)의 "오늘"은 JVM 기본 시간대로 정해진다. 서버가 UTC 로 뜨면
+    // KST 00~09 시 사이에 오늘 날짜 검색이 400 으로 거절된다. 기준을 코드가 아니라 실행 설정에
+    // 두기로 했으므로(D-F7-8) 그 설정을 여기에 못박는다. jar 로 띄울 때는 같은 값을 직접 준다.
+    jvmArgs("-Duser.timezone=Asia/Seoul")
 }
 
 openapi3 {

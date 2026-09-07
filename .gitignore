@@ -66,5 +66,3 @@ mock-supplier-*/data/
 *.p12
 *.jks
 
-# API 문서 스펙은 테스트가 만드는 생성물이다. 로더(index.html)만 커밋한다 (F7 D-F7-10).
-api-docs/openapi3.json

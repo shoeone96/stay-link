@@ -266,6 +266,20 @@ class SearchStaysUseCaseTest {
                 .isEqualTo(StayErrorCode.ALL_SUPPLIERS_FAILED);
     }
 
+    @Test
+    @DisplayName("공급사 결과가 하나도 오지 않으면 전 공급사 실패로 보지 않고 빈 결과를 돌려준다")
+    void search_supplierResultsAreEmpty_returnsEmptyResultWithoutFailing() {
+        // given
+        givenSingleMapping();
+        given(supplierAvailabilityPort.searchAll(any(AvailabilityQuery.class))).willReturn(List.of());
+
+        // when
+        StaySearchResult result = searchStaysUseCase.search(COMMAND);
+
+        // then
+        assertThat(result).isEqualTo(new StaySearchResult(List.of(), List.of()));
+    }
+
     /** 항목 하나짜리 시나리오가 반복되므로 매핑 준비를 모은다. 숙소 1 · 객실 1 · 둘 다 ACTIVE. */
     private void givenSingleMapping() {
         given(propertyRepository.findAllSearchTargets())

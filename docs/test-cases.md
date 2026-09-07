@@ -218,7 +218,12 @@ E2E 는 실제 Job·Step·트랜잭션 프록시·H2 위에서 Boot 러너에 �
 
 ## stay-search-api (2026-09-07)
 
-요약: 총 24 · 통과 24 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 210 · 통과 210 · 실패 0 · 건너뜀 0)
+요약: 총 23 · 통과 23 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 211 · 통과 211 · 실패 0 · 건너뜀 0)
+
+집계 근거는 `./gradlew test --rerun-tasks` 뒤의 `**/build/test-results/test/TEST-*.xml` 이다. 클래스별로
+`SearchStaysUseCaseTest` 11 · `StayMappingIndexTest` 3 · `StaySearchE2ETest` 7 · `PropertyJpaRepositoryTest`
+와 `RoomJpaRepositoryTest` 에서 각 1(두 클래스의 나머지는 F1 몫). T-01~T-20 의 20 개 메서드 중
+Parameterized 2건(T-12 가 2 케이스, T-16 이 3 케이스)이 펼쳐져 20 − 2 + 5 = 23 이다.
 
 | # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
 |---|---|---|---|---|---|
@@ -241,7 +246,9 @@ E2E 는 실제 Job·Step·트랜잭션 프록시·H2 위에서 Boot 러너에 �
 | T-17 | `StaySearchE2ETest#search_oneSupplierFailed_returnsSurvivingResultsWithFailedStatus` | E2E | A 정상·B 실패 → 200, 결과는 A 것만, `suppliers[B].status=FAILED` | ✅ | 높음 — 수용 기준 3 을 응답 계약 수준에서. 부분 실패를 500 이나 빈 응답으로 바꾸는 회귀를 막는다 |
 | T-18 | `StaySearchE2ETest#search_allSuppliersFailed_returnsBadGatewayWithoutData` | E2E | A·B 모두 실패 → 502 · `ALL_SUPPLIERS_FAILED` · `data` 없음 | ✅ | 높음 — 수용 기준 4. Red 가 500(마지막 그물)이었고, advice 핸들러가 없으면 우리 코드 예외와 상류 실패가 같은 상태로 섞인다 |
 | T-19 | `StaySearchE2ETest#search_withoutAnyMapping_returnsEmptyResultsAndSuppliers` | E2E | 매핑 미저장 → 200 · `results`·`suppliers` 둘 다 빈 배열 | ✅ | 중간 — T-09 가 유스케이스 쪽에서 같은 규칙을 덮지만, 이 테스트만 "빈 상태의 앱에 첫 요청이 들어오면 500 이 아니라 200" 을 끝단에서 확인한다 |
+| T-20 | `SearchStaysUseCaseTest#search_supplierResultsAreEmpty_returnsEmptyResultWithoutFailing` | application | 매핑은 있는데 공급사 결과 목록이 빈 채로 옴 → 예외 없이 빈 `items`·빈 `outcomes` | ✅ | 높음 — `allMatch` 의 **공허참**으로 아무도 실패하지 않은 검색이 502 로 나가던 갈래를 막는다. Red 가 실제로 `AllSuppliersFailedException` 이었다 (리뷰 round-1 위반 #3) |
 
+- **T-20 은 설계의 테스트 리스트 밖이다.** 리뷰 round-1 이 `Collected.allFailed()` 의 빈 목록 공허참을 짚었고(위반 #3, D-F7-3·D-F7-15), 고친 조건이 다시 풀리는 것을 막을 테스트가 리스트에 없었다. 설계가 이 갈래를 빠뜨린 이유는 "어댑터가 공급사마다 결과를 채우므로 목록이 비지 않는다"는 전제였는데, 그 보장은 **어댑터의 구현일 뿐 포트 계약(`List<SupplierAvailabilityResult> searchAll(...)`)에는 없다.** 계약이 허용하는 입력에 대한 갈래라 새 결정이 아니라 기존 결정(전원 실패만 502)의 경계를 고정하는 것이며, 그래서 설계 이탈 요청이 아니라 리스트 밖 테스트 1건으로 더했다.
 - **만들지 않은 것 (TDD-8, 설계 §5)**: 단순 DTO 생성·변환(`StaySearchResponse`·`StayResultResponse`·`SupplierStatusResponse` — T-15·T-17 이 응답 JSON 으로 덮는다) · `soldOut()` 파생 단독(T-03) · `FanOutExecutor`·어댑터·번역기 동작(F3a·F5) · **로그 출력 자체**(부수효과라 검증이 취약하고, 레벨의 입력이 되는 status 판정은 T-06~T-08 이 고정한다 — 대신 네 갈래의 실제 출력을 눈으로 확인해 `02-implementation.md` 에 남겼다) · 실제 소켓·타임아웃(§7 실측, 이번 범위 밖).
 - **Red 없이 통과한 것 7건**(T-03·T-04·T-05·T-11·T-12·T-13·T-16)은 전부 **앞선 사이클이 그 규칙을 함께 구현한 경우**다. 역매핑과 색인은 T-01 을, 요청 제약은 T-15 를 통과시키는 데 필요해 그 사이클에서 들어갔고, 리포지터리 둘은 파생 쿼리라 쓸 프로덕션 코드가 없었다. 그래서 여섯 건에 **변이 검사 A~F** 를 붙여 각각 "그 줄을 고치면 이 테스트가 실패한다"를 확인했다(상세는 `02-implementation.md` 「변이 검사」). T-12 만 변이를 만들지 않았는데, `Optional` 반환 자체를 바꾸면 컴파일이 깨져 변이가 성립하지 않기 때문이다.
 - **API 문서가 테스트 산출물이라는 주장의 근거**: 응답에 없는 필드(`data.results[].cancellationPolicy`)를 문서에 적는 변이를 넣자 T-15·T-17 이 실패했다. 문서와 코드의 불일치가 사람 대조가 아니라 빌드로 막힌다는 D-F7-10 이 실제로 성립한다.
