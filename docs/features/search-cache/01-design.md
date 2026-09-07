@@ -202,8 +202,11 @@ getOrLoad(command, loader):
     catch RuntimeException e:
         mine.completeExceptionally(e); throw e        # ⑤ 대기자 전원에게 같은 예외
     finally:
+        if !mine.isDone(): mine.completeExceptionally(IllegalStateException)   # ⑤' Error 등 잡지 않은 갈래 — 대기자를 반드시 깨운다 (D-F10-16 ①)
         inFlight.remove(command, mine)                # ⑥ 다음 요청은 다시 leader
 ```
+
+`Error` 는 잡지 않는다(CLN-6). 그 갈래에서 대기자는 "같은 원인"이 아니라 loader 가 결과 없이 끝났다는 예외로 깨어난다 — leader 에게는 `Error` 가 그대로 올라간다.
 
 **포트 계약** (구현·테스트가 기대는 것):
 
@@ -318,7 +321,7 @@ HTTP 503
 |---|---|---|
 | MISS(loader 실행) | `fetch` | **F7 형식 그대로, 레벨 규칙 그대로.** 이 줄만이 공급사별 성공률의 재료다 |
 | HIT · JOINED | `search()` | `searchStays checkIn=… checkOut=… adults=… children=… cache=HIT results=5 elapsedMs=1` (`cache=` 값은 HIT/JOINED). 기억된 전원 실패면 **WARN**(알려진 이상을 다시 만난 것 — 조치 대상은 최초 실패 때 ERROR 로 올라갔다), 아니면 INFO |
-| Redis 읽기 실패 | advice 503 핸들러 | ERROR — 조치 필요(우리 인프라). 예외 메시지(연산·키·원인 클래스)를 로그에만 |
+| Redis 읽기 실패 | advice 503 핸들러 | ERROR — 조치 필요(우리 인프라). 예외 메시지(연산·키·원인 클래스)와 **cause 스택**을 로그에만 (D-F10-16 ②). 응답에는 코드·문구뿐 |
 | Redis 쓰기 실패 | 어댑터 | WARN 한 줄. 결과는 정상 반환 |
 
 - 적중률 = `cache=` 필드가 있는 줄 ÷ 전체 검색 줄. F7 줄의 형식은 바뀌지 않으므로 기존 파서와 k6 검사가 그대로 선다.
@@ -446,6 +449,7 @@ stay:
 | 30초 안 두 번째 요청이 공급사에 닿지 않는다 | 위와 같다 | k6 순차 2회 + 접근 로그 |
 | 두 공급사를 내린 뒤 30초 안 요청이 호출 없이 502 | negative cache 의 end-to-end | 모의 서버 A·B 장애 모드 |
 | Redis 를 내리면 503 이 300ms 안에 | 즉시 거절 옵션과 타임아웃이 실제로 먹는지 | `docker stop` + k6 p95 |
+| Redis 장애 중 ERROR 로그 바이트/초 | 503 마다 cause 스택이 붙으므로(D-F10-16 ②) 높은 트래픽에서 로그 파이프라인이 먼저 깨질 수 있다 — 리뷰 round-2 재검토 제안. 스택을 줄이거나 샘플링할지는 이 수치로 정한다 | 위 실측과 같은 자리에서 로그 크기 측정 |
 | 저장된 JSON 의 모양 | 문서가 아니라 눈으로 | `redis-cli GET` |
 
 ---
