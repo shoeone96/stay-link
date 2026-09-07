@@ -508,3 +508,23 @@
 - **feature-pr — PR #8 생성·리뷰 게시**: 사전 점검(브랜치 일치·clean·커밋 6·104/104·금지어 0·커밋 메시지 흔적 0) 후 `[F3] supplier-client: 공급사 A·B 목록 클라이언트와 목록 포트 (F4 통합)` — https://github.com/shoeone96/stay-link/pull/8. 본문은 Summary·설계 결정 8장·Test plan·Out of scope. feature-reviewer round-1: **error 0 · warn 4 · 인라인 5 · 통과**. warn — ① 계약에 없는 HTTP 상태 → UNEXPECTED 경로에 상태 값 로그 없음(CLN-9) ② 어댑터 warn 로그에 INVALID_RESPONSE 구분 정보(비어 있는 필드·B 코드) 없음(CLN-9) ③ `items` null은 예외인데 `roomTypes`/`rooms` null은 빈 목록 — 같은 위험이 한 단계 아래 열려 있음(§3.4·D-F3-2) ④ test-cases 요약 "총 62"가 표·xml 합 63과 불일치(TST-9). 리뷰 확인 항목 ①②③ 충족, 02 판단 7건 중 5건 동의·2건 이견(warn ①·③). 리뷰어가 `default-header` 프로퍼티를 Boot 4.1.1 jar에서 실재 확인. JSON 검사(COMMENT·인라인 diff 안·금지어·흔적 0) 후 사용자 사전 승인("다 허락함")에 따라 게시, 인라인 5건 확인. 상태표 F3 `PR`. 다음: warn 반영 여부는 사용자 선택 → `/dev-checkpoint supplier-client fix` → `/feature-pr supplier-client review`.
 - **리뷰 round-1 warn 처리(사용자 결정)**: ① 계약에 없는 HTTP 상태 → "case 의 default 처럼 마지막 처리 하나" — `byHttpStatus` default 가지에서 status 를 ERROR 로그 후 UNEXPECTED ② 어댑터 로그 상세 → 미반영, 테스트하며 추후 확인 ③ `rooms` 부재 → 사용자가 "계약이 바뀌면 전 데이터가 함께 안 나와 눈에 띈다"고 판단해 예외 대신 공급사별 집계 warn(`객실 정보가 없는 숙소가 있다 supplier= roomless= total=`, 0건이면 생략)으로 감지만 ④ 정리표 숫자 63. 내가 ③에 "null 과 빈 배열은 무료로 구분되니 null 은 예외로 막자"고 제안했으나 사용자가 로깅으로 시작하기로 결정. feature-developer fix-1: 코드 3파일 + 정리표·02, 새 테스트 없음(임시 프로브로 로그 원문 실측 후 삭제), 104/104. 메인 세션이 01 §3.4 분류표 3행·번역기 규칙 문언과 결정 카드 D-F3-9 를 반영해 fix 커밋 dc03a77 로 push.
 - **리뷰 round-2 (fix 후 재리뷰)**: error 0 · warn 1 · 인라인 1 · 통과. round-1 판정 — #1 해결, #2 사용자 결정으로 보류, #3 해결(로깅), #4 해결. 새 warn: 새 로그를 테스트하지 않은 근거로 test-standard 「적용하지 않을 때」를 인용했으나 그 목록에 로그가 없음 → 근거를 "01 §5.1 리스트에 T-NN 없음(TDD-1)"으로 문구 수정(test-cases 124행·02 fix-1 3곳, 개발자 반영). 설계 반론 1건 기록: 집계 warn 이 유일한 감지 수단인데 자동 테스트가 없어 호출을 지워도 깨지지 않음 — T-21(ListAppender) 추가 여부는 사용자 판단으로 남김. 게시 후 인라인 누적 6건.
+
+### 74. F5 supplier-availability-adapter 설계 확정 (2026-09-07)
+- **범위**: F3a의 배선(그룹 등록·조합기·마스킹 필터)과 F3의 실패 유형 위에 공급사 A·B의 **재고·요금** 호출을 얹어 표준 항목으로 번역한다. 목록(F3)과 다른 점 두 가지 — 한 번에 보낼 수 있는 코드가 50개로 제한되어 공급사당 호출이 여러 건이 되고, 그래서 **한 공급사 안에 성공과 실패가 동시에 존재**한다.
+- **확정 결정 13장(D-F5-1~13)**:
+  - D-F5-1 금액은 `Money(long amount, Currency)` 값 객체 — `long` 원시는 통화를 안 들고 다니고, `BigDecimal`은 나눗셈이 없어 scale이 아무 일도 안 하며, `moneta`·`joda-money`는 Boot 4.1.1 BOM 비관리라 `core` 시그니처에 비관리 의존성이 박힌다.
+  - D-F5-2 총액은 gross 기간 총액 단일값(`taxIncluded` 미탑재). base/tax 분리는 업계 표준이나 KRW 단일 통화 전제에서 표시할 곳이 없다. 전제가 깨지면 A는 원본 복원 가능·B는 불가라는 비대칭을 기록.
+  - D-F5-3 재고는 `bookableRooms` 숫자만. `soldOut`은 `== 0` 파생이라 F7 몫.
+  - D-F5-4 품절 항목은 결과에 남긴다(D8 유지).
+  - D-F5-5 묶음 분할은 Fetcher가 아니라 **어댑터**에서 — Fetcher에 두면 조합기의 `.timeout(perCall)`이 묶음이 아니라 공급사 전체에 걸려 묶음이 늘수록 호출 하나의 상한이 저절로 조여지고, `FailedChunk`에 담을 코드 목록도 만들 수 없다.
+  - D-F5-6 한도 키는 공급사별 `supplier.<공급사>.availability.max-codes`.
+  - D-F5-7 부분 실패는 sealed 3변형이 아니라 `SupplierAvailabilityResult(supplier, offers, failures)` 단일 타입 — 근거는 AIP-233·SQS(`Successful`/`Failed`)·DynamoDB(`UnprocessedItems`), AIP-193의 예외 조항이 "particularly in bulk operations"로 이 상황을 가리킨다.
+  - D-F5-8 요청 숙박일을 순회하며 누락만 검사 → 항목 제외, 전부 누락이면 `INVALID_RESPONSE` 승격. 개수 비교는 "3개인데 하나가 범위 밖"을 통과시킨다.
+  - D-F5-9 Reactor 배치 연산자(`buffer`·`window`·`parallel().runOn()`)를 쓰지 않고 순수 자바 List 파티션 + 기존 `flatMap(maxConcurrent)` — 소스가 메모리 `List`라 Flux 왕복만 생기고 동시 상한이 두 겹이 된다.
+  - D-F5-10 fan-out 세 값 재산정은 미룬다(F9). 재산정 입력(캐시 적중률·일일 요청량·rate limit)이 하나도 없다.
+  - D-F5-11 계약 필드명은 리터럴 유지 — 상수로 빼면 어긋남을 보려고 다른 파일을 열어야 해 탐지 가능성이 오히려 나빠진다.
+  - D-F5-12 어느 코드가 누구 것인지는 F7이 갈라서 `Map<Supplier, List<String>>`로 넘긴다. **어댑터는 DB를 모른다.**
+  - D-F5-13 포트는 `searchAll(query)` 하나 — 공급사별로 나누면 조합기 `budget`이 호출마다 따로 걸려 검색 하나가 최악 2배가 된다.
+- **DDD 전술 패턴 미적용**: 불변식을 지키는 Aggregate가 없고 외부 API를 내부 모델로 정규화하는 Adapter/ACL이 전부다. F3와 같은 판단.
+- **테스트 리스트 T-01~T-21** 확정, 만들지 않는 것(단순 값 보관 record · `FailureClassifier` 재검증 · `FanOutExecutor` 동작 · 실제 소켓 · `soldOut` 파생)도 근거와 함께 기록.
+- **이번 세션(커밋 단계)**: 커밋 전 검사에서 01-design.md D-F5-2 행의 금지어 한 단어를 중립 표현으로 고쳐 0건. AI 흔적·자격 증명·이메일 각 0건. 설계 산출물(01-design.md · design.html)과 상태표(F3 `완료(병합)` · F5 `설계중`)를 커밋한 뒤 구현 단계로 넘어간다. README F5 절 본문 정정(묶음 분할 누락 · 검산값 396,000/415,800 → 435,600/453,600 · 닫아야 할 결정 닫힘 표시)과 `docs/availability-api-integration-design.html` D6·D7 예시 정정은 설계가 "이번 범위에서 함께 고치는 문서"로 잡아 두었으므로 구현 커밋과 함께 처리한다.
