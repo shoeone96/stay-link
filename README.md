@@ -557,6 +557,40 @@ mock-supplier-b  모의 공급사 B (실행 대상)
 `api-app`은 `persistence`·`supplier-client`·`cache-redis`를 **런타임에만** 의존합니다. 구현 클래스를 실수로
 import하면 컴파일이 실패해 경계가 지켜집니다.
 
+```mermaid
+flowchart TB
+    subgraph run["실행 대상"]
+        API["api-app<br/>webmvc · validation"]
+        BATCH["batch-app<br/>batch-jdbc"]
+    end
+    subgraph adapters["어댑터 (구현)"]
+        PERS["persistence<br/>data-jpa · mysql"]
+        SC["supplier-client<br/>webclient · resilience4j"]
+        CR["cache-redis<br/>data-redis"]
+    end
+    CORE["core<br/>domain + application<br/>(spring-context · tx 만)"]
+
+    API -->|implementation| CORE
+    API -.->|runtimeOnly| PERS
+    API -.->|runtimeOnly| SC
+    API -.->|runtimeOnly| CR
+    BATCH -->|implementation| CORE
+    BATCH -.->|runtimeOnly| PERS
+    BATCH -.->|runtimeOnly| SC
+    PERS -->|implementation| CORE
+    SC -->|implementation| CORE
+    CR -->|implementation| CORE
+
+    MA["mock-supplier-a<br/>webmvc · jpa · h2"]
+    MB["mock-supplier-b<br/>webmvc · jpa · h2"]
+    MA ~~~ MB
+```
+
+실선은 컴파일 의존, 점선은 런타임 의존입니다. `core`는 어느 모듈도 의존하지 않고, 어댑터 셋은 서로를
+모르며 `core`의 포트만 구현합니다. `batch-app`은 캐시를 쓰지 않으므로 `cache-redis`를 의존하지 않고,
+검색 유스케이스가 요구하는 캐시 포트는 대역(NoOp)으로 채웁니다. 모의 서버 둘은 자사 모듈과 연결이
+없고 서로도 의존하지 않습니다 — 공통 모델이 생길 자리를 물리적으로 없앤 것입니다.
+
 ---
 
 ## 구현하지 않은 것과 이유
