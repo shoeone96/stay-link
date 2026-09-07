@@ -2,6 +2,9 @@ package com.stay.property.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.stay.property.application.CatalogProperty;
 import com.stay.property.application.CatalogRoom;
@@ -25,7 +28,7 @@ import reactor.core.publisher.Mono;
  */
 class SupplierCatalogAdapterTest {
 
-    private static final FanOutPolicy POLICY = new FanOutPolicy(2, Duration.ofSeconds(2), Duration.ofSeconds(5));
+    private static final FanOutPolicy POLICY = new FanOutPolicy(Duration.ofSeconds(2), Duration.ofSeconds(5));
 
     private static final List<CatalogProperty> A_PROPERTIES =
             List.of(new CatalogProperty("A-3201", "Haeundae Blue Hotel", List.of(new CatalogRoom("OCN-DBL", "Ocean Double"))));
@@ -39,7 +42,8 @@ class SupplierCatalogAdapterTest {
         SupplierCatalogAdapter adapter =
                 new SupplierCatalogAdapter(
                         List.of(fetcher(Supplier.B, Mono.just(B_PROPERTIES)), fetcher(Supplier.A, Mono.just(A_PROPERTIES))),
-                        new FanOutExecutor(POLICY));
+                        new FanOutExecutor(POLICY),
+                        passThrough());
 
         // when
         List<SupplierCatalogResult> results = adapter.fetchAll();
@@ -60,7 +64,8 @@ class SupplierCatalogAdapterTest {
                         List.of(
                                 fetcher(Supplier.A, Mono.just(A_PROPERTIES)),
                                 fetcher(Supplier.B, Mono.error(new SupplierBResultException("E503")))),
-                        new FanOutExecutor(POLICY));
+                        new FanOutExecutor(POLICY),
+                        passThrough());
 
         // when
         List<SupplierCatalogResult> results = adapter.fetchAll();
@@ -78,9 +83,17 @@ class SupplierCatalogAdapterTest {
     void create_withDuplicateOrMissingFetcher_throwsIllegalState(
             String shape, List<SupplierCatalogFetcher> fetchers, String expectedInMessage) {
         // given · when · then — 누락을 조용히 넘기면 그 공급사는 영원히 수집되지 않는다
-        assertThatThrownBy(() -> new SupplierCatalogAdapter(fetchers, new FanOutExecutor(POLICY)))
+        assertThatThrownBy(
+                        () -> new SupplierCatalogAdapter(fetchers, new FanOutExecutor(POLICY), passThrough()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(expectedInMessage);
+    }
+
+    /** 데코레이터를 보지 않는 테스트가 쓰는 더블. 준 호출을 그대로 돌려준다. */
+    private static SupplierResilience passThrough() {
+        SupplierResilience resilience = mock(SupplierResilience.class);
+        when(resilience.decorate(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+        return resilience;
     }
 
     private static Stream<Arguments> misregisteredFetchers() {

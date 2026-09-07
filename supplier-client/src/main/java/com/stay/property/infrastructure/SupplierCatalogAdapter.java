@@ -18,6 +18,10 @@ import org.springframework.stereotype.Component;
  * 목록 포트의 구현. 등록된 Fetcher 전부를 수집용 조합기에 한 번에 넣고, 조합기가 돌려준 값을
  * 포트의 결과 값으로 옮긴다. 리액티브 타입은 여기서 끝나며 포트 밖으로 나가지 않는다.
  *
+ * <p>목록 API 는 파라미터를 받지 않아 자를 대상이 없으므로 재시도·서킷은 <b>호출 하나</b>에 걸린다.
+ * 수집용 정책을 쓰는 이유는 검색과 대기 주체가 달라서다 — 배치는 오래 기다려도 되고 다 받는 것이
+ * 중요하다.
+ *
  * <p>조합기의 방어망({@code block(hardStop)})이 터져 나오는 예외는 잡지 않는다 — 공급사 장애가 아니라
  * 우리 설정·코드의 결함이라 "전 공급사 실패"로 포장하면 운영자가 엉뚱한 곳을 본다.
  */
@@ -28,6 +32,7 @@ public class SupplierCatalogAdapter implements SupplierCatalogPort {
 
     private final EnumMap<Supplier, SupplierCatalogFetcher> fetchers;
     private final FanOutExecutor catalogExecutor;
+    private final SupplierResilience resilience;
 
     /**
      * 등록된 Fetcher 가 곧 "수집 대상"의 정의다. 같은 공급사가 둘이면 {@code EnumMap} 이 하나를 덮어써
@@ -35,9 +40,11 @@ public class SupplierCatalogAdapter implements SupplierCatalogPort {
      */
     public SupplierCatalogAdapter(
             List<SupplierCatalogFetcher> fetchers,
-            @Qualifier(SupplierCatalogConfig.CATALOG_FAN_OUT_EXECUTOR) FanOutExecutor catalogExecutor) {
+            @Qualifier(SupplierCatalogConfig.CATALOG_FAN_OUT_EXECUTOR) FanOutExecutor catalogExecutor,
+            @Qualifier(SupplierCatalogConfig.CATALOG_SUPPLIER_RESILIENCE) SupplierResilience resilience) {
         this.fetchers = indexBySupplier(fetchers);
         this.catalogExecutor = catalogExecutor;
+        this.resilience = resilience;
     }
 
     private static EnumMap<Supplier, SupplierCatalogFetcher> indexBySupplier(List<SupplierCatalogFetcher> fetchers) {
@@ -60,7 +67,11 @@ public class SupplierCatalogAdapter implements SupplierCatalogPort {
     public List<SupplierCatalogResult> fetchAll() {
         List<SupplierCall<List<CatalogProperty>>> calls =
                 fetchers.values().stream()
-                        .map(fetcher -> new SupplierCall<>(fetcher.supplier(), fetcher.call()))
+                        .map(
+                                fetcher ->
+                                        new SupplierCall<>(
+                                                fetcher.supplier(),
+                                                resilience.decorate(fetcher.supplier(), fetcher.call())))
                         .toList();
         return catalogExecutor.runAll(calls).stream().map(SupplierCatalogAdapter::toResult).toList();
     }

@@ -2,12 +2,17 @@ package com.stay.property.infrastructure;
 
 import com.stay.property.infrastructure.supplier.a.SupplierAApi;
 import com.stay.property.infrastructure.supplier.b.SupplierBApi;
+import java.time.Duration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.http.client.autoconfigure.reactive.ClientHttpConnectorBuilderCustomizer;
+import org.springframework.boot.http.client.reactive.ReactorClientHttpConnectorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.ReactorResourceFactory;
 import org.springframework.web.reactive.function.client.support.WebClientHttpServiceGroupConfigurer;
 import org.springframework.web.service.registry.HttpServiceGroup.ClientType;
 import org.springframework.web.service.registry.ImportHttpServices;
+import reactor.netty.resources.ConnectionProvider;
 
 /**
  * 바깥으로 나가는 호출의 배선. 공급사마다 그룹을 따로 두는 이유는 그래야 커넥터가 갈려
@@ -17,7 +22,11 @@ import org.springframework.web.service.registry.ImportHttpServices;
  * 하나로 찍어낼 수 없으므로 인터페이스·DTO·번역기는 공급사별 하위 패키지에 있고, 여기는 배선만 한다.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({FanOutProperties.class, SupplierAvailabilityProperties.class})
+@EnableConfigurationProperties({
+    FanOutProperties.class,
+    SupplierAvailabilityProperties.class,
+    SupplierResilienceProperties.class
+})
 @ImportHttpServices(
         group = SupplierHttpClientConfig.SUPPLIER_A_GROUP,
         clientType = ClientType.WEB_CLIENT,
@@ -31,8 +40,27 @@ public class SupplierHttpClientConfig {
     public static final String SUPPLIER_A_GROUP = "supplier-a";
     public static final String SUPPLIER_B_GROUP = "supplier-b";
 
-    /** 조합기 빈이 검색용·수집용 둘이라 주입 지점은 이름으로 고른다. */
+    /** 조합기 빈이 검색용·수집용 둘이라 주입 지점은 이름으로 고른다. 데코레이터도 같은 이유로 이름을 갖는다. */
     public static final String FAN_OUT_EXECUTOR = "fanOutExecutor";
+
+    public static final String SUPPLIER_RESILIENCE = "supplierResilience";
+
+    /**
+     * 커넥션 풀 크기. 동시 상한을 조합기에서 없앤 뒤로(D-F9-5) <b>바깥으로 나가는 호출의 유일한 상한</b>이
+     * 여기다. 기본값을 그대로 두면 {@code max(코어 수, 8) × 2} 라 배포 머신마다 상한이 달라지므로 값을
+     * 못박는다. 50 은 실측(동시 80 까지 p99 33ms, 선형)에서 여유가 확인된 구간이고, 검색 1건이 내는
+     * 호출이 오늘 2건이라 동시 검색 25건까지 대기 없이 흘린다.
+     *
+     * <p>자사 자원과 예상 동시 요청 수가 정해지면 다시 잡는다 — 설계 §6.1 의 이연 항목이다.
+     */
+    private static final int MAX_CONNECTIONS = 50;
+
+    /**
+     * 풀 자리를 기다리는 시간. 기본값 45초를 그대로 두면 조합기의 {@code per-call} 이 <b>먼저</b> 터져
+     * 자사 병목이 {@code TIMEOUT} 으로 기록되고, 그 표본이 서킷을 열어 멀쩡한 공급사를 차단한다.
+     * {@code per-call} 보다 확실히 짧게 두면 풀 고갈이 고유한 예외로 먼저 터져 구분된다 (D-F9-6).
+     */
+    private static final int PENDING_ACQUIRE_TIMEOUT_DIVISOR = 2;
 
     @Bean
     FanOutPolicy fanOutPolicy(FanOutProperties properties) {
@@ -42,6 +70,42 @@ public class SupplierHttpClientConfig {
     @Bean(FAN_OUT_EXECUTOR)
     FanOutExecutor fanOutExecutor(FanOutPolicy policy) {
         return new FanOutExecutor(policy);
+    }
+
+    /**
+     * 검색용 데코레이터. 시도별 상한이 {@code per-call} 에서 유도되므로 정책 빈을 함께 받는다 —
+     * 그래야 "재시도 전체가 호출당 상한 안에서 끝난다"가 설정을 맞게 적었을 때만 성립하는 우연이 아니라
+     * 구조가 된다 (설계 §3.2).
+     */
+    @Bean(SUPPLIER_RESILIENCE)
+    SupplierResilience supplierResilience(SupplierResilienceProperties properties, FanOutPolicy policy) {
+        return new SupplierResilience(SupplierResilience.AVAILABILITY, properties.toPolicy(), policy.perCall());
+    }
+
+    /**
+     * 커넥션 풀을 명시 설정한다. 두 공급사 그룹의 커넥터가 이 자원을 함께 쓰므로 상한도 둘의 합에
+     * 걸리며, 그것이 의도다 — 죽은 공급사가 붙든 자리는 살아 있는 공급사가 못 쓰는 자리다.
+     */
+    @Bean
+    ReactorResourceFactory supplierConnectionResources(FanOutPolicy policy) {
+        ReactorResourceFactory resources = new ReactorResourceFactory();
+        resources.setUseGlobalResources(false);
+        resources.setConnectionProvider(
+                ConnectionProvider.builder("supplier")
+                        .maxConnections(MAX_CONNECTIONS)
+                        .pendingAcquireTimeout(pendingAcquireTimeout(policy.perCall()))
+                        .build());
+        return resources;
+    }
+
+    @Bean
+    ClientHttpConnectorBuilderCustomizer<ReactorClientHttpConnectorBuilder> supplierConnectorPoolCustomizer(
+            ReactorResourceFactory resources) {
+        return builder -> builder.withReactorResourceFactory(resources);
+    }
+
+    private static Duration pendingAcquireTimeout(Duration perCall) {
+        return perCall.dividedBy(PENDING_ACQUIRE_TIMEOUT_DIVISOR);
     }
 
     /**
