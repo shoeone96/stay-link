@@ -90,7 +90,11 @@ public final class FailureClassifier {
         };
     }
 
-    /** A 는 실패를 HTTP 상태로만 알린다. 계약에 없는 상태는 공급사 장애가 아니라 우리가 모르는 상황이다. */
+    /**
+     * A 는 실패를 HTTP 상태로만 알린다. 계약에 없는 상태는 공급사 장애가 아니라 우리가 모르는 상황이므로
+     * 규칙 9 와 같은 수준의 ERROR 를 남긴다 — 이 로그가 없으면 어떤 상태가 왔는지 어디에도 남지 않는다
+     * (조합기는 예외 타입만 싣고, 어댑터는 유형만 싣는다). 예외 자체는 싣지 않는다 — 메시지에 요청 URL 이 든다.
+     */
     private static SupplierErrorCode byHttpStatus(int status) {
         return switch (status) {
             case 400 -> SupplierErrorCode.INVALID_REQUEST;
@@ -98,7 +102,10 @@ public final class FailureClassifier {
             case 429 -> SupplierErrorCode.RATE_LIMITED;
             case 500 -> SupplierErrorCode.SUPPLIER_ERROR;
             case 503 -> SupplierErrorCode.UNAVAILABLE;
-            default -> SupplierErrorCode.UNEXPECTED;
+            default -> {
+                log.error("계약에 없는 HTTP 상태가 공급사 호출에서 나왔다 status={}", status);
+                yield SupplierErrorCode.UNEXPECTED;
+            }
         };
     }
 }

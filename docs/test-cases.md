@@ -87,9 +87,9 @@
 - 테스트가 태우지 않는 갈래: 방어망(`block(hardStop)`)이 실제로 터지는 경로. 앞의 상한이 걸려 있으면 도달하지 않는 자리라 재현하려면 조합기 자체를 고장 내야 하고, 그러면 "고장 낸 코드"를 검증하는 테스트가 된다. `ERROR` 로그와 예외 전파는 코드 리뷰로 본다.
 - `api-app` 의 컴포넌트 스캔이 `runtimeOnly` 로만 의존하는 `supplier-client` 의 설정을 집어 오는지는 **임시 프로브로 실측하고 프로브를 삭제**했다. 결과와 근거는 `docs/features/webclient-config/02-implementation.md` 에 있다. F3 이 실제 공급사 인터페이스를 얹을 때 정식 테스트로 승격할 것을 제안한다.
 
-## supplier-client (2026-09-07)
+## supplier-client (2026-09-07, fix-1 갱신 — PR #8 리뷰 반영)
 
-요약: 총 62 · 통과 62 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 104 · 통과 104 · 실패 0 · 건너뜀 0)
+요약: 총 63 · 통과 63(신규 62 + 승격 1) · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 104 · 통과 104 · 실패 0 · 건너뜀 0)
 
 **웹 서버를 띄우지 않는다**(D-F3-5). 번역기·분류기는 순수 단위 테스트, Fetcher 는 HTTP Interface 를 Mockito 로 대체, 어댑터는
 조합기 실물(테스트용 정책) + Fetcher 더블, 설정은 서버 없는 컨텍스트(`webEnvironment = NONE`)다. 실제 소켓·타임아웃·503 은
@@ -121,4 +121,5 @@
 - 만들지 않은 것(TDD-8, 설계 §5): `SupplierCatalogResult`·DTO record·`SupplierErrorCode` enum(단순 값), Fetcher 정상 경로(T-15 가 덮음), hardStop 예외 전파(어댑터에 잡는 코드가 없어 검증할 행동이 없음 — 리뷰 확인 항목 ②), 실제 HTTP 디코딩·`read-timeout`(5.2 k6), 인증 키 마스킹(F3a T-09).
 - Red 없이 통과한 것 3건(T-04·T-13·T-16)은 직전 사이클의 구현이 이미 덮은 행동이다. T-14 는 Red 가 컴파일 오류뿐이라 변이 검사로 보강했다(`02-implementation.md` 사이클 로그).
 - 테스트가 태우지 않는 갈래: 분류기 규칙 3(계약에 없는 HTTP 상태 → UNEXPECTED)과 규칙 7(`WebClientRequestException` 사슬의 `ReadTimeoutException` → TIMEOUT), `CatalogProperty.rooms` null → 빈 목록, 번역기의 `roomTypes`/`rooms` null → 빈 객실 목록. 설계 리스트에 없어 케이스를 늘리지 않았고, 규칙 7 은 5.2 의 k6 "per-call 초과" 항목과 겹친다.
+- fix-1에서 바뀐 것(PR #8 리뷰 반영): 테스트 목록은 그대로다(20건, 63개). 반영한 두 건(#1 규칙 3 의 ERROR 로그, #3 번역기의 객실 없는 숙소 집계 warn)은 **로그만 더한 것**이라 돌려주는 값·예외가 바뀌지 않았고, 로그 자체는 검증 대상이 아니다(test-standard 「적용하지 않을 때」). 대신 **임시 프로브를 실행해 로그 원문을 확인하고 프로브를 삭제**했다 — 원문은 `docs/features/supplier-client/02-implementation.md` fix-1 「실제로 돌려서 확인한 것」에 있다. #4 는 이 요약의 숫자 정정이다.
 - 승격으로 사라진 것: F3a T-10 의 탐침 인터페이스 `ProbeSupplierClient`. 같은 테스트 클래스가 실제 두 인터페이스를 주입받는 T-18 이 됐다.

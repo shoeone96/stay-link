@@ -120,3 +120,83 @@ T-17·T-19 의 Red(컴파일 오류)가 모듈 전체의 테스트 컴파일을 
 3. `feat: [F3] 실패 분류기 — 두 공급사의 실패 표현을 8개 유형 한 곳에서 번역한다` — `FailureClassifier` + 테스트
 4. `feat: [F3] 목록 Fetcher·어댑터와 수집용 조합기 빈` — `SupplierCatalogFetcher`·A/B Fetcher·`SupplierCatalogAdapter`·`CatalogFanOutProperties`·`SupplierCatalogConfig`·`SupplierHttpClientConfig`(types)·yaml 3벌 + Fetcher·어댑터·설정 테스트, `SupplierHttpClientConfigTest` 승격
 5. `docs: [F3] 구현 기록·테스트 정리표, D-F0-6 재검토 조건 정정` — `02-implementation.md`·`docs/test-cases.md` + 메인 세션의 D-F0-6 문서 정정
+
+## fix-1 (2026-09-07 11:08)
+
+status: 완료
+
+PR #8 리뷰 round-1 의 warn 4건 중 사용자가 반영으로 분류한 3건(#1·#3·#4)을 고치고, #2 는 사용자 결정으로 남겨 둔다.
+error 는 0건이었다.
+
+### 사이클 로그
+
+| T-NN | 테스트 (클래스#메서드) | Red | Green | 비고 |
+|---|---|---|---|---|
+| — | (새 테스트 없음) | — | ✅ 기존 63건 전부 통과 | #1·#3 은 돌려주는 값·예외를 바꾸지 않고 로그만 더한다. 로그는 검증 대상이 아니라(test-standard 「적용하지 않을 때」) T-NN 을 늘리지 않았고, 대신 임시 프로브로 로그 원문을 실측한 뒤 프로브를 삭제했다(아래) |
+
+### 전체 테스트 결과
+
+- 총 104 · 통과 104 · 실패 0 · 건너뜀 0 (근거: `./gradlew test --rerun-tasks` 후 `*/build/test-results/test/*.xml`)
+- 모듈별: `core` 25 · `persistence` 3 · `supplier-client` 66 · `api-app` 10 — implement 와 같다
+- 이 기능의 클래스만: `FailureClassifierTest` 18 · `ACatalogTranslatorTest` 8 · `BCatalogTranslatorTest` 14 · `SupplierCatalogAdapterTest` 4 를 포함해 63건 전부 통과
+
+### 변경 파일
+
+- `supplier-client/src/main/java/com/stay/property/infrastructure/FailureClassifier.java` (수정 — `byHttpStatus` 의 `default` 가지에 ERROR 로그)
+- `supplier-client/src/main/java/com/stay/property/infrastructure/supplier/a/ACatalogTranslator.java` (수정 — `warnIfRoomless` 집계 warn)
+- `supplier-client/src/main/java/com/stay/property/infrastructure/supplier/b/BCatalogTranslator.java` (수정 — 같은 집계 warn)
+- `docs/test-cases.md` (수정 — 요약 62 → 63, fix-1 항목)
+
+### 설계 이탈 요청
+
+- 없음. 다만 아래 두 건은 `01-design.md` 의 문언과 달라진 자리이므로 메인 세션이 01 을 갱신할지 정한다(이 에이전트는 01 을 쓰지 않는다).
+  - §3.4 분류표 3행 "`WebClientResponseException` 그 밖의 상태 → UNEXPECTED (계약에 없는 상태)" — 이제 9행과 같이 **+ ERROR 로그**다.
+  - §3.4 번역기 규칙 — `roomTypes`/`rooms` 가 null·빈 배열이면 객실 0개로 통과하고 공급사별 집계 warn 을 남긴다는 문장이 01 에 없다. 리뷰 #3 이 요구한 "두 배열의 취급이 갈리는 이유"는 번역기 클래스 주석에 적었다.
+
+### (fix) 처리한 위반
+
+| 위반 ID(규칙 ID·파일) | 처리 | 미처리 사유 |
+|---|---|---|
+| #1 CLN-9 · `FailureClassifier.java` | `byHttpStatus` 의 `default` 가지를 "예상 못 한 값의 마지막 처리"로 바꿨다. `log.error("계약에 없는 HTTP 상태가 공급사 호출에서 나왔다 status={}", status)` 를 남기고 UNEXPECTED 를 돌려준다 — 규칙 9 의 ERROR 와 같은 수준. **예외 객체는 싣지 않는다**: `WebClientResponseException` 의 메시지에 요청 URL 이 들어가고, F3a 조합기가 같은 이유로 예외 타입만 싣기로 한 결정(`FanOutExecutor.failed`)과 맞춘다. 상태 값은 우리 쪽을 볼 근거로 충분하고, 공급사는 바로 다음 줄의 어댑터 warn(`supplier=`)에 있다 | — |
+| #2 CLN-9 · `SupplierCatalogAdapter.java:75` | 반영하지 않음 | 사용자 결정 — "테스트하면서 조금 더 보고 추후 확인". 어댑터 warn 에 `InvalidSupplierResponseException`·`SupplierBResultException` 의 메시지를 실을지는 F6 에서 실제 목록 수집을 돌려 본 뒤 정한다. 코드·주석 무변경 |
+| #3 01 §3.4 필수 필드 규칙 · D-F3-2 · `ACatalogTranslator.java`·`BCatalogTranslator.java` | **동작은 유지**(null·빈 배열 모두 객실 0개로 통과)하고 로그로만 감지한다. 번역기가 표준 모델을 다 만든 뒤 `rooms().isEmpty()` 인 숙소를 세어 N > 0 일 때만 warn 한 줄 `객실 정보가 없는 숙소가 있다 supplier={} roomless={} total={}` 을 남긴다. N = 0 이면 남기지 않는다. 자리는 번역기다 — 공급사와 목록 전체를 아는 유일한 곳이고, Fetcher·어댑터는 표준 모델만 본다. null 과 빈 배열을 따로 세지 않은 이유: F6 이 읽는 결과(객실 0개)가 같고, 계약이 바뀌면 어느 쪽이든 전 숙소가 한꺼번에 잡혀 `roomless == total` 로 드러난다. 사용자 판단: 계약 변경은 모든 데이터가 함께 안 나와 눈에 띄므로 예외 대신 로깅으로 시작한다 | — |
+| #4 TST-9 · `docs/test-cases.md:92` | 요약을 "총 63 · 통과 63(신규 62 + 승격 1)"로 고쳤다. 문자만 바꿨다 | — |
+
+### 실제로 돌려서 확인한 것
+
+새 로그 두 종류는 테스트가 아니라 임시 프로브(`TmpLogProbeTest`, 실행 후 삭제)로 확인했다. 아래는 `build/test-results` xml 의
+`system-out` 에서 그대로 가져온 것이다(시각만 생략).
+
+```
+ERROR com.stay.property.infrastructure.FailureClassifier -- 계약에 없는 HTTP 상태가 공급사 호출에서 나왔다 status=502
+PROBE-1 rule3 502 -> UNEXPECTED
+ERROR com.stay.property.infrastructure.FailureClassifier -- 계약에 없는 HTTP 상태가 공급사 호출에서 나왔다 status=418
+PROBE-1b rule3 418 wrapped -> UNEXPECTED
+PROBE-1c rule2 503 (no ERROR expected) -> UNAVAILABLE
+WARN com.stay.property.infrastructure.supplier.a.ACatalogTranslator -- 객실 정보가 없는 숙소가 있다 supplier=A roomless=2 total=3
+PROBE-2 A roomless: 3
+PROBE-3 A all rooms (no warn expected): 1
+WARN com.stay.property.infrastructure.supplier.b.BCatalogTranslator -- 객실 정보가 없는 숙소가 있다 supplier=B roomless=1 total=2
+PROBE-4 B roomless: 2
+```
+
+- 규칙 3: 사슬 바깥(502)·사슬 안쪽(`IllegalStateException` 이 감싼 418) 둘 다 상태 값이 ERROR 로 남고 UNEXPECTED 다. 계약 상태(503)는 ERROR 없이 UNAVAILABLE 이다.
+- 번역기: A 는 `roomTypes` null 1건 + 빈 배열 1건 + 정상 1건 → `roomless=2 total=3`. 전부 정상이면 warn 이 없다(PROBE-3 앞뒤에 WARN 줄 없음). B 는 `rooms` null 1건 → `roomless=1 total=2`. 번역 결과 크기는 그대로다(동작 무변경).
+
+### 게시 전 자체 검사
+
+- 금지어 grep(상위 폴더 체크리스트 명령 그대로, 저장소 전체): 0건 · AI 흔적 grep: 0건 · 자격 증명 grep: 0건 · 이메일 grep: 0건
+- 커밋은 하지 않았다. 브랜치명·커밋 메시지 검사는 dev-checkpoint 의 커밋 전 검사 몫이다
+
+### 남은 이슈·커밋 단위 제안
+
+**남은 이슈**
+
+- 리뷰 #2(어댑터 warn 의 INVALID_RESPONSE 구분 정보)는 사용자 결정으로 보류 — F6 실측 뒤 재검토.
+- `01-design.md` §3.4 의 분류표 3행과 번역기 규칙 문언을 이번 동작(ERROR 로그·집계 warn)에 맞출지는 메인 세션 판단.
+
+**커밋 단위 제안** (전부 `feature/f3-supplier-client`)
+
+1. `fix: [F3] 계약에 없는 HTTP 상태를 상태 값과 함께 ERROR 로 남긴다` — `FailureClassifier.java`
+2. `fix: [F3] 객실 정보가 없는 숙소를 공급사별로 집계해 warn 으로 남긴다` — `ACatalogTranslator.java`·`BCatalogTranslator.java`
+3. `docs: [F3] 리뷰 round-1 반영 기록과 정리표 숫자 정정` — `02-implementation.md`·`docs/test-cases.md`

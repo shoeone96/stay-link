@@ -1,7 +1,7 @@
 # supplier-client 설계 — 공급사 목록 클라이언트와 목록 포트 (F3 + F4 통합)
 
 status: 확정
-updated: 2026-09-07
+updated: 2026-09-07 (PR #8 리뷰 round-1 반영 — D-F3-9)
 
 ## 1. 요구사항 재해석·범위
 
@@ -175,6 +175,7 @@ Mono의 error 신호가 되어 조합기의 `onErrorResume`이 받는다. Mono�
 - B: `resultCode != "0000"`이면 `SupplierBResultException(resultCode)`. `0000`인데 `data`가 null이면
   `InvalidSupplierResponseException(B, "data is null")`. 그 외는 A와 같은 규칙으로 `propertyId`·`propertyName`·
   `rooms → CatalogRoom(roomId, roomName)`.
+- `roomTypes`/`rooms`가 null이거나 비어 있으면 객실 0개로 통과시키되, 공급사 단위로 집계해 `객실 정보가 없는 숙소가 있다 supplier= roomless= total=` warn 한 줄을 남긴다(0건이면 남기지 않는다). 예외로 막지 않는 이유는 D-F3-9.
 - 표준 모델 생성에서 나는 `IllegalArgumentException`은 번역기가 `InvalidSupplierResponseException`으로 감싼다.
   이 두 예외 타입만이 INVALID_RESPONSE로 분류되며, 범용 예외는 그러지 않는다(D-F3-7).
 
@@ -186,7 +187,7 @@ Mono의 error 신호가 되어 조합기의 `onErrorResume`이 받는다. Mono�
 |---|---|---|
 | 1 | `BudgetExceededException`, `java.util.concurrent.TimeoutException` | TIMEOUT |
 | 2 | `WebClientResponseException` 상태 400 / 401 / 429 / 500 / 503 | INVALID_REQUEST / UNAUTHORIZED / RATE_LIMITED / SUPPLIER_ERROR / UNAVAILABLE |
-| 3 | `WebClientResponseException` 그 밖의 상태 | UNEXPECTED (계약에 없는 상태) |
+| 3 | `WebClientResponseException` 그 밖의 상태 | UNEXPECTED + **ERROR 로그(status 포함)** — 규칙 9와 같은 수준. 예외 객체는 메시지에 요청 URL이 들어 싣지 않는다 (D-F3-9) |
 | 4 | `SupplierBResultException` `E400` / `E401` / `E429` / `E500` / `E503` | 2와 같은 다섯 값 |
 | 5 | `SupplierBResultException` 그 밖의 코드 | INVALID_RESPONSE |
 | 6 | `InvalidSupplierResponseException`, `org.springframework.core.codec.DecodingException`, `UnsupportedMediaTypeException` | INVALID_RESPONSE |
@@ -335,6 +336,7 @@ D-F3-5에 따라 소켓을 여는 자동 테스트는 두지 않는다. 다음 �
 | D-F3-6 | 수집 예산 정책 | A 한 벌 공유 / B 수집 정책 별도(빈 둘 · `runAll` 오버로드) / C 조합기 우회 | **B, 빈 둘** (사용자 결정 2026-09-07). `CatalogFanOutProperties` + 수집용 `FanOutExecutor` 빈. 초기값은 3.5 | A: 검색은 사용자가, 수집은 배치가 기다리므로 한 벌이면 하나는 반드시 틀린다. B 오버로드: 정책이 private 메서드 5곳에 퍼져 F3a 수정 범위가 크다. C: F3a의 실패 처리·계측·로그를 복제하고 정상 경로가 두 갈래가 된다 | 예 |
 | D-F3-7 | 번역 실패 예외 타입 | 전용 예외 / 범용 `IllegalArgumentException`을 그대로 분류 | **전용** `InvalidSupplierResponseException(supplier, reason)` + `SupplierBResultException(resultCode)` | 범용: 무관한 버그까지 INVALID_RESPONSE로 분류되어 UNEXPECTED의 신호 기능이 죽는다 | 예 |
 | D-F3-8 | Fetcher 등록 검사 | 중복·누락 모두 기동 실패 / 중복만 / 검사 없음 | **중복·누락 모두 `IllegalStateException`** | 중복만: 누락된 공급사가 조용히 수집에서 빠진다. 검사 없음: 같은 이유 + `EnumMap` 덮어쓰기로 한 Fetcher가 사라진다 | 예 |
+| D-F3-9 | PR #8 리뷰 round-1 warn 처리 | warn 1·2·3·4 각각 반영 / 미반영 | **1 반영** — 계약에 없는 HTTP 상태는 `default` 가지에서 ERROR 로그 후 UNEXPECTED. **3 로깅만** — `rooms` 부재를 예외로 막지 않고 집계 warn으로 감지(사용자 결정: 계약이 바뀌면 전 숙소가 한꺼번에 0개가 되어 눈에 띈다, 실측 뒤 예외 전환 판단). **4 반영** — 정리표 숫자. **2 미반영** — 어댑터 warn에 예외 메시지 싣기는 테스트하며 추후 확인 | 3을 예외로 막는 안: null과 빈 배열이 무료로 구분되지만 계약 문서에 "객실 없는 숙소" 표현이 없어 근거 부족, 로깅으로 시작. 2: 지금 판단 유보 | 아니오 |
 | D-F0-6 (정정) | `ErrorCode` 재검토 조건 | — | 조건을 "공급사 실패 유형이 구현하지 않으면 제거"에서 **"두 번째 구현체 후보는 컨텍스트 domain의 코드 enum이며, 컨텍스트 전용 응답 코드가 처음 필요한 feature에서 재검토"** 로 바꾼다. F0 결정(인터페이스 유지)은 불변. `docs/features/api-response/01-design.md`의 카드 행과 README F4 절을 이 브랜치에서 함께 고친다 | — | 아니오 |
 
 ## 7. 뒤 feature로 넘기는 계약
