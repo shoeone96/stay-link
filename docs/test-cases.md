@@ -171,3 +171,47 @@ Mockito 로 대체하고, 어댑터는 조합기 실물(테스트용 정책) + F
   T-16·T-17 이 고정한 행동에 변화가 없고, 새로 늘어난 것은 로그 문구뿐이다. 설계 §5 의 테스트 리스트에 로그를 대상으로 한 행이 없어 리스트 밖 테스트가
   되며(TDD-1), 문구를 단언하면 로그를 다듬을 때마다 깨지는 「유의미함 낮음」 테스트가 되어 `test-standard` 「적용하지 않을 때」에 걸린다(TDD-8). 대신
   임시 프로브로 실제 출력을 한 번 확인하고 지웠다(`02-implementation.md` fix-1).
+
+## catalog-sync (2026-09-07)
+
+요약: 총 35 · 통과 35 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 188 · 통과 188 · 실패 0 · 건너뜀 0 — F5 병합 main 위로 리베이스한 뒤 `./gradlew test --rerun-tasks` 결과)
+
+application 테스트의 리포지터리·공급사 포트·알림 포트는 mock 이고 도메인 객체는 실물이다. 유스케이스 테스트는 `SupplierCatalogSyncService` 도
+실물로 두고 그 아래의 리포지터리만 mock 이다 — 한 공급사의 예외가 리포지터리에서 올라와 격리 경계에 닿는 경로를 그대로 태우기 위해서다(T-17).
+E2E 는 실제 Job·Step·트랜잭션 프록시·H2 위에서 Boot 러너에 커맨드라인 인자를 넘겨 잡을 띄운다. MySQL 실기동(`schema-batch.sql`·종료 코드·같은 날짜 재실행)은
+`docs/features/catalog-sync/02-implementation.md` 「실제로 돌려서 확인한 것」에 있다.
+
+| # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
+|---|---|---|---|---|---|
+| T-01 | `PropertyTest#create_startsActive` | domain | `Property.create` → `lifecycle() == ACTIVE` | ✅ | 중간 — 수용 기준 1 의 "ACTIVE 로 시작". 생성자에서 초기값이 빠지면 NOT NULL 컬럼에 null 이 들어가 첫 저장에서 터진다 |
+| T-02 | `PropertyTest#changeLifecycle_fromAnyState_reachesTargetAndStaysThere` (Parameterized 4) | domain | ACTIVE/INACTIVE × activate/deactivate, 두 번 연속 호출 → 목표 상태 | ✅ | 높음 — 멱등 계약(§2). 서비스가 `if (lifecycle == INACTIVE)` 분기 없이 부를 수 있는 근거이며, "이미 ACTIVE 면 예외"로 바꾸는 회귀에 실패한다 |
+| T-03 | `PropertyTest#rename_withDifferentName_keepsNewName` | domain | `rename("리노베이션 호텔")` → `propertyName()` 갱신 | ✅ | 중간 — 수용 기준 4(덮어쓰기). 값만 확인하지만 T-04 와 짝으로 `rename` 의 정상·비정상 경계를 이룬다 |
+| T-04 | `PropertyTest#rename_withBlankName_throwsInvalidMappingException` (Parameterized 3) | domain | null/''/'  ' → `InvalidMappingException`, 메시지에 `propertyName` | ✅ | 높음 — 불변식(코드·이름 공백 불가)이 생성뿐 아니라 갱신에도 걸리는지. Red 에서 3건이 예외 없이 통과했다(검증이 없었음) |
+| T-05 | `RoomTest#create_startsActive` | domain | `Room.create` → `lifecycle() == ACTIVE` | ✅ | 중간 — T-01 의 객실 쪽 |
+| T-06 | `RoomTest#changeLifecycle_fromAnyState_reachesTargetAndStaysThere` (Parameterized 4) | domain | T-02 와 동일 4조합 | ✅ | 높음 — 객실 enum 이 별도(D-F6-3)이므로 숙소 테스트가 대신하지 못한다 |
+| T-07 | `RoomTest#rename_withDifferentName_keepsNewName` | domain | `rename("디럭스 오션뷰")` → `roomName()` 갱신 | ✅ | 중간 — T-03 의 객실 쪽 |
+| T-08 | `RoomTest#rename_withBlankName_throwsInvalidMappingException` (Parameterized 3) | domain | null/''/'  ' → `InvalidMappingException`, 메시지에 `roomName` | ✅ | 높음 — T-04 의 객실 쪽. Red 에서 3건 통과(검증 없음) |
+| T-09 | `SupplierCatalogSyncServiceTest#sync_propertyOnlyInResponse_savesNewActiveProperty` | application | 기존 0건 + 응답 `P-001` → `saveAll` 에 코드·이름·ACTIVE 인 숙소 1건 | ✅ | 높음 — 수용 기준 1. 신규 판정이 `saveAll` 로 가는 유일한 직접 확인 |
+| T-10 | `SupplierCatalogSyncServiceTest#sync_inactivePropertyReappears_revivesKeepingId` | application | id 7 인 INACTIVE 숙소 + 같은 코드 응답 → `saveAll` 미호출, 같은 객체가 id 7 그대로 ACTIVE | ✅ | 높음 — 수용 기준 2 와 D-F6-9 의 핵심. 조회에 lifecycle 필터를 걸어 "DB 에 없음"으로 잘못 판정하면 `saveAll` 이 불려 실패한다. Red 는 `NeverWantedButInvoked` |
+| T-11 | `SupplierCatalogSyncServiceTest#sync_propertyMissingFromResponse_deactivatesPropertyAndItsRooms` | application | 기존 `P-001`(객실 `R-001`) + 응답 `P-002` 만 → 둘 다 INACTIVE | ✅ | 높음 — 수용 기준 3 + D-F6-4 쓰기 연쇄. 카드를 뒤집을 때(읽기 파생) 이 테스트의 객실 단언만 바뀐다 |
+| T-12 | `SupplierCatalogSyncServiceTest#sync_responseNameDiffers_overwritesStoredName` | application | 기존 "예전 이름" + 응답 "새 이름" → `propertyName() == "새 이름"` | ✅ | 중간 — 수용 기준 4 를 서비스 수준에서. `rename` 을 조건부로 바꾸는 D-F6-6 B 안으로의 회귀를 잡는다 |
+| T-13 | `SupplierCatalogSyncServiceTest#sync_roomsOfNewProperty_useIdIssuedBySave` | application | `saveAll` 스텁이 id 100 발급 → 객실 `saveAll` 에 `propertyId == 100` | ✅ | 높음 — §3 "④ 가 ⑤ 보다 먼저" 라는 순서 계약. 객실을 숙소 저장 전에 만들면 propertyId 가 null 이라 실패한다. Red 는 `roomRepository.saveAll` 미호출 |
+| T-14 | `CatalogSyncUseCaseTest#syncAll_emptyResponse_skipsSupplierWithoutTouchingMappings` | application | `Fetched(A, [])` → 리포지터리 무접촉, `skipped == [A]` | ✅ | 높음 — D-F6-7. 0건을 "전부 소실"로 반영하면 그 공급사 상품이 하루 사라진다 |
+| T-15 | `SupplierCatalogSyncServiceTest#sync_propertyWithEmptyRooms_keepsExistingRoomsActive` | application | 기존 `P-001`(객실 `R-001`) + 응답 `P-001` 의 `rooms=[]` → 객실 ACTIVE 유지 | ✅ | 높음 — §3 ⑤ 예외. Red 없이 통과했으나 변이 검사(건너뜀 제거)에서 이 테스트가 실패해 규칙을 지키는 것을 확인했다 |
+| T-16 | `CatalogSyncUseCaseTest#syncAll_failedSupplier_skipsWithoutRepositoryCalls` | application | `Failed(A, TIMEOUT)` → 리포지터리 무접촉, `skipped == [A]` | ✅ | 중간 — 실패 결과를 값으로 받는 D-F3-2 의 소비 쪽. sealed switch 가 갈래를 강제해 Red 없이 통과했다 |
+| T-17 | `CatalogSyncUseCaseTest#syncAll_oneSupplierThrows_stillSyncsOtherSupplier` | application | A 의 조회가 `DataIntegrityViolationException` → B 의 `saveAll` 은 호출, report `synced=[B] skipped=[A]` | ✅ | 높음 — 수용 기준 5 의 흐름 쪽(실제 커밋은 T-23). 격리 catch 를 빼면 예외가 그대로 전파돼 실패한다 |
+| T-18 | `SupplierCatalogSyncServiceTest#sync_noExistingProperties_doesNotQueryRooms` | application | 기존 0건 → `findAllByPropertyIdIn` 미호출 | ✅ | 중간 — §3 ② "id 가 비면 호출하지 않는다". Red 없이 통과했으나 변이 검사(가드 제거)에서 실패를 확인했다 |
+| T-18a | `CatalogSyncUseCaseTest#syncAll_withSkippedSupplier_alertsOnceWithReport` | application | `Failed(A)` + `Fetched(B)` → `alert(report{synced=[B], skipped=[A]})` 정확히 1회 | ✅ | 높음 — D-F6-7c 의 알림 시점을 고정한다. 알림이 공급사마다 불리거나(중복) 빠지면 실패한다 |
+| T-18b | `CatalogSyncUseCaseTest#syncAll_allSuppliersSynced_doesNotAlert` | application | 둘 다 `Fetched` → 알림 포트 무호출 | ✅ | 중간 — 정상 실행마다 알림이 울리는 회귀 방지. Red 없이 통과했으나 변이 검사(조건 제거)에서 실패를 확인했다 |
+| T-19 | `PropertyJpaRepositoryTest#findAllBySupplier_returnsInactivePropertiesToo` | repository | A 의 INACTIVE 1·ACTIVE 1 + B 1 저장·clear → A 조회에 두 건, lifecycle 그대로 | ✅ | 높음 — D-F6-9. Red 가 **컨텍스트 기동 실패**(`No property 'saveAll' found for type 'Room'`)였다 — D-F6-11 이 예측한 C 단독의 실패이며 어댑터 default 다리로 풀렸다 |
+| T-20 | `RoomJpaRepositoryTest#findAllByPropertyIdIn_returnsRoomsOfGivenPropertiesIncludingInactive` | repository | 숙소 3 (객실 각 1, 하나는 INACTIVE) → 두 id 로 조회 시 2건, 제3 숙소 제외 | ✅ | 중간 — IN 조회 범위와 lifecycle 무필터. 파생 쿼리라 프로덕션 코드가 없어 Red 없이 통과했다 |
+| T-21 | `CatalogSyncE2ETest#runJob_bothSuppliersFetched_storesMappingsAndCompletes` | E2E | 두 공급사 `Fetched` → 러너로 잡 실행 → COMPLETED, A·B 숙소 ACTIVE 저장 | ✅ | 높음 — 배선 전체(러너 → Job → Tasklet → 유스케이스 → 프록시 → H2). Red 는 batch-app 소스가 없는 컴파일 오류 |
+| T-22 | `CatalogSyncE2ETest#runJob_oneSupplierSkipped_failsJobWithNonZeroExitCode` | E2E | `Failed(A)` + `Fetched(B)` → FAILED, `JobExecutionExitCodeGenerator.getExitCode() != 0` | ✅ | 높음 — 수용 기준 7. Tasklet 이 예외를 던지지 않으면 COMPLETED 가 된다(Red 가 정확히 그 상태). 러너의 이벤트가 종료 코드 생성기까지 닿는지도 함께 본다 |
+| T-23 | `CatalogSyncE2ETest#runJob_supplierAViolatesConstraint_keepsSupplierBCommitted` | E2E | A 에 같은 코드 2건(UNIQUE 위반) + B 정상 → FAILED, `B-003` 저장·`A-DUP` 없음 | ✅ | 높음 — 수용 기준 5 "실제로 커밋이 남아야 한다". 변이 검사: REQUIRES_NEW 제거(A)·스텝 TM 을 JPA 로(B) 각각은 통과, **둘 다 제거(C)하면 B 가 rollback-only 세션에 참여해 함께 롤백되어 실패**한다 |
+
+- 만들지 않은 것(TDD-8, 설계 §5): `CatalogSyncTasklet` 단위 테스트(단순 위임, T-21~23 이 덮음), Job·Step 빈 설정 자체, 기본 CRUD, `CatalogSyncReport`(값), `LoggingCatalogSyncAlerter`(로그 한 줄 — MySQL 실기동 로그로 원문 확인).
+- Red 없이 통과한 것 5건: T-15·T-18·T-18b 는 직전 사이클이 설계 규칙을 함께 구현한 경우라 **변이 검사로 보강**했고(각각 해당 줄을 지우면 그 테스트만 실패), T-16 은 sealed switch 의 강제, T-20 은 파생 쿼리라 쓸 프로덕션 코드가 없다. T-23 은 REQUIRES_NEW 가 설계대로 처음부터 있어 Red 가 없었고 변이 A·B·C 로 무엇이 지키는지를 확인했다(`02-implementation.md` 「변이 검사」).
+- **테스트만 부르는 접근자를 열었다**(설계 §2 "읽기 접근자" 의 위임): `Property.lifecycle()`·`propertyName()`, `Room.lifecycle()`·`roomName()`. 프로덕션 호출자는 없다. AssertJ 의 필드 이름 기반 추출(`hasFieldOrPropertyWithValue`)로 피할 수도 있었으나, 필드명 문자열에 테스트가 묶이는 것보다 접근자가 리팩터링에 안전하다고 판단했다. 프로덕션에서 `lifecycle()` 을 읽는 코드가 생기면 그 코드가 상태 분기(DDD-5)일 가능성이 크므로 리뷰에서 본다.
+- application 픽스처(`PropertyFixture`·`RoomFixture`)는 리플렉션으로 private `id` 를 채운다. 리포지터리가 mock 이라 JPA 가 id 를 발급하지 않는데 T-10(id 유지)·T-11(객실을 propertyId 로 묶기)·T-13(발급 id 전달)이 id 를 필요로 하기 때문이며, 프로덕션에 id setter 를 두지 않기 위한 우회다.
+- E2E 세 테스트는 한 컨텍스트의 H2 를 공유하고 잡이 커밋하므로 롤백으로 격리되지 않는다. 각 테스트가 자기 코드(`A-001`·`B-002`·`A-DUP` 등)만 `contains` 로 단언하고 `syncDate` 를 달리 준다. 컨텍스트 기동 시 러너가 인자 없이 한 번 돌지만(`spring.batch.job.enabled` 기본값 — 러너와 종료 코드 생성기 빈이 같은 속성으로 켜져 끌 수 없다) mock 포트가 빈 목록을 돌려줘 아무것도 건드리지 않는다.
+- 테스트가 태우지 않는 갈래: `Fetched` 의 `properties` 에 같은 코드가 둘인 경우의 *의도된* 동작(지금은 UNIQUE 위반으로 그 공급사가 롤백된다 — T-23 이 이 성질을 이용할 뿐 규칙으로 고정하지는 않았다), 스텝 Resourceless TM 과 REQUIRES_NEW 의 병용이 커넥션 수에 주는 효과(설계 D-F6-10 의 대가 — 실측 항목).
