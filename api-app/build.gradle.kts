@@ -62,7 +62,8 @@ openapi3 {
 }
 
 // 생성된 스펙을 저장소의 api-docs/ 로 옮긴다. 서버를 띄우지 않고 브라우저로 api-docs/index.html 을
-// 열면 같은 폴더의 openapi3.json 을 읽어 문서가 보인다. index.html 만 커밋하고 json 은 생성물이다.
+// 열면 같은 폴더의 openapi3.json 을 읽어 문서가 보인다. json 은 생성물이지만 커밋한다 — 읽는 사람이
+// 빌드 없이 볼 수 있어야 하기 때문(README 「API 문서」). 이 태스크가 다시 만들어 덮어쓴다.
 tasks.register<Copy>("copyApiSpec") {
     dependsOn("openapi3")
     from(layout.buildDirectory.file("api-spec/openapi3.json"))

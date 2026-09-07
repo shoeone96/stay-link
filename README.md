@@ -12,6 +12,22 @@
 
 그래서 **매핑 테이블이 조회의 전제**입니다 — 무엇을 물어볼지 우리가 먼저 알고 있어야 합니다.
 
+```mermaid
+flowchart LR
+    subgraph 정적["① 목록 · 하루 1회"]
+        BATCH["batch-app<br/>목록 동기화"] -->|GET 목록| SA1["공급사 A"]
+        BATCH -->|GET 목록| SB1["공급사 B"]
+        BATCH -->|upsert · INACTIVE| DB[("MySQL<br/>property · room")]
+    end
+    subgraph 동적["② 재고·요금 · 요청마다"]
+        C["클라이언트"] -->|"GET /api/v1/stays/search"| API["api-app<br/>검색 유스케이스"]
+        API -->|보유 숙소 코드| DB
+        API <-->|"30초 캐시 · single-flight"| REDIS[("Redis")]
+        API -->|"WebClient 병렬<br/>재시도 · 서킷"| SA2["공급사 A"]
+        API -->|"WebClient 병렬<br/>재시도 · 서킷"| SB2["공급사 B"]
+    end
+```
+
 ---
 
 ## 빠른 시작
@@ -91,6 +107,35 @@ curl -X POST "http://localhost:9092/control/mode?value=normal&endpoint=all"
 ---
 
 ## API
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 클라이언트
+    participant U as SearchStaysUseCase
+    participant R as Redis 캐시
+    participant DB as MySQL 매핑
+    participant A as 공급사 A
+    participant B as 공급사 B
+    C->>U: GET /stays/search (날짜·인원)
+    U->>R: find(조건)
+    alt 30초 안 같은 조건
+        R-->>U: 저장된 결과 (부분 실패·전원 실패 포함)
+        U-->>C: 200 그대로 / 전원 실패면 502
+    else miss (같은 조건 동시 요청은 leader 1건만)
+        U->>DB: ACTIVE 숙소·객실 코드
+        par 공급사별 묶음(≤50) 병렬 · 시도 2회 · 서킷
+            U->>A: GET /a/v1/availability
+            A-->>U: dailyRates 또는 4xx/5xx
+        and
+            U->>B: GET /b/api/search
+            B-->>U: totalPrice 또는 200+resultCode≠0000
+        end
+        U->>U: 표준 모델 정규화 · 역매핑 · 병합
+        U->>R: store(결과, TTL 30s)
+        U-->>C: 200 (suppliers[].status로 부분 실패 표시) / 전원 실패 502 / Redis 불가 503
+    end
+```
 
 ### `GET /api/v1/stays/search`
 
