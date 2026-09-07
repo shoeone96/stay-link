@@ -86,3 +86,39 @@
 - **자동 테스트가 덮지 않는 것 — 로그 내용.** 조합기가 잘린 호출을 기록하는지(#1), URL 쿼리 값이 가려지는지(#3), 그룹 한정 configurer가 실제 그룹 호출에 필터를 붙이는지(#8)는 **임시 프로브로 실제 소켓·실제 Netty를 태워 확인하고 프로브를 삭제**했다. 로그 원문은 `docs/features/webclient-config/02-implementation.md` 「실제로 돌려서 확인한 것」과 「실물 모의 공급사 서버 상대 재확인」에 있다(후자는 띄워 둔 `mock-supplier-a` 정상 · `mock-supplier-b` 무응답 상태에서 실제로 부른 결과다). 실제 소켓을 여는 테스트 방식이 F3 몫이라(01 7장) 지금 정식 테스트로 올리지 않았고, F3에서 승격을 권한다.
 - 테스트가 태우지 않는 갈래: 방어망(`block(hardStop)`)이 실제로 터지는 경로. 앞의 상한이 걸려 있으면 도달하지 않는 자리라 재현하려면 조합기 자체를 고장 내야 하고, 그러면 "고장 낸 코드"를 검증하는 테스트가 된다. `ERROR` 로그와 예외 전파는 코드 리뷰로 본다.
 - `api-app` 의 컴포넌트 스캔이 `runtimeOnly` 로만 의존하는 `supplier-client` 의 설정을 집어 오는지는 **임시 프로브로 실측하고 프로브를 삭제**했다. 결과와 근거는 `docs/features/webclient-config/02-implementation.md` 에 있다. F3 이 실제 공급사 인터페이스를 얹을 때 정식 테스트로 승격할 것을 제안한다.
+
+## supplier-client (2026-09-07)
+
+요약: 총 62 · 통과 62 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 104 · 통과 104 · 실패 0 · 건너뜀 0)
+
+**웹 서버를 띄우지 않는다**(D-F3-5). 번역기·분류기는 순수 단위 테스트, Fetcher 는 HTTP Interface 를 Mockito 로 대체, 어댑터는
+조합기 실물(테스트용 정책) + Fetcher 더블, 설정은 서버 없는 컨텍스트(`webEnvironment = NONE`)다. 실제 소켓·타임아웃·503 은
+설계 5.2 의 k6 항목이며 F6 에서 실행한다.
+
+| # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
+|---|---|---|---|---|---|
+| T-01 | `CatalogPropertyTest#create_withBlankField_throwsIllegalArgument` (Parameterized 6) · `CatalogRoomTest#create_withBlankField_throwsIllegalArgument` (Parameterized 6) | core | 코드·이름 중 하나가 null/공백 → 생성 → `IllegalArgumentException`, 메시지에 필드명 | ✅ | 높음 — 표준 모델의 자기 검증(DDD-4). `Fetched` 가 "번역 검증을 통과한 뒤에만" 만들어진다는 D-F3-2 의 전제가 이 검증이다 |
+| T-02 | `ACatalogTranslatorTest#translate_contractResponse_mapsToCatalogProperties` | supplier-client | 계약 §5 ① 응답 → `[CatalogProperty(A-3201, …, [CatalogRoom(OCN-DBL, …)])]`, `maxOccupancy` 없음 | ✅ | 높음 — A 의 필드 대응표를 실행으로 고정한다. 필드 하나를 바꿔 끼우는 회귀(`hotelName`↔`hotelCode`)에 실패한다 |
+| T-03 | `BCatalogTranslatorTest#translate_successResponse_mapsToCatalogProperties` | supplier-client | 계약 §6 ① `0000` 응답 → `[CatalogProperty(P-88410, …, [CatalogRoom(R-201, …)])]` | ✅ | 높음 — B 의 봉투(`resultCode`·`data`) 해체와 필드 대응을 고정한다. 수용 기준 2(A·B 가 같은 모델로) 의 B 쪽 |
+| T-04 | `ACatalogTranslatorTest#translate_withEmptyItems_returnsEmptyList` · `BCatalogTranslatorTest#translate_withEmptyItems_returnsEmptyList` | supplier-client | `items: []` → 빈 목록, 예외 없음 | ✅ | 중간 — "비어 있음 = 실패"로 바꾸는 회귀를 막는다. F6 이 빈 `Fetched` 를 "사라진 상품 전부"로 읽으므로 이 경계가 곧 매핑 삭제의 조건이 된다. Red 없이 통과했다 |
+| T-05 | `BCatalogTranslatorTest#translate_withFailureResultCode_throwsSupplierBResultException` (Parameterized 5) | supplier-client | `E400`~`E503` + `data: null` → `SupplierBResultException`, `resultCode()` 보존 | ✅ | 높음 — B 는 실패도 HTTP 200 이라 이 검사가 없으면 장애가 `Fetched` 가 된다(계약 문서 §6 경고). 코드 보존은 분류기의 입력이다 |
+| T-06 | `BCatalogTranslatorTest#translate_withNullDataOnSuccess_throwsInvalidSupplierResponse` | supplier-client | `0000` + `data: null` → `InvalidSupplierResponseException`, 메시지에 `공급사 B`·`data is null` | ✅ | 중간 — 성공 코드와 빈 본문이 함께 오는 계약 위반을 NPE(→ UNEXPECTED) 가 아니라 INVALID_RESPONSE 로 가게 한다 |
+| T-07 | `ACatalogTranslatorTest#translate_withBlankRequiredField_throwsInvalidSupplierResponse` (Parameterized 6) · `BCatalogTranslatorTest#…` (Parameterized 6) | supplier-client | `items` null / 숙소 코드·이름 / 객실 코드·이름 중 하나가 null·공백 → `InvalidSupplierResponseException`, 메시지에 공급사와 계약 필드명 | ✅ | 높음 — D-F3-7 의 핵심. 추가 전 Red 는 NPE·`IllegalArgumentException` 이었고, 그대로 두면 분류기가 전부 UNEXPECTED 로 보내 "우리 버그" 신호가 오염된다 |
+| T-08 | `FailureClassifierTest#classify_contractHttpStatus_mapsToErrorCode` (Parameterized 5) | supplier-client | `WebClientResponseException` 400/401/429/500/503 → 다섯 유형 | ✅ | 높음 — A 실패 표현의 분류표(규칙 2). 500 과 503 이 갈리는지가 F9 재시도 대상 판별의 근거다 |
+| T-09 | `FailureClassifierTest#classify_supplierBResultCode_mapsToErrorCode` (Parameterized 6) | supplier-client | `SupplierBResultException` `E400`~`E503` → T-08 과 같은 다섯 값, `E999` → INVALID_RESPONSE | ✅ | 높음 — 수용 기준 3(A 503 = B E503 = UNAVAILABLE)의 B 쪽 + 미지 코드가 UNEXPECTED 가 아니라 INVALID_RESPONSE 인 규칙 5 |
+| T-10 | `FailureClassifierTest#classify_timeoutCauses_mapsToTimeout` (Parameterized 2) | supplier-client | `TimeoutException`(호출당 상한) · `BudgetExceededException`(예산) → TIMEOUT | ✅ | 중간 — 조합기가 만드는 두 타입이 하나의 유형으로 모이는지. 규칙 1 이 사슬의 맨 앞임을 함께 고정한다 |
+| T-11 | `FailureClassifierTest#classify_requestExceptionWrappingConnectException_mapsToUnavailable` | supplier-client | `WebClientRequestException(cause=ConnectException)` → UNAVAILABLE | ✅ | 높음 — cause 사슬 추적(D-F3-3 조건 ②)을 실제 WebClient 예외 모양으로 본다. 공급사 서버가 내려간 상황이 이 경로다 |
+| T-12 | `FailureClassifierTest#classify_invalidResponseCauses_mapsToInvalidResponse` (Parameterized 3) | supplier-client | `DecodingException` · `UnsupportedMediaTypeException` · `InvalidSupplierResponseException` → INVALID_RESPONSE | ✅ | 중간 — 규칙 6 의 세 타입 전부. 설계 리스트의 두 타입에 `UnsupportedMediaTypeException` 을 값 변형 행으로 더했다(TST-2) |
+| T-13 | `FailureClassifierTest#classify_unmappedException_mapsToUnexpected` | supplier-client | `IllegalStateException(cause=NPE)` → UNEXPECTED | ✅ | 중간 — 분류표 밖의 예외가 다른 유형으로 새지 않는지. 범용 예외를 INVALID_RESPONSE 로 잡는 "친절한" 수정이 들어오면 실패한다. Red 없이 통과했다 |
+| T-14 | `SupplierACatalogFetcherTest#call_whenApiThrowsSynchronously_failsInsideMono` · `SupplierBCatalogFetcherTest#…` | supplier-client | 프록시 mock 이 호출 즉시 던짐 → `call()` 은 던지지 않고 `block()` 에서 같은 예외 | ✅ | 높음 — 리뷰 확인 항목 ①(`Mono.defer`)을 실행으로 고정한다. `defer` 를 빼는 변이에서 `fetcher.call()` 줄이 실패했다. 이것이 빠지면 조합기 밖에서 예외가 터져 다른 공급사까지 함께 실패한다 |
+| T-15 | `SupplierCatalogAdapterTest#fetchAll_whenAllFetchersSucceed_returnsFetchedInSupplierOrder` | supplier-client | Fetcher 를 B, A 순으로 등록, 둘 다 성공 → `[Fetched(A), Fetched(B)]` | ✅ | 높음 — 수용 기준 1(공급사 수만큼, `Supplier` 값 순서). 등록 순서를 뒤집어 넣어 `List` 순서를 그대로 흘리는 회귀에 실패한다 |
+| T-16 | `SupplierCatalogAdapterTest#fetchAll_whenOneFetcherFails_keepsOtherFetchedAndClassifiesFailure` | supplier-client | B 가 `SupplierBResultException("E503")` → `[Fetched(A), Failed(B, UNAVAILABLE)]` | ✅ | 높음 — 수용 기준 3·4 를 한 번에. 분류기가 어댑터에서 실제로 불리는지를 보는 유일한 테스트다. Red 없이 통과했다(sealed switch 가 갈래를 강제) |
+| T-17 | `CatalogFanOutPropertiesTest#bind_withInconsistentValues_failsAtStartup` (Parameterized 3) | supplier-client | `budget == per-call` / `budget < per-call` / `max-concurrent = 0` → 기동 실패, 메시지에 `supplier.catalog.fan-out.*` 키 | ✅ | 높음 — 수용 기준 5 의 "수집 정책도 부등식 검사를 받는다". 키 이름을 보므로 검색용 검사로 통과하지 않는다 |
+| T-18 | `SupplierHttpClientConfigTest#loadContext_injectsSupplierApisByType` | supplier-client | 서버 없는 컨텍스트 → `SupplierAApi`·`SupplierBApi` 프록시가 타입으로 주입 | ✅ | 중간 — F3a T-10 탐침의 승격. `types` 를 비우면 `UnsatisfiedDependencyException`(추가 전 Red 가 그 상태) |
+| T-19 | `SupplierCatalogConfigTest#loadContext_registersTwoExecutorsWithDifferentPolicies` | supplier-client | 컨텍스트 → `FanOutExecutor` 빈이 `fanOutExecutor`·`catalogFanOutExecutor` 둘, 두 정책이 다름 | ✅ | 중간 — 수용 기준 5 의 "각각 다른 정책으로 뜬다". 정책은 `ReflectionTestUtils` 로 읽는다(근거는 `02-implementation.md` 판단 표) |
+| T-20 | `SupplierCatalogAdapterTest#create_withDuplicateOrMissingFetcher_throwsIllegalState` (Parameterized 2) | supplier-client | A 둘 / B 없음 → 생성 시 `IllegalStateException`, 메시지에 해당 공급사 | ✅ | 높음 — D-F3-8. 누락을 조용히 넘기면 그 공급사는 영원히 수집되지 않고, 중복은 `EnumMap` 이 하나를 덮어쓴다 |
+
+- 만들지 않은 것(TDD-8, 설계 §5): `SupplierCatalogResult`·DTO record·`SupplierErrorCode` enum(단순 값), Fetcher 정상 경로(T-15 가 덮음), hardStop 예외 전파(어댑터에 잡는 코드가 없어 검증할 행동이 없음 — 리뷰 확인 항목 ②), 실제 HTTP 디코딩·`read-timeout`(5.2 k6), 인증 키 마스킹(F3a T-09).
+- Red 없이 통과한 것 3건(T-04·T-13·T-16)은 직전 사이클의 구현이 이미 덮은 행동이다. T-14 는 Red 가 컴파일 오류뿐이라 변이 검사로 보강했다(`02-implementation.md` 사이클 로그).
+- 테스트가 태우지 않는 갈래: 분류기 규칙 3(계약에 없는 HTTP 상태 → UNEXPECTED)과 규칙 7(`WebClientRequestException` 사슬의 `ReadTimeoutException` → TIMEOUT), `CatalogProperty.rooms` null → 빈 목록, 번역기의 `roomTypes`/`rooms` null → 빈 객실 목록. 설계 리스트에 없어 케이스를 늘리지 않았고, 규칙 7 은 5.2 의 k6 "per-call 초과" 항목과 겹친다.
+- 승격으로 사라진 것: F3a T-10 의 탐침 인터페이스 `ProbeSupplierClient`. 같은 테스트 클래스가 실제 두 인터페이스를 주입받는 T-18 이 됐다.
