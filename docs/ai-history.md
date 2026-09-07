@@ -618,3 +618,9 @@
 - **커밋 전 검사**: 금지어 0 · AI 흔적 0(파일·커밋 메시지) · 자격 증명 0 · 외부 원문 0 · T-01~T-23 정리표 대조 전건 존재. `docs/db-schema.html` 의 `lifecycle` 반영은 설계 커밋에 이미 포함.
 - **남긴 이슈**: `:batch-app:bootRun` 은 `--spring.docker.compose.file=../compose.yaml` 인자가 있어야 compose 를 찾는다(모듈 작업 디렉터리에서만 탐색). Gradle `workingDir` 지정은 api-app 과 함께 볼 문제라 이번에 손대지 않았다. 로컬 MySQL 컨테이너를 쓰던 경우 `lifecycle` 컬럼 때문에 재생성이 필요하다(`IF NOT EXISTS` 는 컬럼을 더하지 않는다).
 - **다음**: `/feature-pr catalog-sync` — PR 생성 직후 리뷰 코멘트.
+
+### 83. F6 `catalog-sync` PR #10 — 리뷰 round-1 (2026-09-07)
+
+- **feature-pr — PR #10 생성·리뷰 게시**: 사전 점검(브랜치 일치·clean·커밋 8·188/188·금지어 0·커밋 메시지 흔적 0) 후 `[F6] catalog-sync: 공급사 목록 동기화 배치 (lifecycle·공급사별 격리·batch-app)` — https://github.com/shoeone96/stay-link/pull/10. 본문은 Summary·설계 결정 13장·Test plan(E2E 3건·MySQL 실기동 3회)·실행 커맨드·Out of scope. push 는 `177e757..4e43803` fast-forward(리베이스 전 원격 브랜치가 module-split 병합 시점에 머물러 있어 강제 push 없이 올라갔다).
+- **feature-reviewer round-1**: **error 0 · warn 4 · 인라인 4 · 통과**. 리뷰어가 `--rerun-tasks` 로 188/188 을 독립 재확인하고 결정 카드 D-F6-1~19 의 구현 차단 항목 전부를 코드에서 대조. `catch (RuntimeException)` 은 CLN-6 에 가깝지만 ERROR 로그·skipped·알림·잡 실패로 이어져 삼키지 않으므로 위반으로 두지 않았다. warn — ① `CatalogSyncUseCase.syncAll` 31줄·깊이 4(CLN-2·3), 세 갈래 판정 메서드 추출 제안 ② `sync()` 의 `List<CatalogProperty>` 인자명이 단수 `catalog`(CLN-1·DDD-1, 설계 시그니처는 `properties`) ③ T-17 에 assert 주제 2개(TST-7) — report 동등성은 T-18a 가 이미 고정 ④ `lifecycle NOT NULL` 을 DEFAULT 없이 `IF NOT EXISTS` 로만 더해 **기존 DB 는 validate 에서 기동 실패**, 전진 배포 절차가 저장소에 없음(D-F6-15·16, 범위 판단은 설계 소관). JSON 검사(COMMENT·인라인 4건 모두 diff 안·금지어·흔적 0) 후 사용자의 일괄 위임("쭉 진행")에 따라 게시. 상태표 F6 `PR`.
+- **다음**: warn 반영 여부는 사용자 선택 → `/dev-checkpoint catalog-sync fix` → 커밋·push → `/feature-pr catalog-sync review`. 병합은 GitHub 에서, 상태표 `완료(병합)` 전환은 다음 feature 브랜치 첫 커밋에서.
