@@ -366,11 +366,11 @@
       </div>
 <pre><span class="cm">// Supplier A: 날짜별 net + 세금 → 합산</span>
 totalAmount(A) = Σ(nightlyRate + taxAmount)
-             = (110000+11000) + (140000+14000) + (110000+11000)
-             = <span class="st">396,000 KRW</span>   <span class="cm">// 정수 합산 — 반올림 오차 없음</span>
+             = (110000+11000) + (143000+14300) + (143000+14300)
+             = <span class="st">435,600 KRW</span>   <span class="cm">// 정수 합산 — 반올림 오차 없음</span>
 
 <span class="cm">// Supplier B: 기간 총액 gross → 그대로</span>
-totalAmount(B) = totalPrice = <span class="st">415,800 KRW</span>
+totalAmount(B) = totalPrice = <span class="st">453,600 KRW</span>
 <span class="cm">// taxIncluded는 항상 true라 표준에 싣지 않는다 (정보가 아니라 소음)</span></pre>
     </div>
 
@@ -382,7 +382,7 @@ totalAmount(B) = totalPrice = <span class="st">415,800 KRW</span>
       </div>
 <pre>availableRooms = min(날짜별 remainingRooms)
 
-<span class="cm">// A OCN-DBL: [3, 1, 4] → 1  (09-11이 병목)</span>
+<span class="cm">// A OCN-DBL: [3, 1, 1] → 1  (09-11부터 병목)</span>
 <span class="cm">// 어느 날짜든 0이면 → 0 = 품절. 그 날 안 되면 기간 전체가 안 되니까</span>
 
 soldOut = (availableRooms == 0)   <span class="cm">// D8: 빼지 않고 노출 + 명시적 품절 표기</span></pre>
@@ -418,9 +418,9 @@ soldOut = (availableRooms == 0)   <span class="cm">// D8: 빼지 않고 노출 +
       "roomId": 11,
       "roomName": "Ocean Double",
       "maxOccupancy": 2,
-      "availableRooms": 1,                    <span class="cm">// min(3,1,4) (D7)</span>
+      "availableRooms": 1,                    <span class="cm">// min(3,1,1) (D7)</span>
       "soldOut": false,                       <span class="cm">// 0이면 true, 빼지 않음 (D8)</span>
-      "totalAmount": 396000,                  <span class="cm">// gross 합산 (D6)</span>
+      "totalAmount": 435600,                  <span class="cm">// gross 합산 (D6)</span>
       "currency": "KRW",
       "breakfastIncluded": false,
       "supplier": "A"                         <span class="cm">// 출처 공급사</span>
