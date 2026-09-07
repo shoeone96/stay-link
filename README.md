@@ -454,7 +454,7 @@ WebFlux 전면 도입으로 얻는 것은 "요청 스레드를 블로킹하지 �
 
 ## 신규 공급사를 추가하려면
 
-고칠 곳이 정해져 있습니다. 아래 다섯 군데 밖은 건드리지 않습니다.
+고칠 곳이 정해져 있습니다. 아래 일곱 군데 밖은 건드리지 않습니다.
 
 | # | 무엇 | 어디 |
 |---|---|---|
@@ -462,11 +462,15 @@ WebFlux 전면 도입으로 얻는 것은 "요청 스레드를 블로킹하지 �
 | 2 | HTTP Interface와 원본 응답 DTO | `supplier-client` · `supplier.<새 공급사>` 패키지 |
 | 3 | 번역기 2개 (목록·재고요금) — 원본 필드를 표준 모델로 | 같은 패키지 |
 | 4 | Fetcher 2개 — 스프링 빈으로 등록하면 어댑터가 자동으로 집어 갑니다 | 같은 패키지 |
-| 5 | 설정 — base URL·인증 키·코드 한도 | `application.yaml` |
+| 5 | HTTP Interface를 그룹으로 등록 — `@ImportHttpServices(group = …)` 한 줄과, 마스킹 로그 필터의 그룹명 목록에 그 이름 추가 | `supplier-client` · `SupplierHttpClientConfig` |
+| 6 | 코드 한도 설정의 공급사 칸 — `a`·`b`가 고정 필드인 record라 새 공급사 칸과 `maxCodes` 분기 한 줄 | `supplier-client` · `SupplierAvailabilityProperties` |
+| 7 | 설정 — base URL·인증 키·코드 한도·(선택) 공급사별 타임아웃 | `application.yaml` (검색·수집 앱 각각) |
 
 **유스케이스·어댑터·응답 DTO는 고치지 않습니다.** 어댑터가 주입받은 Fetcher 목록을 공급사 값으로
 색인하므로, 구현을 더하는 것으로 끝나고 기존 코드에 분기가 늘지 않습니다. 등록이 중복되거나 빠지면
-**기동 시점에** 실패합니다.
+**기동 시점에** 실패합니다. 재시도·서킷 인스턴스는 공급사 값으로 만들어지므로 따로 등록할 것이 없습니다.
+5·6번이 남는 이유는 등록기와 설정 바인딩이 자동 색인이 아니라 이름을 열거하는 구조이기 때문이며,
+공급사가 셋째로 늘 때 그 두 곳을 색인 방식으로 바꿀지 판단합니다.
 
 ---
 
@@ -537,6 +541,12 @@ import하면 컴파일이 실패해 경계가 지켜집니다.
 | `docs/features/supplier-resilience/01-design.md` | 재시도·서킷 — 2단 상한의 유도, 서킷 값의 근거, 실측(`04-runtime-verification.md`) |
 | `docs/features/search-cache/01-design.md` | 검색 결과 캐시 — TTL·실패 응답 저장·Redis 장애 시 503의 근거 |
 | `docs/supplier-api-contract.md` | 공급사 API 규약 |
+| `docs/list-api-integration-design.html` · `docs/availability-api-integration-design.html` | 목록·재고요금 통합 모델 설계 (D1~D12, 필드 매칭) |
+| `docs/supplier-response-comparison.html` · `docs/domain-background.html` | A·B 응답 비교와 도메인 배경 |
+| `docs/architecture.html` | 연동 구조도 — F3 병합 시점 스냅샷. 최신 전체 구조는 이 README 상단 다이어그램 |
+| `docs/mock-supplier-behavior.html` · `docs/tech-reference-research.html` | 모의 서버 동작 표·실측, 클라이언트 배선 조사 |
+| `api-docs/index.html` | OpenAPI 문서 (테스트가 생성, 브라우저로 바로 열림) |
+| `k6/` | 부하·꼬리 지연·검색 API 회귀 스크립트 |
 | `docs/db-schema.html` | 테이블 정의 원본 |
 | `docs/test-cases.md` | 테스트 정리표 |
 | `docs/ai-history.md` | AI 활용 기록 — 무엇을 묻고 무엇을 받아들이거나 뒤집었는지 |

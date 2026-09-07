@@ -22,7 +22,7 @@
                                                                            │
                                                                   ┌────────┴─────────┐
                                                                   ▼                  ▼
-                                                        [F10 search-cache]  [F11 unmapped-code-recovery] (선택)
+                                                        [F10 search-cache]  [F11 unmapped-code-recovery] (선택 → 하지 않음, 2026-09-07)
 ```
 
 - **F10의 선행을 F8에서 F9로 바꿨다 (2026-09-07)** — 캐시가 재시도보다 먼저 들어가면 1회 타임아웃이 30초 동안 그 공급사의 미노출로 굳는다. 재시도를 거친 실패여야 30초 저장이 "그 시점의 사실"이 된다.
@@ -119,10 +119,10 @@
 - **포함**
   - 공급사별 클라이언트 인스턴스 생성 — `@ImportHttpServices(group, clientType = WEB_CLIENT, types = {...})`. 등록기가 **인터페이스마다 빈을 만들어** 주므로 쓰는 쪽은 타입으로 주입받아 메서드를 부르면 된다
   - 커넥터 구성 — `spring.http.serviceclient.<group>.*`의 `base-url`·`default-header`·`connect-timeout`·`read-timeout`. Boot 4가 **그룹마다 별도 커넥터**를 만들어 공급사별 차등이 성립한다
-  - fan-out 조합기 `FanOutExecutor` — `flatMap(fn, maxConcurrent)` → `take(budget)` → `collectList()` → `block(hardStop)`. **연산자마다 역할이 하나씩**이며, 예산을 `block`이 아니라 `take`로 표현하는 것이 핵심이다(`block`으로 자르면 이미 도착한 결과까지 사라진다)
+  - fan-out 조합기 `FanOutExecutor` — `flatMap(fn, maxConcurrent)`(F9에서 `maxConcurrent`는 요청의 호출 수로 바뀌었다, D-F9-5) → `take(budget)` → `collectList()` → `block(hardStop)`. **연산자마다 역할이 하나씩**이며, 예산을 `block`이 아니라 `take`로 표현하는 것이 핵심이다(`block`으로 자르면 이미 도착한 결과까지 사라진다)
   - 조합기의 입출력 타입 — `SupplierCall<T>`(공급사 값 + `Mono<T>`)와 `Outcome<T>`(`Success` | `Failed`). **둘 다 `supplier-client`에 산다** — `core`를 넘지 않는다
   - 요청 응답 로깅 필터 — 인증 키 마스킹 포함. `WebClientCustomizer`로 붙는다
-  - `FanOutProperties` — `maxConcurrent`·`perCall`·`budget`. 바인딩 시점에 `budget > perCall` 강제
+  - `FanOutProperties` — ~~`maxConcurrent`~~·`perCall`·`budget`. 바인딩 시점에 `budget > perCall` 강제 (`maxConcurrent` 프로퍼티는 F9에서 삭제, D-F9-5)
 - **제외**
   - 공급사별 HTTP Interface와 원본 DTO — **F3**
   - 도메인 포트·표준 목록 모델·내부 실패 유형(D12) — **F4.** F3a의 `Outcome.Failed`는 `Throwable`만 들고 분류하지 않는다(실패 분류 체계를 둘로 만들지 않기 위해)
@@ -141,7 +141,7 @@
 - **미리 확인한 걸림돌**
   - `@ImportHttpServices`를 단 `@Configuration`을 `supplier-client`에 두었을 때 `api-app`의 컴포넌트 스캔이 집어 오는지는 **아직 확인하지 않았다**. `api-app`은 어댑터를 `runtimeOnly`로만 의존하므로(D-MS-5) 컴파일 시점 참조가 막혀 있다. **문서로 판단하지 않고 최소 예제를 실제로 태워서 확정한다.**
   - `SupplierCatalogFetcher.fetch()`류의 구현은 **본문에서 블로킹하면 안 된다.** `Mono`가 만들어지기 전에 막히면 `.timeout(perCall)`이 붙을 자리가 없어 **어떤 장치도 그 호출을 자르지 못한다.** F3·F4에 계약으로 넘긴다.
-  - **재시도가 붙으면 예산 부등식이 커진다** — `budget > ⌈공급사 수 ÷ maxConcurrent⌉ × perCall × (1 + 최대 재시도)`. 지금은 재시도가 없어 계수를 코드로 넣지 않지만, F9가 이 부등식을 다시 봐야 한다.
+  - ~~**재시도가 붙으면 예산 부등식이 커진다** — `budget > ⌈공급사 수 ÷ maxConcurrent⌉ × perCall × (1 + 최대 재시도)`. 지금은 재시도가 없어 계수를 코드로 넣지 않지만, F9가 이 부등식을 다시 봐야 한다.~~ → **정정 (D-F9-3·5, 2026-09-07).** 재시도는 `perCall` 안쪽 2단 상한이라 우변에 곱해지지 않고, `maxConcurrent` 삭제로 부등식은 `budget > perCall` 하나다.
   - `supplier-client`에는 `@SpringBootApplication`도 서블릿 스택도 없다. 다만 **F3a 테스트에는 웹 서버가 필요 없다** — 조합기는 테스트 더블로, 필터는 `ExchangeFunction` 스텁으로, 그룹 등록은 서버 없는 컨텍스트 테스트로 확인한다. 실제 소켓을 여는 테스트 방식은 **F3이 정한다**.
 
 ## F3. `supplier-client` — 공급사 HTTP 클라이언트
@@ -198,7 +198,7 @@
 
 ## F6. `catalog-sync` — 목록 수집·주기 갱신
 
-- **목적**: 공급사 목록을 가져와 매핑을 upsert 하는 정적 트랙. 기동 1회 + 주기 갱신.
+- **목적**: 공급사 목록을 가져와 매핑을 upsert 하는 정적 트랙. ~~기동 1회 + 주기 갱신.~~ → 확정(D-F6-19): 외부 스케줄러가 하루 1회 one-shot으로 `batch-app`을 실행. 상주·기동 시 수집 없음.
 - **포함**
   - upsert 규칙 — (supplier, 코드)로 조회 → 있으면 내부 id 유지·이름만 갱신, 없으면 신규 발급 (D4 불변식). F1에서 이관된 항목이며 조회·이름 변경 메서드를 여기서 그 쿼리 패턴에 맞춰 추가한다 (D-F1-8)
   - 기동 시 1회 수집 + 주기 갱신 (주기 값과 근거)
@@ -317,7 +317,7 @@
 
 ## 구조 변경 (feature 번호 없음)
 
-- **`module-split`** — 단일 모듈이던 `stay-link`를 `core`(domain+application)·`persistence`(JPA)·`supplier-client`(WebClient, 아직 비어 있음)·`api-app`(presentation) 4개 Gradle 모듈로 분리. F3(`supplier-client`)·F4·F5·F6부터는 이 구조 위에서 진행한다 — 설계·근거는 `docs/features/module-split/01-design.md` 참조. `batch-app`은 F6 설계 시 별도로 만든다. **`supplier-client`는 아직 비어 있고 `core` 의존도 없다 — 그 모듈의 첫 코드와 `core` 의존 선언은 F3a가 넣는다.**
+- **`module-split`** — 단일 모듈이던 `stay-link`를 `core`(domain+application)·`persistence`(JPA)·`supplier-client`(WebClient, 아직 비어 있음)·`api-app`(presentation) 4개 Gradle 모듈로 분리. F3(`supplier-client`)·F4·F5·F6부터는 이 구조 위에서 진행한다 — 설계·근거는 `docs/features/module-split/01-design.md` 참조. `batch-app`은 F6 설계 시 별도로 만든다. ~~**`supplier-client`는 아직 비어 있고 `core` 의존도 없다 — 그 모듈의 첫 코드와 `core` 의존 선언은 F3a가 넣는다.**~~ (F3a에서 넣었고, 이후 `batch-app`(F6)·`cache-redis`(F10)가 더해져 모듈은 8개다.)
 
 ## 마무리 (feature 아님, 상시)
 

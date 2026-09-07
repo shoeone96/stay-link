@@ -28,14 +28,14 @@
 - [x] **2. 조회 aggregator** (병렬 fan-out) → F7 (2026-09-07 병합). 조합기·묶음 분할·포트는 F3a·F5, 유스케이스·역매핑 색인은 F7
 - [x] **3. 부분 실패 + resilience fallback** → F8은 F7에 흡수 (2026-09-07 병합)
   - [x] 일부 공급사 실패/타임아웃 시 부분 결과 + 실패 표시 반환 — 200 + `suppliers[].status`(OK/PARTIAL/FAILED), 전 공급사 실패만 502. 골격(`Outcome`·`FailedChunk`·실패 유형 8개)은 F3a·F3·F5
-- [ ] **4. resilience retry / circuit** (필요시 rate limiter) → F9 `supplier-resilience` 진행 중
-  - [ ] 공급사별 인스턴스 분리, 백오프 + 지터
-- [ ] **5. 캐싱** (single-flight + soft TTL) → F10 `search-cache`
+- [x] **4. resilience retry / circuit** (필요시 rate limiter) → F9 `supplier-resilience` (2026-09-07 병합). rate limiter는 한도 초과가 관측되지 않아 이월(D-F9-10)
+  - [x] 공급사별 인스턴스 분리(`<공급사>:<용도>`), 백오프 + 지터, 2단 상한
+- [x] **5. 캐싱** (single-flight + ~~soft TTL~~ 30초 단일 TTL, Redis, 전원 실패 기억) → F10 `search-cache` (2026-09-07 병합)
 
 ## 마무리
 
-- [ ] README·설계 근거 문서화 (WebFlux 미도입 근거, 결정 요약) — F7 병합으로 루트 README 재작성(빠른 시작·설계 결정·연동 지표·미구현 사유). F9·F10 병합 시마다 갱신
-- [ ] 테스트 정리 (도메인 단위 / 어댑터 통합 / 핵심 플로우) — `docs/test-cases.md`에 기능별 누적 중(210건). 핵심 플로우 E2E는 F7의 검색 API 테스트에 있고, 잔여 공백 점검은 F9·F10 뒤
+- [x] README·설계 근거 문서화 (WebFlux 미도입 근거, 결정 요약) — F10 병합까지 반영(2026-09-07): 구조·시퀀스 다이어그램, 재시도·서킷·캐시 절, 신규 공급사 추가 지점 7곳
+- [x] 테스트 정리 (도메인 단위 / 어댑터 통합 / 핵심 플로우) — `docs/test-cases.md`에 기능별 정리표 누적(298건, 실패 0). 핵심 플로우 E2E는 F7 검색 API 테스트, 실제 HTTP 경계는 k6 + 모의 서버(사람이 돌리는 회귀 장치임을 README에 명시)
 
 ## 추후 고려사항 (지금은 구현하지 않음 — 2026-09-03)
 
