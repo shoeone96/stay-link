@@ -16,6 +16,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 /**
  * 서버 없이 컨텍스트만 올려 검색용·수집용 조합기가 각자의 정책으로 뜨는지 본다. 조합기는 정책을
  * 밖으로 내지 않으므로(그럴 호출자가 없다) 필드를 직접 읽는다 — F3a 클래스를 테스트 때문에 바꾸지 않는다.
+ * 데코레이터의 시도별 상한은 커넥션 풀 배선이 읽는 값이라 접근자가 있어 그쪽을 쓴다.
  */
 @SpringBootTest(
         classes = SupplierCatalogConfigTest.CatalogConfiguration.class,
@@ -52,7 +53,7 @@ class SupplierCatalogConfigTest {
         assertThat(resiliences)
                 .containsOnlyKeys("supplierResilience", "catalogSupplierResilience")
                 .extractingByKeys("supplierResilience", "catalogSupplierResilience")
-                .extracting(resilience -> ReflectionTestUtils.getField(resilience, "attemptTimeout"))
+                .extracting(SupplierResilience::attemptTimeout)
                 .containsExactly(Duration.ofMillis(850), Duration.ofMillis(750));
     }
 

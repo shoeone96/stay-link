@@ -31,6 +31,7 @@ import org.springframework.web.reactive.function.UnsupportedMediaTypeException;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.slf4j.LoggerFactory;
+import reactor.netty.internal.shaded.reactor.pool.PoolAcquireTimeoutException;
 
 /** 예외 객체를 직접 만들어 분류만 태운다. 소켓도, 조합기도 없다. */
 class FailureClassifierTest {
@@ -156,6 +157,29 @@ class FailureClassifierTest {
     }
 
     /**
+     * 자사 커넥션 풀이 자리를 못 내준 것이라 공급사 실패가 아니다. {@code PoolAcquireTimeoutException} 이
+     * {@code TimeoutException} 을 상속하므로 규칙 순서가 어긋나면 조용히 {@code TIMEOUT} 이 되고, WebClient
+     * 가 전송 실패를 감싸므로 사슬 맨 바깥만 보면 {@code UNAVAILABLE} 이 된다 — 둘 다 재시도 대상이자 서킷
+     * 표본이라 우리 병목이 멀쩡한 공급사의 서킷을 연다. 두 모양을 함께 태우는 이유가 이것이다 (D-F9-6).
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("poolExhaustionCauses")
+    @DisplayName("풀 자리를 못 얻은 예외는 감싸여 오든 그대로 오든 TIMEOUT·UNAVAILABLE 이 아니라 POOL_EXHAUSTED 가 된다")
+    void classify_poolAcquireTimeout_mapsToPoolExhausted(String shape, Throwable cause) {
+        // given · when
+        SupplierErrorCode code = FailureClassifier.classify(cause);
+
+        // then
+        assertThat(code).isEqualTo(SupplierErrorCode.POOL_EXHAUSTED);
+    }
+
+    private static Stream<Arguments> poolExhaustionCauses() {
+        return Stream.of(
+                Arguments.arguments("WebClient 가 감싼 모양", requestFailure(poolAcquireTimeout())),
+                Arguments.arguments("감싸이지 않은 모양", poolAcquireTimeout()));
+    }
+
+    /**
      * 판정용 진입점은 재시도 predicate·서킷 predicate·어댑터가 각각 부르므로, 여기서 로그를 남기면
      * 분류표에 없는 예외 하나에 같은 ERROR 가 여러 줄 찍힌다 — 실제 장애 때 가장 시끄러워진다(D-F9-11).
      */
@@ -181,6 +205,14 @@ class FailureClassifierTest {
         appender.start();
         logger.addAppender(appender);
         return appender;
+    }
+
+    /**
+     * 실제 풀이 던지는 그 타입 그대로 만든다. reactor-netty 가 reactor-pool 을 shade 해서 넣으므로 이름이
+     * {@code internal.shaded} 로 시작하며, 그 경로가 바뀌면 이 테스트가 컴파일 단계에서 먼저 깨진다.
+     */
+    static PoolAcquireTimeoutException poolAcquireTimeout() {
+        return new PoolAcquireTimeoutException(Duration.ofMillis(925));
     }
 
     static WebClientRequestException requestFailure(Throwable transportCause) {

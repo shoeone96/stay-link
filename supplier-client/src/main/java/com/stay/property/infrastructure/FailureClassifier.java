@@ -12,6 +12,7 @@ import org.springframework.core.codec.DecodingException;
 import org.springframework.web.reactive.function.UnsupportedMediaTypeException;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.netty.internal.shaded.reactor.pool.PoolAcquireTimeoutException;
 
 /**
  * 공급사 호출이 남긴 예외를 실패 유형으로 바꾸는 단 한 곳.
@@ -73,9 +74,22 @@ public final class FailureClassifier {
         return Optional.empty();
     }
 
+    /**
+     * 풀 고갈 규칙이 {@code TimeoutException} 규칙 <b>앞</b>에 있어야 하는 이유는
+     * {@code PoolAcquireTimeoutException} 이 그 타입을 상속하기 때문이다. 순서가 뒤집히면 자사 병목이
+     * {@code TIMEOUT} 으로 기록되어 재시도 대상이자 서킷 표본이 되고, 부하가 오를수록 우리 풀이 멀쩡한
+     * 공급사의 서킷을 연다 (D-F9-6).
+     *
+     * <p>타입이 {@code reactor.netty.internal.shaded.*} 인 것은 reactor-netty 가 reactor-pool 을 shade
+     * 해서 넣기 때문이고, 그래서 이 이름 말고는 풀 고갈을 가릴 방법이 없다. 예외 메시지를 문자열로 보는
+     * 대안은 조용히 어긋나지만, 타입으로 보면 shade 경로가 바뀌는 순간 <b>컴파일이 깨져</b> 드러난다.
+     */
     private static Optional<SupplierErrorCode> matchOne(Throwable current) {
         if (current instanceof CallNotPermittedException) {
             return Optional.of(SupplierErrorCode.CIRCUIT_OPEN);
+        }
+        if (current instanceof PoolAcquireTimeoutException) {
+            return Optional.of(SupplierErrorCode.POOL_EXHAUSTED);
         }
         if (current instanceof BudgetExceededException || current instanceof TimeoutException) {
             return Optional.of(SupplierErrorCode.TIMEOUT);
@@ -103,11 +117,17 @@ public final class FailureClassifier {
     }
 
     /**
-     * 요청이 나가지 못했거나 응답을 받는 중 끊긴 것. 읽기 타임아웃만 TIMEOUT 으로 가르고 나머지(연결 거부·
-     * 이름 해석 실패·연결 타임아웃)는 전부 "지금 공급사에 닿을 수 없다"로 본다.
+     * 요청이 나가지 못했거나 응답을 받는 중 끊긴 것. 풀 자리를 못 얻은 것과 읽기 타임아웃만 따로 가르고
+     * 나머지(연결 거부·이름 해석 실패·연결 타임아웃)는 전부 "지금 공급사에 닿을 수 없다"로 본다.
+     *
+     * <p>풀 고갈을 여기서 <b>한 번 더</b> 보는 이유는 WebClient 가 전송 실패를 이 예외로 감싸는데, 사슬
+     * 순회가 맨 바깥의 이 타입에서 이미 규칙에 걸려 안쪽까지 내려가지 않기 때문이다.
      */
     private static SupplierErrorCode byTransportFailure(WebClientRequestException request) {
         for (Throwable current = request.getCause(); current != null; current = current.getCause()) {
+            if (current instanceof PoolAcquireTimeoutException) {
+                return SupplierErrorCode.POOL_EXHAUSTED;
+            }
             if (current instanceof ReadTimeoutException) {
                 return SupplierErrorCode.TIMEOUT;
             }

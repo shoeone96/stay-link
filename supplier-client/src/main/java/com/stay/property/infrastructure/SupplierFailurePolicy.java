@@ -22,6 +22,11 @@ public final class SupplierFailurePolicy {
      * 공급사가 아프다는 신호. 우리 요청이 틀린 것({@code INVALID_REQUEST}·{@code UNAUTHORIZED})과 계약
      * 위반({@code INVALID_RESPONSE})은 서킷을 열어도 낫지 않고 진단만 흐려진다. {@code CIRCUIT_OPEN} 을
      * 빼는 이유는 더 직접적이다 — 자기 상태를 자기가 먹이게 된다.
+     *
+     * <p>{@code POOL_EXHAUSTED} 는 두 표 <b>어디에도</b> 없다. 자사 커넥션 풀이 자리를 내주지 못한 것이라
+     * 공급사가 아프다는 신호가 아니고(서킷 표본이 아니다), 자리가 없는데 다시 부르면 같은 줄을 한 번 더
+     * 세울 뿐이다(재시도 대상이 아니다). 이 자리가 비면 부하가 오를수록 우리 병목이 멀쩡한 공급사의
+     * 서킷을 연다 (D-F9-6).
      */
     private static final Set<SupplierErrorCode> CIRCUIT_FAILURES =
             EnumSet.of(

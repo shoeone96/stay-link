@@ -257,21 +257,22 @@ Parameterized 2건(T-12 가 2 케이스, T-16 이 3 케이스)이 펼쳐져 20 �
 
 ## supplier-resilience (2026-09-07)
 
-요약: 총 61 · 통과 61 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 267 · 통과 267 · 실패 0 · 건너뜀 0)
+요약: 총 66 · 통과 66 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 272 · 통과 272 · 실패 0 · 건너뜀 0)
 
 집계 근거는 `./gradlew test --rerun-tasks` 뒤의 `**/build/test-results/test/TEST-*.xml` 이다. 클래스별로
-`ResiliencePolicyTest` 5 · `SupplierFailurePolicyTest` 18 · `SupplierResilienceTest` 11 ·
-`SupplierResiliencePropertiesTest` 10 · `CatalogResiliencePropertiesTest` 10 · `FailureClassifierTest` 에서 2 ·
+`ResiliencePolicyTest` 5 · `SupplierFailurePolicyTest` 20 · `SupplierResilienceTest` 12 ·
+`SupplierResiliencePropertiesTest` 10 · `CatalogResiliencePropertiesTest` 10 · `FailureClassifierTest` 에서 4 ·
 `FanOutExecutorTest` 에서 3 · `SupplierAvailabilityAdapterTest` 와 `SupplierCatalogConfigTest` 에서 각 1.
-설계 리스트의 T-01~T-20 이 Parameterized 로 펼쳐져 61 케이스가 된다.
+설계 리스트의 T-01~T-22 가 Parameterized 로 펼쳐져 66 케이스가 된다. 리뷰 round-1 의 fix-1 에서 5 케이스가
+늘었다 — T-21·T-22(신규)와 T-03·T-04 의 `POOL_EXHAUSTED` 행이다.
 
 | # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
 |---|---|---|---|---|---|
 | T-01 | `ResiliencePolicyTest#attemptTimeout_withSearchValues_derivesFromPerCallAndBackoff` | supplier-client | 검색용 값(시도 2 · 백오프 200~600ms · 지터 0.5)에 `per-call 4s` → 1850ms | ✅ | 높음 — 설계 §3.2 의 유도식이 코드에 그대로 있는지를 값 하나로 고정한다. Red 는 컴파일 실패 |
 | T-02 | `ResiliencePolicyTest#attemptTimeout_withMoreAttempts_shrinksMonotonically` (Parameterized 3) | supplier-client | 시도 1·2·3 → 4000ms · 1850ms · 1083ms | ✅ | 높음 — 시도 1회(백오프 없음)라는 경계에서 호출당 상한이 그대로 나오는지와, 시도를 늘리면 저절로 줄어드는지를 함께 본다. 백오프 합을 빼지 않는 변이는 시도 2·3 행에서 잡힌다 |
 | T-02 | `ResiliencePolicyTest#attemptTimeout_whenPerCallDoesNotExceedBackoffTotal_fails` | supplier-client | 시도 3회의 최악 백오프 합과 정확히 같은 `per-call 750ms` → `IllegalArgumentException`, 메시지에 `per-call` | ✅ | 높음 — 남는 시간이 0 이 되는 경계. 유도 결과가 0이나 음수인 상한을 조용히 만들면 그 호출은 첫 시도부터 잘린다 |
-| T-03 | `SupplierFailurePolicyTest#isRetryable_perErrorCode_followsDecisionTable` (Parameterized 9) | supplier-client | 실패 유형 9종 → 재시도 대상 3종만 true | ✅ | 높음 — 설계 §3.4 표가 곧 코드다. `RATE_LIMITED` 가 false 인 자리가 rate limiter 없이 429 에 대응하는 방법(D-F9-9)이고, `CIRCUIT_OPEN` 이 false 인 자리가 열린 서킷을 두드리지 않게 한다 |
-| T-04 | `SupplierFailurePolicyTest#isCircuitFailure_perErrorCode_followsDecisionTable` (Parameterized 9) | supplier-client | 실패 유형 9종 → 서킷 표본 4종만 true | ✅ | 높음 — T-03 과 갈리는 자리(`RATE_LIMITED`)가 두 판정이 다른 질문에 답한다는 결정을 고정한다. 두 집합을 하나로 합치는 변이는 이 둘이 동시에 잡는다 |
+| T-03 | `SupplierFailurePolicyTest#isRetryable_perErrorCode_followsDecisionTable` (Parameterized 10) | supplier-client | 실패 유형 10종 → 재시도 대상 3종만 true | ✅ | 높음 — 설계 §3.4 표가 곧 코드다. `RATE_LIMITED` 가 false 인 자리가 rate limiter 없이 429 에 대응하는 방법(D-F9-9)이고, `CIRCUIT_OPEN`·`POOL_EXHAUSTED` 가 false 인 자리가 자사 사정을 공급사에게 되돌려 보내지 않게 한다. **변이 검사 E**(`POOL_EXHAUSTED` 를 재시도 대상에 넣기)에서 해당 행이 실패 |
+| T-04 | `SupplierFailurePolicyTest#isCircuitFailure_perErrorCode_followsDecisionTable` (Parameterized 10) | supplier-client | 실패 유형 10종 → 서킷 표본 4종만 true | ✅ | 높음 — T-03 과 갈리는 자리(`RATE_LIMITED`)가 두 판정이 다른 질문에 답한다는 결정을 고정한다. 두 집합을 하나로 합치는 변이는 이 둘이 동시에 잡는다. **변이 검사 F**(`POOL_EXHAUSTED` 를 서킷 표본에 넣기)에서 해당 행이 실패 |
 | T-05 | `SupplierResilienceTest#decorate_whenRetryableFailureIsFollowedBySuccess_succeedsAfterSecondAttempt` | supplier-client | 503 한 번 뒤 성공 → 결과 성공, 공급사 구독 2회 | ✅ | 높음 — 재시도가 실제로 업스트림을 다시 구독하는지. Red 는 컴파일 실패 |
 | T-06 | `SupplierResilienceTest#decorate_whenFailureIsNotRetryable_callsSupplierOnce` | supplier-client | 400 → 구독 1회, 원래 예외 그대로 | ✅ | 높음 — 수용 기준 1 의 "대상이 아닌 유형은 한 번도 다시 시도되지 않는다". 판정 predicate 를 빼고 전부 재시도하는 변이가 여기서 잡힌다. Red 없이 통과(T-05 사이클이 predicate 를 함께 구현) |
 | T-07 | `SupplierResilienceTest#decorate_whenRetriesAreExhausted_propagatesOriginalCause` | supplier-client | 시도 3회 정책으로 계속 실패 → 구독 3회, `isSameAs(원래 예외)` | ✅ | 높음 — 수용 기준 2. `isSameAs` 라 감싼 예외가 올라오면 즉시 실패한다. Reactor `retryWhen` 으로 바꾸면 `RetryExhaustedException` 이 되어 여기서 걸린다(D-F9-2). Red 없이 통과 |
@@ -290,12 +291,16 @@ Parameterized 2건(T-12 가 2 케이스, T-16 이 3 케이스)이 펼쳐져 20 �
 | T-18 | `SupplierResiliencePropertiesTest#bind_withMissingValue_failsAtStartup` | supplier-client | `min-backoff` 를 아예 빼고 바인딩 → 기동 실패, 메시지에 그 키 | ✅ | 높음 — 기간 값이 빠지면 null 로 바인딩되어 첫 호출에서야 터진다. 범위 검사만 두고 부재 검사를 빼는 구현을 막는다 |
 | T-19 | `SupplierAvailabilityAdapterTest#searchAll_withSeveralChunks_decoratesEachChunkWithItsOwnSupplier` | supplier-client | 한도 1 · A 코드 2 · B 코드 1 → `decorate` 3회, 실린 공급사가 A 둘 · B 하나 | ✅ | 높음 — 재시도·서킷이 공급사가 아니라 **묶음** 단위로 걸린다는 배선(D-F9-12)을 고정한다. 어댑터가 데코레이터를 건너뛰면 호출 수가 0이 되어 즉시 잡힌다. Red 는 생성자 시그니처 변경에 따른 컴파일 실패 |
 | T-20 | `SupplierCatalogConfigTest#loadContext_registersTwoResiliencesFromTheirOwnPrefix` | supplier-client | 컨텍스트 기동 → 빈이 둘이고 유도된 시도별 상한이 850ms · 750ms | ✅ | 높음 — 두 빈이 각자 prefix 를 읽는지. 유도값 하나에 `per-call`·시도 수·백오프가 전부 들어가 있어 한쪽 prefix 를 잘못 읽으면 반드시 다른 수가 나온다. 검색용 정책을 수집용에 재사용하는 배선 실수를 막는다 |
+| T-21 | `FailureClassifierTest#classify_poolAcquireTimeout_mapsToPoolExhausted` (Parameterized 2) | supplier-client | 풀 대기 초과 예외를 WebClient 가 감싼 모양 / 감싸이지 않은 모양 → 둘 다 `POOL_EXHAUSTED` | ✅ | 높음 — 두 모양이 각각 다른 규칙에 걸리고 각각 다른 잘못된 답(`UNAVAILABLE`·`TIMEOUT`)으로 새기 때문에 두 케이스가 서로를 대신하지 못한다. **변이 검사 G·H**(두 규칙을 하나씩 제거)에서 각각 한 케이스씩 실패했다. 리뷰 round-1 #1 로 추가 |
+| T-22 | `SupplierResilienceTest#decorate_whenPoolIsExhausted_neitherRetriesNorRecordsFailure` | supplier-client | 풀 고갈로 실패하는 호출을 시도 2회 정책으로 `decorate` → 구독 1회, 원래 예외 그대로, 서킷 실패 표본 0 | ✅ | 높음 — 분류(T-21)와 판정표(T-03·T-04)가 실제 체인에서 함께 도는지를 본다. 표본 수 단언이 있어 "재시도만 막고 서킷에는 먹이는" 절반짜리 구현으로는 통과하지 않는다. 리뷰 round-1 #1 로 추가 |
 | (리스트 밖) | `CatalogResiliencePropertiesTest#bind_withOutOfRangeValue_failsAtStartup` (Parameterized 9) · `#bind_withMissingValue_failsAtStartup` | supplier-client | T-18 과 같은 케이스를 `supplier.catalog.resilience.*` prefix 로 | ✅ | 중간 — 아래 「리스트 밖 테스트」 참조 |
 
 - **리스트 밖 테스트 1건(클래스 단위) — `CatalogResiliencePropertiesTest`.** 설계 §5 의 T-18 은 `supplier.resilience.*` 만 적고 있으나 바인딩 지점은 검색용·수집용 **둘**이다. 한쪽에만 검사를 걸어 두면 나머지 한쪽은 조용히 검사 없이 뜬다 — 기존 `CatalogFanOutPropertiesTest` 가 `FanOutPropertiesTest` 와 나란히 있는 이유와 같다. 새 결정이 아니라 이미 있는 판단(설정 두 벌이면 검사도 두 벌)의 적용이라 설계 이탈 요청이 아니라 리스트 밖 테스트로 더했다.
-- **설계 리스트와 케이스 수가 다른 곳 두 군데.** T-03·T-04 는 리스트에 "8개 유형 (O 3 · X 5)"·"(O 4 · X 4)" 로 적혀 있으나 실제로는 **9개**다 — 같은 설계가 `CIRCUIT_OPEN` 을 더하기로 했고(D-F9-8) §3.4 의 결정표에는 그 행이 있다. 리스트의 숫자가 상수 추가 이전에 쓰인 것으로 보고 표를 기준으로 9종 전부를 태웠다. T-02 는 "Parameterized 4" 인데, 값 단언과 예외 단언은 단언 주제가 달라(TST-7) 메서드 둘로 나누고 합쳐 4 케이스로 맞췄다.
+- **설계 리스트와 케이스 수가 다른 곳 한 군데.** T-02 는 리스트에 "Parameterized 4" 인데, 값 단언과 예외 단언은 단언 주제가 달라(TST-7) 메서드 둘로 나누고 합쳐 4 케이스로 맞췄다. T-03·T-04 는 처음에 리스트의 "8개 유형" 과 어긋난 채(9개) 뒀으나, 리뷰 round-1 이후 설계 §3.4 표에 `POOL_EXHAUSTED` 행이 더해지면서 **리스트와 표와 코드가 10개로 일치**한다.
 - **Red 없이 통과한 것 7건** (T-06·T-07·T-08·T-09 앞 항목·T-10·T-11·T-13). 전부 **앞선 사이클이 그 규칙을 함께 구현한 경우**다 — 재시도 셋은 T-05 사이클에서, 서킷 넷은 T-09 사이클에서 들어갔다. 그래서 **변이 검사 A~D** 를 붙여 각각 "그 값을 바꾸면 이 테스트가 실패한다"를 확인했다(상세는 `docs/features/supplier-resilience/02-implementation.md` 「변이 검사」). T-06·T-07·T-08 에 변이를 따로 만들지 않은 이유는 세 테스트의 관측 대상이 각각 구독 횟수·예외 동일성·가상 시간이라 재시도 구현을 건드리는 어떤 변이든 최소 하나가 반드시 깨지기 때문이다.
+- **fix-1 에서 더한 T-21·T-22 와 T-03·T-04 의 새 행도 Red 없이 통과했다.** 리뷰가 지적한 결함을 먼저 고친 뒤 테스트를 쓴 순서라 그렇다. 대신 **변이 검사 E~H** 로 네 갈래(분류 규칙 둘 · 판정표 둘)를 하나씩 되돌려 각각 어느 케이스가 깨지는지 확인했다(상세는 `02-implementation.md` 「변이 검사 (fix-1)」).
 - **서킷 값은 테스트에서도 설계값 그대로 쓴다** (창 10 · 최소 5 · 임계 50% · 허용 2). 상태 기계가 **우리가 고른 값으로** 도는 것을 보는 것이 목적이라, 테스트하기 쉬운 값으로 갈아 끼우면 확인한 것이 설계와 다른 것이 된다. 짧게 줄인 것은 시계에 묶이는 두 축뿐이다 — 백오프(10~30ms)와 열림 대기(50ms). 열림 대기는 `Thread.sleep(100ms)` 으로 넘긴다.
 - **만들지 않은 것 (TDD-8, 설계 §5)**: Resilience4j 자체 동작(백오프 계산 정확도·슬라이딩 윈도 집계) · `FanOutExecutor` 의 나머지 포트 계약(F3a T-01~06 이 덮고 이 기능이 바꾸지 않는다) · `Properties → Policy` 단순 위임 · half-open 탐침이 성공했을 때 그 값이 응답에 그대로 실리는지(라이브러리가 값을 흘려보내는 동작) · **실제 소켓·커넥션 풀 고갈**.
-- **커넥션 풀 설정은 자동 테스트가 없다.** 설계가 단위 테스트 대상에서 뺐기 때문이다. 대신 **임시 프로브로 실제 컨텍스트를 띄워** 자동 구성된 커넥터가 우리 `ReactorResourceFactory` 를 쓰는지 확인하고 프로브는 삭제했다 — 결과(`maxConnections=50`, 커넥터가 든 provider 가 우리 빈의 인스턴스와 동일)는 `02-implementation.md` 「실제로 돌려서 확인한 것」에 있다. 부하에서의 동작은 k6 와 모의 서버 몫이다.
+- **커넥션 풀 설정 자체는 자동 테스트가 없다.** 설계가 단위 테스트 대상에서 뺐기 때문이다. 대신 **임시 프로브로 실제 컨텍스트를 띄워** 자동 구성된 커넥터가 우리 `ReactorResourceFactory` 를 쓰는지 확인하고 프로브는 삭제했다 — 결과(`maxConnections=50`, 커넥터가 든 provider 가 우리 빈의 인스턴스와 동일)는 `02-implementation.md` 「실제로 돌려서 확인한 것」에 있다. 부하에서의 동작은 k6 와 모의 서버 몫이다.
+- **다만 풀 고갈의 「결과」는 T-21·T-22 가 덮는다.** 소켓 없이 예외 객체만으로 확인할 수 있는 부분(어떤 유형이 되는가, 재시도·서킷이 그 유형을 어떻게 다루는가)이라 단위 테스트로 내려왔다. 리뷰 round-1 #1 이 정확히 이 자리가 비어 드러났다 — 풀 설정은 있었지만 그 설정이 만드는 예외가 `TIMEOUT` 으로 새고 있었다. **대기 타임아웃이 시도별 상한보다 짧다**는 부등식에는 테스트를 두지 않았다. 값이 그 상한에서 나누어 나오므로(설계 §3.2 유도식) 두 값이 어긋날 자리가 구조적으로 없고, 테스트를 쓰면 `x ÷ 2 < x` 를 확인하는 것이 된다.
 - **테스트가 태우지 않는 갈래**: `HALF_OPEN` 에서 자리를 얻은 탐침이 **타임아웃으로** 실패하는 경우(실패 신호의 종류만 다르고 판정 경로는 T-11 과 같다) · `waitDurationInOpenState` 가 지났는데 **아무 호출도 오지 않는** 구간(설계 §3.7 이 "트래픽이 없으면 회복도 없다"로 명시한 성질이고, 관측하려면 시간이 지났음을 확인할 호출이 필요해 정의상 테스트로 고정할 수 없다) · 수집용 데코레이터가 실제 목록 호출에 걸리는 경로(빈 배선은 T-20 이, 어댑터 배선은 `SupplierCatalogAdapterTest` 가 더블로 덮는다).

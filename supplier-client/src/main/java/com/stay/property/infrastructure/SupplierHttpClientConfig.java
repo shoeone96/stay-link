@@ -3,6 +3,7 @@ package com.stay.property.infrastructure;
 import com.stay.property.infrastructure.supplier.a.SupplierAApi;
 import com.stay.property.infrastructure.supplier.b.SupplierBApi;
 import java.time.Duration;
+import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.http.client.autoconfigure.reactive.ClientHttpConnectorBuilderCustomizer;
 import org.springframework.boot.http.client.reactive.ReactorClientHttpConnectorBuilder;
@@ -48,17 +49,26 @@ public class SupplierHttpClientConfig {
     /**
      * 커넥션 풀 크기. 동시 상한을 조합기에서 없앤 뒤로(D-F9-5) <b>바깥으로 나가는 호출의 유일한 상한</b>이
      * 여기다. 기본값을 그대로 두면 {@code max(코어 수, 8) × 2} 라 배포 머신마다 상한이 달라지므로 값을
-     * 못박는다. 50 은 실측(동시 80 까지 p99 33ms, 선형)에서 여유가 확인된 구간이고, 검색 1건이 내는
-     * 호출이 오늘 2건이라 동시 검색 25건까지 대기 없이 흘린다.
+     * 못박는다. 50 은 실측(동시 80 까지 p99 33ms, 선형)에서 여유가 확인된 구간이다.
+     *
+     * <p>이 값은 전체 상한이 아니라 <b>공급사 하나당</b> 상한이다 — reactor-netty 의 자바독이
+     * {@code maxConnections} 를 "the maximum number of connections <b>(per connection pool)</b>" 로
+     * 정의하고 풀은 원격 호스트별로 갈리므로, 공급사가 둘이면 천장은 50 이 아니라 호스트마다 50 이다.
+     * 죽은 공급사가 자리를 붙들어도 그것은 그 공급사의 풀 안이라 살아 있는 공급사의 자리를 줄이지 않는다.
+     * 검색 1건이 공급사마다 묶음 하나씩 내는 오늘 기준으로는 동시 검색 50건까지 대기 없이 흘린다.
      *
      * <p>자사 자원과 예상 동시 요청 수가 정해지면 다시 잡는다 — 설계 §6.1 의 이연 항목이다.
      */
     private static final int MAX_CONNECTIONS = 50;
 
     /**
-     * 풀 자리를 기다리는 시간. 기본값 45초를 그대로 두면 조합기의 {@code per-call} 이 <b>먼저</b> 터져
-     * 자사 병목이 {@code TIMEOUT} 으로 기록되고, 그 표본이 서킷을 열어 멀쩡한 공급사를 차단한다.
-     * {@code per-call} 보다 확실히 짧게 두면 풀 고갈이 고유한 예외로 먼저 터져 구분된다 (D-F9-6).
+     * 풀 자리를 기다리는 시간을 <b>시도별 상한</b>에서 나누는 몫. 기본값 45초를 그대로 두면 우리 상한이
+     * <b>먼저</b> 터져 자사 병목이 {@code TIMEOUT} 으로 기록되고, 그 표본이 서킷을 열어 멀쩡한 공급사를
+     * 차단한다.
+     *
+     * <p>기준이 조합기의 {@code per-call} 이 아닌 이유는, 재시도가 붙은 뒤로 호출을 먼저 자르는 것이
+     * 바깥의 {@code per-call} 이 아니라 같은 체인 안쪽의 시도별 상한이기 때문이다 — 검색용에서
+     * {@code per-call ÷ 2} 는 2s 인데 시도별 상한이 1.85s 라 풀 고갈이 그쪽에 먼저 잘린다 (D-F9-6).
      */
     private static final int PENDING_ACQUIRE_TIMEOUT_DIVISOR = 2;
 
@@ -83,17 +93,20 @@ public class SupplierHttpClientConfig {
     }
 
     /**
-     * 커넥션 풀을 명시 설정한다. 두 공급사 그룹의 커넥터가 이 자원을 함께 쓰므로 상한도 둘의 합에
-     * 걸리며, 그것이 의도다 — 죽은 공급사가 붙든 자리는 살아 있는 공급사가 못 쓰는 자리다.
+     * 커넥션 풀을 명시 설정한다. 두 공급사 그룹의 커넥터가 이 자원을 함께 쓰지만 풀은 원격 호스트별로
+     * 갈리므로 <b>크기</b>는 공급사마다 따로 걸린다. 반면 <b>대기 타임아웃</b>은 이 자원을 쓰는 모든
+     * 경로에 같은 값 하나로 걸리므로, 데코레이터들이 든 시도별 상한 중 <b>가장 짧은 것</b>을 기준으로
+     * 잡는다 — 한 경로에서라도 시도별 상한이 먼저 터지면 그 경로의 풀 고갈은 다시 공급사 실패로
+     * 기록된다 (D-F9-6).
      */
     @Bean
-    ReactorResourceFactory supplierConnectionResources(FanOutPolicy policy) {
+    ReactorResourceFactory supplierConnectionResources(List<SupplierResilience> decorators) {
         ReactorResourceFactory resources = new ReactorResourceFactory();
         resources.setUseGlobalResources(false);
         resources.setConnectionProvider(
                 ConnectionProvider.builder("supplier")
                         .maxConnections(MAX_CONNECTIONS)
-                        .pendingAcquireTimeout(pendingAcquireTimeout(policy.perCall()))
+                        .pendingAcquireTimeout(pendingAcquireTimeout(decorators))
                         .build());
         return resources;
     }
@@ -104,8 +117,13 @@ public class SupplierHttpClientConfig {
         return builder -> builder.withReactorResourceFactory(resources);
     }
 
-    private static Duration pendingAcquireTimeout(Duration perCall) {
-        return perCall.dividedBy(PENDING_ACQUIRE_TIMEOUT_DIVISOR);
+    /** 데코레이터가 하나도 없으면 유도할 기준이 없다 — 배선이 틀린 것이라 기동을 세운다. */
+    private static Duration pendingAcquireTimeout(List<SupplierResilience> decorators) {
+        return decorators.stream()
+                .map(SupplierResilience::attemptTimeout)
+                .min(Duration::compareTo)
+                .orElseThrow(() -> new IllegalStateException("공급사 데코레이터가 없어 풀 대기 시간을 유도할 수 없다"))
+                .dividedBy(PENDING_ACQUIRE_TIMEOUT_DIVISOR);
     }
 
     /**

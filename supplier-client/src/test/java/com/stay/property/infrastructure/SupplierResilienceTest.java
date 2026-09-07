@@ -219,6 +219,28 @@ class SupplierResilienceTest {
         assertThat(blockedCallsOf(resilience, Supplier.A) - blockedBefore).isEqualTo(1);
     }
 
+    /**
+     * 풀 고갈은 <b>자사 병목</b>이라 두 장치 어느 쪽도 건드리면 안 된다 — 자리가 없는데 다시 부르면 같은
+     * 줄을 한 번 더 세우고, 이것을 실패 표본으로 세면 부하가 오를수록 우리 풀이 멀쩡한 공급사의 서킷을
+     * 연다. 예외 모양은 실제 풀이 던지는 타입을 WebClient 가 감싼 그대로다 (D-F9-6).
+     */
+    @Test
+    @DisplayName("풀 자리를 못 얻은 호출은 다시 시도되지 않고 서킷의 실패 표본도 되지 않는다")
+    void decorate_whenPoolIsExhausted_neitherRetriesNorRecordsFailure() {
+        // given — 시도 2회짜리 정책이라 재시도 대상이었다면 두 번 구독된다
+        Throwable cause = FailureClassifierTest.requestFailure(FailureClassifierTest.poolAcquireTimeout());
+        CallLog call = new CallLog(attempt -> Mono.error(cause));
+        SupplierResilience resilience = resilience(ResiliencePolicyFixture.fast(2));
+
+        // when
+        Throwable thrown = catchThrowable(() -> resilience.decorate(Supplier.A, call.mono()).block(PER_CALL));
+
+        // then
+        assertThat(thrown).isSameAs(cause);
+        assertThat(call.subscriptions()).isEqualTo(1);
+        assertThat(failedCallsOf(resilience, Supplier.A)).isZero();
+    }
+
     @Test
     @DisplayName("한 공급사의 서킷이 열려 있어도 다른 공급사의 호출은 그대로 나간다")
     void decorate_whenOneSupplierCircuitIsOpen_leavesTheOtherSupplierUntouched() {
@@ -235,15 +257,24 @@ class SupplierResilienceTest {
         assertThat(callB.subscriptions()).isEqualTo(1);
     }
 
+    private static long blockedCallsOf(SupplierResilience resilience, Supplier supplier) {
+        return breakerOf(resilience, supplier).getMetrics().getNumberOfNotPermittedCalls();
+    }
+
+    /** 표본으로 세지 않은 실패는 창에 성공으로 들어가므로, 실패 표본 수가 0 인 것이 "세지 않았다"의 증거다. */
+    private static int failedCallsOf(SupplierResilience resilience, Supplier supplier) {
+        return breakerOf(resilience, supplier).getMetrics().getNumberOfFailedCalls();
+    }
+
     /**
      * 서킷 상태는 밖으로 내지 않는다 — 그럴 호출자가 없고, 값을 노출하면 조합기가 상태를 보고
      * 분기하고 싶어지는 자리가 생긴다(D-F3A-5 와 충돌). 그래서 계측만 필드에서 직접 읽는다.
      */
     @SuppressWarnings("unchecked")
-    private static long blockedCallsOf(SupplierResilience resilience, Supplier supplier) {
+    private static CircuitBreaker breakerOf(SupplierResilience resilience, Supplier supplier) {
         Map<Supplier, CircuitBreaker> breakers =
                 (Map<Supplier, CircuitBreaker>) ReflectionTestUtils.getField(resilience, "breakers");
-        return breakers.get(supplier).getMetrics().getNumberOfNotPermittedCalls();
+        return breakers.get(supplier);
     }
 
     private static void callRepeatedly(

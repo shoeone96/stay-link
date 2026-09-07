@@ -163,7 +163,7 @@ public record ResiliencePolicy(
 
     /**
      * 재시도가 실제로 기다릴 수 있는 최대 시간. 라이브러리가 지터를 <b>먼저</b> 얹고 그 결과를
-     * {@code maxBackoff} 로 자르므로(‌{@code IntervalFunction.ofExponentialRandomBackoff}) 여기서도
+     * {@code maxBackoff} 로 자르므로({@code IntervalFunction.ofExponentialRandomBackoff}) 여기서도
      * 같은 순서로 계산한다 — 순서를 뒤집으면 유도값이 실제보다 크게 나와 상한이 새어 나간다.
      *
      * <p>기다리는 횟수가 {@code maxAttempts - 1} 인 이유는 {@code maxAttempts} 가 재시도 횟수가 아니라
