@@ -255,7 +255,7 @@ Parameterized 2건(T-12 가 2 케이스, T-16 이 3 케이스)이 펼쳐져 20 �
 - **E2E 격리는 `@Transactional` 롤백**이다. T-19 가 "매핑 테이블이 비어 있음"을 요구하는데 이 앱에는 매핑을 지우는 포트가 없어(F6 의 동기화 경로도 삭제하지 않는다) 앞 테스트의 저장이 남으면 성립하지 않는다. MockMvc 가 같은 스레드에서 도는 덕에 유스케이스가 트랜잭션 없이도(D-F7-6) 테스트가 저장한 행을 본다.
 - **날짜는 실행일 기준**(`LocalDate.now().plusDays(3)`)이다. `@FutureOrPresent` 때문에 고정 날짜를 쓰면 그날이 지나는 순간 테스트가 썩고, 먼 미래로 도망가면 그 값이 그대로 API 문서의 예시가 된다.
 
-## supplier-resilience (2026-09-07)
+## supplier-resilience (2026-09-07, fix-1 갱신 — round-1 리뷰 반영)
 
 요약: 총 66 · 통과 66 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 272 · 통과 272 · 실패 0 · 건너뜀 0)
 
@@ -295,6 +295,7 @@ Parameterized 2건(T-12 가 2 케이스, T-16 이 3 케이스)이 펼쳐져 20 �
 | T-22 | `SupplierResilienceTest#decorate_whenPoolIsExhausted_neitherRetriesNorRecordsFailure` | supplier-client | 풀 고갈로 실패하는 호출을 시도 2회 정책으로 `decorate` → 구독 1회, 원래 예외 그대로, 서킷 실패 표본 0 | ✅ | 높음 — 분류(T-21)와 판정표(T-03·T-04)가 실제 체인에서 함께 도는지를 본다. 표본 수 단언이 있어 "재시도만 막고 서킷에는 먹이는" 절반짜리 구현으로는 통과하지 않는다. 리뷰 round-1 #1 로 추가 |
 | (리스트 밖) | `CatalogResiliencePropertiesTest#bind_withOutOfRangeValue_failsAtStartup` (Parameterized 9) · `#bind_withMissingValue_failsAtStartup` | supplier-client | T-18 과 같은 케이스를 `supplier.catalog.resilience.*` prefix 로 | ✅ | 중간 — 아래 「리스트 밖 테스트」 참조 |
 
+- **T-21·T-22 는 설계 리스트에 원래 없었다 — 리뷰 round-1 #1 이 드러낸 결함을 고정하는 자리다.** 설계는 D-F9-6 에서 "대기 타임아웃을 `per-call` 보다 짧게 두면 풀 고갈이 고유한 예외로 먼저 터져 구분된다"고 적고 그것을 **참으로 전제**했기 때문에, 그 전제를 확인할 테스트를 리스트에 두지 않았다. 실제로는 두 가지가 함께 틀렸다 — 부등식의 기준이 `per-call` 이 아니라 시도별 상한이어야 했고, 타임아웃을 짧게 두는 것만으로는 유형이 갈리지 않았다(`PoolAcquireTimeoutException` 이 `TimeoutException` 을 상속한다). **틀린 전제를 고치면 그 전제는 더 이상 전제가 아니라 지켜야 할 성질**이므로, 설계 §5 리스트에 T-21·T-22 를 더하고(01-design.md 를 함께 정정) 그 아래에서 태웠다. T-20 때와 같은 성격이다 — 새 결정을 만든 것이 아니라 기존 결정(자사 사정을 공급사 실패로 적지 않는다, D-F9-8)이 실제로 성립하는 경계를 고정한 것이라 설계 이탈 요청이 아니다.
 - **리스트 밖 테스트 1건(클래스 단위) — `CatalogResiliencePropertiesTest`.** 설계 §5 의 T-18 은 `supplier.resilience.*` 만 적고 있으나 바인딩 지점은 검색용·수집용 **둘**이다. 한쪽에만 검사를 걸어 두면 나머지 한쪽은 조용히 검사 없이 뜬다 — 기존 `CatalogFanOutPropertiesTest` 가 `FanOutPropertiesTest` 와 나란히 있는 이유와 같다. 새 결정이 아니라 이미 있는 판단(설정 두 벌이면 검사도 두 벌)의 적용이라 설계 이탈 요청이 아니라 리스트 밖 테스트로 더했다.
 - **설계 리스트와 케이스 수가 다른 곳 한 군데.** T-02 는 리스트에 "Parameterized 4" 인데, 값 단언과 예외 단언은 단언 주제가 달라(TST-7) 메서드 둘로 나누고 합쳐 4 케이스로 맞췄다. T-03·T-04 는 처음에 리스트의 "8개 유형" 과 어긋난 채(9개) 뒀으나, 리뷰 round-1 이후 설계 §3.4 표에 `POOL_EXHAUSTED` 행이 더해지면서 **리스트와 표와 코드가 10개로 일치**한다.
 - **Red 없이 통과한 것 7건** (T-06·T-07·T-08·T-09 앞 항목·T-10·T-11·T-13). 전부 **앞선 사이클이 그 규칙을 함께 구현한 경우**다 — 재시도 셋은 T-05 사이클에서, 서킷 넷은 T-09 사이클에서 들어갔다. 그래서 **변이 검사 A~D** 를 붙여 각각 "그 값을 바꾸면 이 테스트가 실패한다"를 확인했다(상세는 `docs/features/supplier-resilience/02-implementation.md` 「변이 검사」). T-06·T-07·T-08 에 변이를 따로 만들지 않은 이유는 세 테스트의 관측 대상이 각각 구독 횟수·예외 동일성·가상 시간이라 재시도 구현을 건드리는 어떤 변이든 최소 하나가 반드시 깨지기 때문이다.
