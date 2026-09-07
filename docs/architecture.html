@@ -923,7 +923,7 @@
 
           <rect x="24" y="116" width="330" height="56" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
           <foreignObject x="24" y="116" width="330" height="56">
-            <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">flatMap(toArrival, maxConcurrent)</div></div>
+            <div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">flatMap(toArrival, calls.size())</div></div>
           </foreignObject>
           <foreignObject x="378" y="108" width="318" height="72">
             <div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">동시에 구독되는 호출 수의 상한. 넘는 호출은 앞이 끝날 때까지 <b>구독조차 되지 않는다</b>.</div></div>
@@ -972,7 +972,7 @@
           </foreignObject>
         </svg>
       </div>
-      <figcaption><b>그림 4.</b> 상한이 <b>세 겹</b>이다. 동시 구독 수(<code>maxConcurrent</code>) · 호출 1건(<code>perCall</code>) · 전체(<code>budget</code>). 커넥터의 <code>read-timeout 45s</code>는 이 셋보다 뒤에 있는 뒷그물이다.</figcaption>
+      <figcaption><b>그림 4.</b> 상한이 <b>두 겹</b>이다 — 호출 1건(<code>perCall</code>) · 전체(<code>budget</code>). F9(2026-09-07)에서 동시 구독 상한(<code>maxConcurrent</code>)을 프로퍼티째 삭제하고 요청마다 호출 수만큼 보내기로 해 웨이브가 항상 1이 되었고, 실제 동시 호출 상한은 <b>커넥션 풀</b>이 맡는다. <code>perCall</code> 안쪽에는 재시도의 <b>시도별 상한</b>이 한 겹 더 있다. 커넥터의 <code>read-timeout</code>은 이 모두보다 뒤에 있는 뒷그물이다.</figcaption>
     </figure>
 
     <div class="fn-card">

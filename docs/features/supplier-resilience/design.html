@@ -871,7 +871,7 @@
           <foreignObject x="600" y="336" width="440" height="44"><div class="fo red" xmlns="http://www.w3.org/1999/xhtml"><div class="s">탐침이 하나라도 실패하면 → 다시 60초</div></div></foreignObject>
 
           <rect x="40" y="396" width="1040" height="102" rx="16" fill="#F4F9FF" stroke="#cfe4ff" stroke-width="1.5"/>
-          <foreignObject x="52" y="404" width="1016" height="86"><div class="fo left" xmlns="http://www.w3.org/1999/xhtml"><div class="d"><b>이 그림이 말하는 설계상의 요점 셋.</b> ① <b>최소 호출 수가 없으면 서킷은 첫 실패에 열린다</b> — 그래서 5가 임계 50%보다 먼저 걸리는 조건이다. ② <b>차단이 이득인 이유는 재시도를 막아서가 아니라 첫 호출을 막아서다</b> — 죽은 공급사로 나가는 호출 하나가 시도별 상한(1.85초) 동안 커넥션 풀 슬롯을 잡고, 그 슬롯은 살아 있는 공급사가 써야 할 것이다(D-F9-5·6). ③ <b>회복 판정은 요청이 와야 일어난다</b> — 트래픽이 없으면 상태도 움직이지 않는다.</div></div></foreignObject>
+          <foreignObject x="52" y="404" width="1016" height="86"><div class="fo left" xmlns="http://www.w3.org/1999/xhtml"><div class="d"><b>이 그림이 말하는 설계상의 요점 셋.</b> ① <b>최소 호출 수가 없으면 서킷은 첫 실패에 열린다</b> — 그래서 5가 임계 50%보다 먼저 걸리는 조건이다. ② <b>차단이 이득인 이유는 재시도를 막아서가 아니라 첫 호출을 막아서다</b> — 죽은 공급사로 나가는 호출 하나가 시도별 상한(1.85초) 동안 <b>검색을 붙들고</b>, 재시도까지 하면 그 검색은 약 3.9초를 기다린 뒤에야 부분 결과를 낸다. ③ <b>회복 판정은 요청이 와야 일어난다</b> — 트래픽이 없으면 상태도 움직이지 않는다.</div></div></foreignObject>
         </svg>
       </div>
       <figcaption>같은 값들이 <b>어느 순간에 무엇을 결정하는지</b>를 한 줄로 이은 것. 표가 정적인 정의라면 이 그림은 그 정의가 작동하는 순서다.</figcaption>
@@ -882,7 +882,7 @@
     <div class="note key"><span class="tag">창은 COUNT_BASED — 시간 기반이면 영영 열리지 않는다 (D-F9-13)</span><span class="term">minimumNumberOfCalls</span> 의 정의에 <b>“(per sliding window period)”</b> 가 붙어 있다. TIME_BASED 를 쓰면 <b>창 기간 안에</b> 최소 호출 수를 채워야 판정이 시작된다.<br><br>우리 호출은 검색 요청에 종속적이라 트래픽이 뜸한 시간대에는 그 수가 모이지 않는다. 그러면 <strong>공급사가 완전히 죽어 있어도 서킷이 열리지 않는다</strong> — 서킷을 둔 목적이 통째로 사라지는 갈래다. COUNT_BASED 는 창을 시간이 아니라 <b>마지막 N건</b>으로 잡으므로 트래픽이 적어도 판정이 성립한다.<br><br><b>느린 호출 판정</b>(<span class="term">slowCall*</span>)을 쓰지 않는 것도 같은 종류의 판단이다 — 그 일은 <b>시도별 상한이 이미 하고 있고</b>, 상한에 걸린 호출은 TIMEOUT 실패로 창에 들어간다.</div>
 
 
-    <div class="note"><span class="tag">왜 토큰 버킷이 아니라 서킷인가</span>AWS Builders' Library 는 서킷에 유보적이다 — <em>“circuit breakers introduce modal behavior… We have found that we can mitigate this risk by limiting retries locally using a token bucket.”</em> 그러나 그 권고는 <strong>재시도 증폭</strong>을 문제로 놓은 것이다 — 같은 단락이 <em>“Even with a single layer of retries, traffic still significantly increases when errors start.”</em> 로 문제를 세우고, <em>“Circuit breakers … are widely promoted to solve <b>this problem</b>.”</em> 로 서킷을 그 해법에 놓은 <b>다음에</b> 유보를 붙인다. AWS 가 재는 것은 <b>재시도로 늘어난 부하</b>다.<br><br>이 시스템에서 죽은 공급사가 물리는 비용은 재시도가 아니라 <strong>첫 호출이 커넥션 풀 슬롯을 시도별 상한 동안 붙드는 것</strong>이다. 동시 상한을 없애고 실제 상한을 풀 하나로 옮겼으므로(D-F9-5·6) <strong>그 슬롯이 가장 희소한 자원</strong>이고, 그것은 <b>살아 있는 공급사가 써야 할 것</b>이다. 토큰 버킷은 이 점유를 한 건도 줄이지 못한다 — 첫 호출은 재시도가 아니기 때문이다.<br><br><b>유보론에 대한 대응</b> — ① 상태 전이를 로그로 남긴다 ② half-open 의 두 전이를 테스트로 못 박는다(AWS 가 “테스트하기 어렵다”고 한 그 부분이다) ③ <span class="term">waitDurationInOpenState</span> 를 과하게 크게 잡지 않는다.</div>
+    <div class="note"><span class="tag">왜 토큰 버킷이 아니라 서킷인가</span>AWS Builders' Library 는 서킷에 유보적이다 — <em>“circuit breakers introduce modal behavior… We have found that we can mitigate this risk by limiting retries locally using a token bucket.”</em> 그러나 그 권고는 <strong>재시도 증폭</strong>을 문제로 놓은 것이다 — 같은 단락이 <em>“Even with a single layer of retries, traffic still significantly increases when errors start.”</em> 로 문제를 세우고, <em>“Circuit breakers … are widely promoted to solve <b>this problem</b>.”</em> 로 서킷을 그 해법에 놓은 <b>다음에</b> 유보를 붙인다. AWS 가 재는 것은 <b>재시도로 늘어난 부하</b>다.<br><br>이 시스템에서 죽은 공급사가 물리는 비용은 재시도가 아니라 <strong>첫 호출이 검색을 시도별 상한 동안 붙드는 것</strong>이다. 재시도까지 하면 검색 1건이 약 <b>3.9초</b>를 기다린 뒤에야 부분 결과를 낸다. 토큰 버킷은 이 점유를 한 건도 줄이지 못한다 — 첫 호출은 재시도가 아니기 때문이다.<br><br><b>부하 실측이 이것을 확인했다</b> — 공급사 하나가 5초씩 지연되는 상태에서 VU 40 · 40초를 걸었더니 31,539 요청 중 <strong>타임아웃 비용을 낸 것은 3건뿐</strong>이고 p(95)가 <b>101ms</b>였다.<br><br><span style="color:#C9303C"><b>정정</b></span> — 여기 원래 “그 슬롯은 살아 있는 공급사가 써야 할 것”이라고 적었으나 <b>사실이 아니다.</b> reactor-netty 의 maxConnections 는 <em>“(per connection pool)”</em> 이고 풀은 <b>원격 호스트별로 갈린다.</b> 결론은 유지되지만 근거가 다르다.<br><br><b>유보론에 대한 대응</b> — ① 상태 전이를 로그로 남긴다 ② half-open 의 두 전이를 테스트로 못 박는다(AWS 가 “테스트하기 어렵다”고 한 그 부분이다) ③ <span class="term">waitDurationInOpenState</span> 를 과하게 크게 잡지 않는다.</div>
 
     <h3>결정 B-2 — 재시도와 서킷 중 어느 쪽이 바깥인가</h3>
     <p>둘 다 <span class="term">Mono</span> 체인의 연산자라 순서를 정해야 하고, 순서가 <strong>서킷 통계의 단위</strong>를 바꾼다.</p>
@@ -965,7 +965,7 @@
             <rect x="780" y="134" width="120" height="26" rx="7" fill="#E8F3FF" stroke="#3182F6"/>
           </g>
           <g font-family="JetBrains Mono, monospace" font-size="10.5" fill="#1B64DA" text-anchor="middle">
-            <text x="840" y="88">묶음 1</text><text x="840" y="120">묶음 2</text><text x="840" y="152">묶음 3</text>
+            <text x="840" y="88">묶음 1</text><text x="840" y="120">묶음 2</text><text x="840" y="152">묶음 1</text>
           </g>
           <path d="M734 112 L776 83" stroke="#3182F6" stroke-width="1.6" fill="none"/>
           <path d="M734 120 L776 115" stroke="#3182F6" stroke-width="1.6" fill="none"/>
@@ -996,7 +996,7 @@
 
     <div class="note key"><span class="tag">허용 수는 2 — Azure 의 의미론을 재현하는 값</span>Azure 문서가 half-open 을 <em>“If <b>any request fails</b>, … it <b>reverts to the Open state</b>”</em> 로 정의한다. 그런데 Resilience4j 는 half-open 도 <strong>실패율</strong>로 판정하고 <span class="term">failureRateThreshold</span> 를 CLOSED 판정과 <b>공유</b>한다 — half-open 만 엄격하게 두는 손잡이가 없다.<br><br><strong>허용 수 2가 그 의미론을 재현한다</strong> — 임계 50%에서 2건 중 1건 실패는 50%이고 “이 비율 <b>이상</b>이면 OPEN”이므로 <b>한 건만 실패해도 되돌아간다.</b> 3이면 1건 실패가 33%라 닫혀 버려 권고와 어긋난다. 탐침이 이미 <b>재시도를 안에 품고</b> 있어 실패한 탐침은 이미 두 번 실패한 것이라는 점도 같은 방향이다.</div>
 
-    <div class="note warn"><span class="tag">허용 수를 「검색 수 × 묶음 수」로 잡는 안은 기각</span>① <b>묶음 수는 런타임 값</b>이라 정적 설정의 인수가 될 수 없다. ② 그 곱이 half-open 을 <strong>무력화한다</strong> — “검색 3건 × 묶음 3개 = 9”면 회복 중인 공급사가 <b>동시에 9건</b>을 받는다. Azure 가 half-open 을 둔 이유가 <em>“prevent a recovering service from suddenly being flooded with requests”</em> 인데 <strong>그 flood 를 설정으로 재현하는 셈</strong>이다. 막으려던 것을 만들게 된다.<br><br>대신 <b>최대 묶음 수 구간</b>으로 판단한다 — 1이면 2 고정, 2~3이면 묶음 수와 같게, <b>4 이상이면 허용 수를 늘리지 말고 구조를 본다</b>(max-codes·묶음 전략·서킷을 거는 층). 발동 조건은 숫자가 아니라 식이다 — <span class="term">⌈코드 수 ÷ max-codes⌉ ≥ 2</span>. <span class="term">max-codes</span> 가 공급사별 값이라 “51곳”으로 적으면 한쪽 계약이 바뀌는 순간 틀려진다.</div>
+    <div class="note warn"><span class="tag">허용 수를 「검색 수 × 묶음 수」로 잡는 안은 기각</span>① <b>묶음 수는 런타임 값</b>이라 정적 설정의 인수가 될 수 없다. ② 그 곱이 half-open 을 <strong>무력화한다</strong> — “검색 3건 × 묶음 1개 = 9”면 회복 중인 공급사가 <b>동시에 9건</b>을 받는다. Azure 가 half-open 을 둔 이유가 <em>“prevent a recovering service from suddenly being flooded with requests”</em> 인데 <strong>그 flood 를 설정으로 재현하는 셈</strong>이다. 막으려던 것을 만들게 된다.<br><br>대신 <b>최대 묶음 수 구간</b>으로 판단한다 — 1이면 2 고정, 2~3이면 묶음 수와 같게, <b>4 이상이면 허용 수를 늘리지 말고 구조를 본다</b>(max-codes·묶음 전략·서킷을 거는 층). 발동 조건은 숫자가 아니라 식이다 — <span class="term">⌈코드 수 ÷ max-codes⌉ ≥ 2</span>. <span class="term">max-codes</span> 가 공급사별 값이라 “51곳”으로 적으면 한쪽 계약이 바뀌는 순간 틀려진다.</div>
 
     <div class="note"><span class="tag">소스로 확정한 두 가지</span><b>① 허용 수를 넘으면 즉시 거부다.</b> <span class="term">HalfOpenState.tryAcquirePermission()</span>이 카운터를 내리고 0이면 <span class="term">CallNotPermittedException</span>을 던진다 — 대기 경로가 없다.<br><b>② <span class="term">maxWaitDurationInHalfOpenState</span>는 0(무한)을 유지한다.</b> 이 값이 막는 위험은 “허용된 호출이 영영 완료되지 않는 것”인데 우리 호출에는 상한이 이중으로 걸려 반드시 종료한다. 반대로 값을 주면 짝인 <span class="term">transitionToStateAfterWaitDuration</span>의 기본값이 <b>OPEN</b>이라, 트래픽이 적을 때 <strong>탐침이 다 모이기 전에 다시 닫아걸어 회복이 늦어진다.</strong></div>
   </section>
@@ -1215,16 +1215,16 @@
           <text x="213" y="98" font-family="JetBrains Mono, monospace" font-size="11" fill="#4E5968" text-anchor="middle">searchAll(query)</text>
 
           <rect x="230" y="126" width="190" height="46" rx="10" fill="#E8F3FF" stroke="#3182F6"/>
-          <foreignObject x="230" y="126" width="190" height="46"><div class="fo blue" xmlns="http://www.w3.org/1999/xhtml"><div class="s">코드 120개 → 묶음 3<br/>(공급사별 max-codes)</div></div></foreignObject>
+          <foreignObject x="230" y="126" width="190" height="46"><div class="fo blue" xmlns="http://www.w3.org/1999/xhtml"><div class="s">코드 3개 → 묶음 1<br/>(공급사별 max-codes)</div></div></foreignObject>
 
           <path d="M325 200 L766 200" stroke="#3182F6" stroke-width="1.8" marker-end="url(#f10b2)"/>
           <text x="545" y="192" font-family="JetBrains Mono, monospace" font-size="11" fill="#1B64DA" text-anchor="middle">decorate(A, fetcher.call(codes)) × 3 — 아직 구독 안 됨</text>
 
           <path d="M325 240 L541 240" stroke="#4E5968" stroke-width="1.8" marker-end="url(#f10a)"/>
-          <text x="433" y="232" font-family="JetBrains Mono, monospace" font-size="11" fill="#4E5968" text-anchor="middle">runAll(6건)</text>
+          <text x="433" y="232" font-family="JetBrains Mono, monospace" font-size="11" fill="#4E5968" text-anchor="middle">runAll(2건)</text>
 
           <rect x="452" y="260" width="186" height="46" rx="10" fill="#F9FAFB" stroke="#E5E8EB"/>
-          <foreignObject x="452" y="260" width="186" height="46"><div class="fo grey" xmlns="http://www.w3.org/1999/xhtml"><div class="s">flatMap(max-concurrent 6)<br/>timeout(per-call 4s)</div></div></foreignObject>
+          <foreignObject x="452" y="260" width="186" height="46"><div class="fo grey" xmlns="http://www.w3.org/1999/xhtml"><div class="s">flatMap(calls.size())<br/>timeout(per-call 4s)</div></div></foreignObject>
 
           <path d="M545 330 L766 330" stroke="#4E5968" stroke-width="1.8" marker-end="url(#f10a)"/>
           <text x="655" y="322" font-family="JetBrains Mono, monospace" font-size="11" fill="#4E5968" text-anchor="middle">구독</text>
