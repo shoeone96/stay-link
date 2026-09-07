@@ -87,3 +87,77 @@ status: 통과
 
 ### 통계
 - error 0 · warn 2 · 인라인 1 · 요약본문 1
+
+## round-3 (2026-09-07 23:37) · PR #14
+
+status: 통과
+
+검사 범위는 `origin/main..HEAD` 전체이되, round-1·2 가 판정한 코드는 재판정하지 않았다. 새로 본 것은 병합 커밋
+`eb8d801`(origin/main 의 F9 를 이 브랜치에 병합)과 그 뒤의 두 커밋 `7dad5e1`(루트 README)·`693c872`(D-F10-15 재검토
+기록)이며, 초점은 ① 손으로 푼 다섯 파일의 병합 정합성 ② 루트 README 가 코드와 일치하는가 ③ D-F10-15 재검토의
+주장이 코드 경로에서 성립하는가 셋이다.
+
+### 위반 목록
+| # | severity | 규칙 ID | 파일:라인 | 인라인 | 위반 내용 | 근거 (01·02의 어느 항목) | 수정 제안 |
+|---|---|---|---|---|---|---|---|
+| 1 | warn | 01 §1.5 · D-F10-15 · F9 01 §3.4 · D-F9-6 | `docs/features/search-cache/02-implementation.md:291-293` | O | 재검토 기록이 "캐시에 저장되는 `FAILED` 는 시도 2회를 거치거나 서킷이 차단한 **뒤의** 판정"이라고 일반화하는데, 이는 **재시도 대상 유형 셋**(`TIMEOUT`·`UNAVAILABLE`·`SUPPLIER_ERROR`)에만 성립한다. `SupplierFailurePolicy.RETRYABLE` 밖의 유형 — `RATE_LIMITED`·`POOL_EXHAUSTED`·`INVALID_REQUEST`·`UNAUTHORIZED`·`INVALID_RESPONSE`·`UNEXPECTED` — 는 첫 시도의 `FAILED` 가 그대로 `StaySearchCache.lead()` → `store.store()` 로 30초 저장된다(코드 경로: `ResiliencePolicy.toRetryConfig().retryOnException` → `isRetryable` 이 false 면 `RetryOperator` 가 즉시 `Mono.error`, `FanOutExecutor.toArrival()` 이 값으로 흡수, `statusOf()` 가 `FAILED`, 캐시는 유형을 보지 않음). 4xx·계약 위반은 결정적이라 저장해도 거짓이 아니고 `RATE_LIMITED` 는 오히려 저장이 유리하다. 문제는 **`POOL_EXHAUSTED`** 다 — F9 가 "자사 병목이라 공급사 실패로 적으면 거짓"이라며 프로세스 로컬 서킷의 표본에서도 뺀 그 실패가, F10 에서는 Redis 를 거쳐 **전 인스턴스에 30초** 전파된다. 한 인스턴스의 풀(공급사당 50)이 잠깐 고갈되면 나머지 인스턴스가 멀쩡해도 그 공급사가 30초 미노출이 된다. §1.5 가 막으려던 "일시 실패가 30초로 굳는" 경우가 이 유형에서 남아 있다. 297행의 "열림 60s > TTL 30s 라 거짓이 아니다" 도 근거가 약하다 — 기억은 열림 창의 어느 시점에서든 시작되므로 서킷이 닫힌 뒤 최대 30초까지 살아남는다(F9 §3.7 ③ 이 이미 인정한 낡음이지, 부등식이 막는 것이 아니다). 코드는 D-F10-8(부분 실패 그대로 저장)을 따르므로 코드 위반은 아니며, `POOL_EXHAUSTED` 는 F10 설계 확정 뒤 F9 fix-1 에서 생긴 유형이라 설계가 볼 수 없었다 | 02 「설계 해석」 · 01 §1.5 "재시도를 거친 FAILED 여야" · F9 01 §3.4 `POOL_EXHAUSTED` 행 · F9 01 §3.7 「캐시가 붙으면」 ③ | 02 의 문장을 "재시도 대상 유형은 재시도 뒤, 그 밖은 첫 시도의 판정"으로 정정하고, `POOL_EXHAUSTED` 만 `FAILED` 인 결과의 저장 여부를 재검토 항목(01 §6 "전제와 재검토" 또는 F9 §6.1 풀 크기 이연과 함께)에 올린다. 코드 변경은 지금 하지 않는다 — 풀 고갈 자체가 미관측(F9 04 「한계」)이라 관측 뒤 정한다 |
+| 2 | warn | 문서≠코드(이번 round 기준) · F9 01 §3.4 | `README.md:387-389` | O | 「검색 결과 캐시」 마지막 불릿 "**재시도 뒤의 `FAILED`라 30초 저장이 거짓이 아닙니다**" 가 #1 과 같은 일반화다. 바로 뒤의 예(타임아웃 한 번)는 재시도 대상이라 맞지만, 굵게 강조한 문장은 재시도하지 않는 유형에는 성립하지 않는다. public 문서라 #1 보다 읽는 사람이 많다 | #1 · README 「재시도와 서킷」 자체가 "재시도 대상은 서킷 기록 대상의 부분집합" 이라 적어 두었다 | "재시도 대상 실패(타임아웃·503·5xx)는 재시도 뒤의 판정이라 …" 로 한정하거나, "재시도하지 않는 유형은 첫 시도의 판정이 그대로 30초 남는다" 한 줄을 더한다 |
+| 3 | warn | LAY-8 · D-F10-16 ② | `README.md:459` | O | 「모듈 구조」의 `cache-redis` 행 "Redis 예외는 이 모듈 안에서 끝납니다". **타입**으로는 맞다 — `core`·`api-app` 은 Redis 예외 타입을 import 하지 않고 `SearchCacheUnavailableException` 의 cause 는 `Throwable` 이다. 그러나 D-F10-16 ② 뒤로 **원인 객체**(`RedisConnectionFailureException` 등 `DataAccessException`)는 cause 로 advice 까지 올라가 503 ERROR 스택에 그대로 찍힌다. 새벽에 api-app 로그에서 Lettuce 스택을 본 사람이 이 문장과 어긋난다고 느낀다 | 01 §3.8 "cause 스택" · round-2 설계 일치 판정(LAY-8 유지 근거) | "Redis 예외 **타입**은 이 모듈 밖으로 나가지 않습니다(원인은 503 로그의 스택에만 남습니다)" 처럼 한정한다 |
+| 4 | warn | 01 §3.8 "검색 1건 = 요약 1줄" · D-F7-14 | `README.md:432-433 · 438` | O | 「연동 지표」가 "요약 로그 **한 줄**" 이라 말하면서 예시 블록의 첫 항목을 두 줄로 접어 보여 주고, 새로 더한 문장이 그 두 줄 묶음을 "첫 줄" 이라 부른다. 코드(`Collected.describe`)는 한 줄이며 파서가 한 줄로 받는다. 접힘은 F7 때부터 있던 표현이지만 "첫 줄·둘째 줄" 문장이 이번에 붙어 두 줄이 별개 이벤트로 읽힐 여지가 생겼다 | `SearchStaysUseCase.Collected.describe()` · README 431-436 | 예시를 실제처럼 한 줄로 두거나(가로 스크롤 감수), "실제로는 한 줄이며 여기서는 접어 보였다" 를 코드 블록 앞에 한 줄 적는다 |
+
+### 병합 정합성 (초점 ①)
+- **병합 커밋 `eb8d801`** (부모: 브랜치 `2af680e` · main `e319ed2`). 손으로 푼 다섯 파일을 양쪽 부모와 각각 diff 했다.
+  - main 쪽 부모 대비: `api-app` main yaml(+13)·test yaml(+7)·`ai-history`(+80)·`test-cases`(+42)는 **추가만** 있고 삭제 0 — F9 가 `main` 에 넣은 내용을 하나도 잃지 않았다. `features/README.md`(+33/−16)의 삭제 16줄은 F10 절의 옛 계획 불릿(soft TTL·Caffeine 등)이라 F10 자신의 교체분이다.
+  - 브랜치 쪽 부모 대비 삭제된 줄: yaml 의 `max-concurrent` 셋(D-F9-5 삭제) · ai-history 의 89~95 제목(91~97 로 밀림) · test-cases 의 F3a 행 셋(F9 가 고친 T-02·T-08·T-17)과 F10 요약 줄(총계에 F9 병합 후 298 을 덧붙임) · features README 의 F9 행(`대기`→`완료(병합)`)과 F9 옛 불릿. 전부 F9 쪽 내용이 이긴 자리이며 F10 내용의 유실은 없다.
+- **yaml**: main 에 `supplier.resilience`(검색)·`supplier.catalog.resilience`(수집)·`stay.search-cache`·`spring.data.redis.*` 넷이 다 있고 `max-concurrent` 는 없다. test yaml 도 `resilience` 두 벌 + `stay.search-cache.enabled: false`.
+- **ai-history 번호**: 89·90 = F9, 91~97 = F10, 98 = 이번 항목. 참조하는 쪽 — `01-design.md` §1.6·§8 "91·92" · "93번", `features/README.md` "91·92번", `design.html` "91·92", `03-review.md` round-1·2 의 "94번·91번·91~94·96번·95·96번" — 전부 옮긴 번호의 내용과 맞는다(94 = 구현·커밋 전 검사, 91 = 착수 전 범위, 96 = fix, 95 = round-1). 97번이 "F9 는 뒤 번호로" 라고 예상했던 것을 98번이 "main 에 이미 들어간 번호를 옮기지 않는다" 로 뒤집은 것도 기록돼 있다.
+- **test-cases**: F9 절(기능 66 · 전체 272)과 F10 절(기능 26 · 전체 237 → F9 병합 후 298)이 나란히 있고 총계가 xml 과 맞는다.
+- **위반은 아니지만 알아야 할 것**: 병합 뒤 `origin/main` 이 **PR #16**(`docs/f9-followup`, 3 커밋 — F9 `02-implementation.md` fix-1 절 132줄 · `04-runtime-verification.md` · `design.html` · `test-cases.md` F9 절 제목·T-21·T-22 설명)만큼 더 나갔다. 그래서 이 round 의 `origin/main..HEAD` 두-점 diff 에는 그 넉 파일의 **역방향 삭제**(−132 등)가 섞여 보이지만 이 브랜치가 지운 것이 아니다. `git merge-tree origin/main HEAD` 로 확인한 결과 **충돌 없음** — PR 병합은 3-way 라 그대로 들어간다. 병합 전에 `origin/main` 을 한 번 더 병합하면 test-cases 의 F9 절이 fix-1 갱신본이 되고 PR 화면의 diff 도 깨끗해진다(선택).
+
+### 설계 일치 판정 — README ≠ 코드 대조 (초점 ②)
+| README 서술 | 코드·설정 근거 | 판정 |
+|---|---|---|
+| 「타임아웃과 예산」 연결 1s · 응답 45s · 검색 4s/5s · 수집 30s/40s | `application.yaml` `serviceclient.*.connect-timeout/read-timeout`, `supplier.fan-out`, `supplier.catalog.fan-out` | 일치 |
+| 부등식 `전체 예산 > 호출당 예산` 하나, 기동 시 검사 · 동시 상한 없음 · 재시도는 우변에 곱해지지 않음 | `FanOutProperties` 생성자 `budget <= perCall` 거부 · `FanOutExecutor.awaitArrived` `flatMap(…, max(1, calls.size()))` · `ResiliencePolicy.attemptTimeout` 이 per-call 안쪽에서 유도 | 일치 |
+| 커넥션 풀 공급사당 50 이 유일한 상한 | `SupplierHttpClientConfig.MAX_CONNECTIONS = 50`, `ConnectionProvider` 는 호스트별 | 일치 |
+| 「재시도와 서킷」 검색 시도 2 · 백오프 200~600ms · 지터 0.5 · 창 10 · 최소 5 · 50% · 열림 60s · 탐침 2 / 수집 시도 3 · 1~3s | yaml `supplier.resilience` · `supplier.catalog.resilience` | 일치 |
+| 시도별 상한 `(4s − 0.3s) ÷ 2 = 1.85s` | `worstCaseBackoffTotal()`: 1회 대기 = min(200ms × (1+0.5), 600ms) = 300ms → (4000−300)/2 = 1850ms | 일치 |
+| 재시도가 바깥, 서킷이 안쪽 | `SupplierResilience.decorate`: `timeout(attempt)` → `CircuitBreakerOperator` → `RetryOperator` | 일치 |
+| 레지스트리 키 `A:availability` · `A:catalog` | `registryKey` = `"%s:%s"`, `AVAILABILITY`/`CATALOG` 상수, `SupplierCatalogConfig` 가 `CATALOG` 로 생성 | 일치 |
+| 차단은 요약 로그에 `CIRCUIT_OPEN` · 429 는 재시도 X 서킷 O · `POOL_EXHAUSTED` 둘 다 X | `FailureClassifier` 89·92행 · `SupplierFailurePolicy.RETRYABLE`/`CIRCUIT_FAILURES` | 일치 |
+| 빠른 시작: `delayMillis=6000` 이면 시도별 상한을 두 번 넘겨 잘리고, 쌓이면 서킷 | `AControlController` `value`·`endpoint` 파라미터, `FaultState.delayMillis` · F9 04 실측 3,944ms | 일치 |
+| 「검색 결과 캐시」 키 = 날짜·인원 넷 · TTL `stay.search-cache.ttl` 30s · 부분 실패·전원 실패 그대로 저장 · 읽기 실패 503/쓰기 실패 WARN · 즉시 거절 + 300ms · JVM single-flight | `StaySearchCommand` record 키 · yaml · `StaySearchCache`/`RedisSearchResultStore` · `SearchCacheRedisConfig.rejectCommandsWhileDisconnected` + `spring.data.redis.timeout` | 일치 (마지막 불릿의 일반화만 #2) |
+| API 표 `503 SEARCH_UNAVAILABLE` "Stays cannot be checked right now", 공급사 호출 없음 | `StayErrorCode.SEARCH_UNAVAILABLE` · `getOrLoad` 가 `find` 에서 던져 loader 미실행 | 일치 |
+| 「연동 지표」 두 로그 줄의 형식 · 레벨 표 | `Summary.of`+`suppliersPart`+`reasonsOf`+`excluded=…results=…elapsedMs=…` · `Summary.head`+`cache=%s results=%d elapsedMs=%d` · `logFetched`/`logCacheHit`/`withoutTargets`(warn)/advice 503(error)/`logStateTransitions`(warn) | 형식·레벨 일치, 표현만 #4 |
+| 「모듈 구조」 `api-app` 이 셋을 `runtimeOnly` | `api-app/build.gradle.kts` 16·17·19행 | 일치 (`cache-redis` 행의 표현만 #3) |
+| 빠른 시작: compose 가 MySQL·Redis 자동 기동 | `compose.yaml` `redis:8` + healthcheck | 일치 |
+
+- T-NN 커버 17/17 유지(이번 round 코드 변경 없음). 결정 카드 반영은 round-2 판정 그대로. `docs/features/README.md` F10 절의 "선행 F9" 와 그림, 상태표 F9 `완료(병합)`·F10 `PR` 이 실제와 맞는다.
+
+### D-F10-15 재검토의 주장 검증 (초점 ③)
+- **경로는 02 가 적은 대로다.** `SupplierAvailabilityAdapter.searchAll` 이 묶음마다 `resilience.decorate(supplier, fetcher.call(...))` 로 `Mono` 를 만들고(79행), `FanOutExecutor.toArrival` 이 `timeout(perCall)` 뒤 `onErrorResume` 으로 **값**으로 흡수하며(141~145행), `fold` → `SupplierAvailabilityResult(offers, failures)` → `SearchStaysUseCase.collect`/`statusOf` 가 `failures` 비어 있지 않고 `offers` 비면 `FAILED`(185~191행) → `fetch` 는 던지지 않고 결과를 돌려주고(97행) → `StaySearchCache.lead` 가 `store.store(command, result)` 를 유형과 무관하게 부른다(57행). 따라서 "캐시가 보는 FAILED 는 데코레이터 **뒤**" 는 위치상 참이다.
+- **"재시도 뒤" 는 유형에 따라 다르다** — 위 #1. 서킷 차단(`CIRCUIT_OPEN`)·재시도 소진(`TIMEOUT` 등)은 02 의 서술대로이고, 비재시도 유형은 첫 시도의 판정이다.
+- 02 가 실기동 재확인을 생략하고 T-07~T-09 + `SupplierResilienceTest` 로 대신한 것은 사용자 지시("바로 머지")가 기록돼 있어 절대 규칙 7 의 "검증 계획이 수행됐는가" 로는 **미수행이 명시된 상태**다. §7 실측 항목이 후속으로 남아 있음을 01 §7 과 02 가 같은 말로 적고 있다.
+
+### 테스트 정리표 판정
+- 유의미함 재판정이 다른 항목: 없음(이번 round 테스트 변경 없음). F10 절 요약(기능 26 · 병합 후 전체 298)이 xml 과 일치한다.
+
+### 실행 검증
+- `./gradlew test --rerun-tasks`: 총 **298** · 통과 298 · 실패 0 · 건너뜀 0 — 02 「D-F10-15 재검토」의 "298/298(F9 272 + F10 26)" 과 **일치**. 모듈별 core 95 · supplier-client 165 · api-app 18 · cache-redis 10 · persistence 7 · batch-app 3 (`**/build/test-results/test/TEST-*.xml`, 2026-09-07 23:32). Docker 가 있어 T-11~T-13 은 실제 Redis 컨테이너로 돌았다.
+- AI 흔적 grep(publish-checks §2 근사 — 모델명·`Co-Authored`·`🤖`·`Generated with`·`noreply@`): diff 추가분 0건(`.claude/` 경로명만 걸리며 이는 main 에 이미 있는 하네스 경로다) · 커밋 메시지 `e319ed2..HEAD` 0건. 이메일(§3): 0건.
+- **금지어 grep(§1): 이번 round 도 수행하지 않았다.** 체크리스트 파일이 작업 디렉터리 밖이라 호출 지시대로 시도하지 않았다. **메인 세션이 게시 전에 공식 절차를 수행한다.** ai-history 98번은 "검사 → 커밋" 순서를 적고 있다.
+
+### (round≥2) 이전 위반 해소
+| 이전 # | 해소 여부 | 근거 |
+|---|---|---|
+| round-2 #1 warn · D-F10-16 · 01 §3.3 ⑤ · §3.8 | **해소** | `01-design.md:205` 에 ⑤' `finally` 의 미완료 future 처리가 의사코드로 들어갔고 209행이 `Error` 갈래의 계약을 적는다. §3.8 「Redis 읽기 실패」 행에 "**cause 스택**을 로그에만 (D-F10-16 ②)" 이 붙었다. ai-history 97번 "게시 전 01 을 고쳐 해소" 와 일치 |
+| round-2 #2 warn · CLN-9 · 로그 파이프라인 | **종결(카드 유지)** | 리뷰 제안대로 코드는 그대로 두고 `01-design.md` §7 에 "Redis 장애 중 ERROR 로그 바이트/초" 실측 항목(452행)이 추가됐다. 실측 뒤 샘플링 여부를 정하는 것으로 재검토 조건이 문서에 남았다 |
+
+### 시니어 관점 코멘트
+- 10배 트래픽에서 먼저 깨지는 것: **아니오** — #1. 풀(공급사당 50)이 잠깐 고갈되면 그 인스턴스의 `POOL_EXHAUSTED` `FAILED` 가 Redis 를 거쳐 나머지 인스턴스에 30초 전파된다. F9 가 프로세스 로컬 서킷에서조차 이 유형을 뺀 이유("우리 병목이 멀쩡한 공급사를 차단한다")가 F10 에서는 더 넓은 범위로 되살아난다. 트래픽이 풀 크기에 닿기 전에는 발생하지 않으므로 지금은 관측 항목이다.
+- 새벽 장애 시 로그만으로 원인 파악: 예(round-2 유지). README 레벨 표가 ERROR 두 종류(전원 실패 502 · Redis 503)를 갈라 적어 조사 시작점이 문서에도 있다.
+- 6개월 뒤 신규 입사자 30분 이해: 예. README 「재시도와 서킷」·「검색 결과 캐시」의 값이 코드와 맞고 각 01 로 이어진다. #3·#4 의 표현만 고치면 된다.
+- 롤백 가능: 예. 이번 round 의 변경은 문서와 병합뿐이고 코드는 round-2 시점 그대로다.
+
+### 통계
+- error 0 · warn 4 · 인라인 4 · 요약본문 0
