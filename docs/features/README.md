@@ -41,9 +41,9 @@
 | F3a | `webclient-config` | 사전작업 3 앞부분(공통 HTTP 배선) | 완료(병합) | 2026-09-07 | 2026-09-07 |
 | F3 | `supplier-client` | 사전작업 3 + 사전작업 4 (목록) — F4를 흡수 (2026-09-07) | 완료(병합) | 2026-09-07 | 2026-09-07 |
 | F4 | `supplier-catalog-adapter` | 사전작업 4 (목록) | F3에 통합 (2026-09-07) | - | - |
-| F5 | `supplier-availability-adapter` | 사전작업 4 (재고·요금) | PR | 2026-09-07 | 2026-09-07 |
+| F5 | `supplier-availability-adapter` | 사전작업 4 (재고·요금) | 완료(병합) | 2026-09-07 | 2026-09-07 |
 | F6 | `catalog-sync` | 사전작업 5 | 대기 | - | - |
-| F7 | `stay-search-api` | 조회 1 + 2 | 대기 | - | - |
+| F7 | `stay-search-api` | 조회 1 + 2 | 설계중 | - | - |
 | F8 | `partial-failure` | 조회 3 | 대기 | - | - |
 | F9 | `supplier-resilience` | 조회 4 | 대기 | - | - |
 | F10 | `search-cache` | 조회 5 | 대기 | - | - |
