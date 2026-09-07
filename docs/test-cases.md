@@ -174,7 +174,7 @@ Mockito 로 대체하고, 어댑터는 조합기 실물(테스트용 정책) + F
 
 ## catalog-sync (2026-09-07)
 
-요약: 총 35 · 통과 35 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 188 · 통과 188 · 실패 0 · 건너뜀 0 — F5 병합 main 위로 리베이스한 뒤 `./gradlew test --rerun-tasks` 결과)
+요약: 총 35 · 통과 35 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 188 · 통과 188 · 실패 0 · 건너뜀 0 — F5 병합 main 위로 리베이스한 뒤 `./gradlew test --rerun-tasks` 결과. 리뷰 round-1 반영(2026-09-07 17:59) 후 `./gradlew test` 로 같은 188/188 재확인)
 
 application 테스트의 리포지터리·공급사 포트·알림 포트는 mock 이고 도메인 객체는 실물이다. 유스케이스 테스트는 `SupplierCatalogSyncService` 도
 실물로 두고 그 아래의 리포지터리만 mock 이다 — 한 공급사의 예외가 리포지터리에서 올라와 격리 경계에 닿는 경로를 그대로 태우기 위해서다(T-17).
@@ -199,7 +199,7 @@ E2E 는 실제 Job·Step·트랜잭션 프록시·H2 위에서 Boot 러너에 �
 | T-14 | `CatalogSyncUseCaseTest#syncAll_emptyResponse_skipsSupplierWithoutTouchingMappings` | application | `Fetched(A, [])` → 리포지터리 무접촉, `skipped == [A]` | ✅ | 높음 — D-F6-7. 0건을 "전부 소실"로 반영하면 그 공급사 상품이 하루 사라진다 |
 | T-15 | `SupplierCatalogSyncServiceTest#sync_propertyWithEmptyRooms_keepsExistingRoomsActive` | application | 기존 `P-001`(객실 `R-001`) + 응답 `P-001` 의 `rooms=[]` → 객실 ACTIVE 유지 | ✅ | 높음 — §3 ⑤ 예외. Red 없이 통과했으나 변이 검사(건너뜀 제거)에서 이 테스트가 실패해 규칙을 지키는 것을 확인했다 |
 | T-16 | `CatalogSyncUseCaseTest#syncAll_failedSupplier_skipsWithoutRepositoryCalls` | application | `Failed(A, TIMEOUT)` → 리포지터리 무접촉, `skipped == [A]` | ✅ | 중간 — 실패 결과를 값으로 받는 D-F3-2 의 소비 쪽. sealed switch 가 갈래를 강제해 Red 없이 통과했다 |
-| T-17 | `CatalogSyncUseCaseTest#syncAll_oneSupplierThrows_stillSyncsOtherSupplier` | application | A 의 조회가 `DataIntegrityViolationException` → B 의 `saveAll` 은 호출, report `synced=[B] skipped=[A]` | ✅ | 높음 — 수용 기준 5 의 흐름 쪽(실제 커밋은 T-23). 격리 catch 를 빼면 예외가 그대로 전파돼 실패한다 |
+| T-17 | `CatalogSyncUseCaseTest#syncAll_oneSupplierThrows_stillSyncsOtherSupplier` | application | A 의 조회가 `DataIntegrityViolationException` → B 의 `saveAll` 은 호출, report `synced=[B] skipped=[A]` | ✅ | 높음 — 수용 기준 5 의 흐름 쪽(실제 커밋은 T-23). 격리 catch 를 빼면 예외가 그대로 전파돼 실패한다. 단언이 둘(B 의 `saveAll` 내용 · report)인 것은 리뷰 round-1 #3 에서 TST-7 로 지적됐으나 유지한다 — 두 번째 단언은 "예외로 끝난 공급사가 synced 가 아니라 skipped 로 분류된다"를 고정하는데, T-18a 는 `Failed` 결과의 분류만 보고 예외 경로의 분류는 다른 어느 테스트도 고정하지 않기 때문이다 |
 | T-18 | `SupplierCatalogSyncServiceTest#sync_noExistingProperties_doesNotQueryRooms` | application | 기존 0건 → `findAllByPropertyIdIn` 미호출 | ✅ | 중간 — §3 ② "id 가 비면 호출하지 않는다". Red 없이 통과했으나 변이 검사(가드 제거)에서 실패를 확인했다 |
 | T-18a | `CatalogSyncUseCaseTest#syncAll_withSkippedSupplier_alertsOnceWithReport` | application | `Failed(A)` + `Fetched(B)` → `alert(report{synced=[B], skipped=[A]})` 정확히 1회 | ✅ | 높음 — D-F6-7c 의 알림 시점을 고정한다. 알림이 공급사마다 불리거나(중복) 빠지면 실패한다 |
 | T-18b | `CatalogSyncUseCaseTest#syncAll_allSuppliersSynced_doesNotAlert` | application | 둘 다 `Fetched` → 알림 포트 무호출 | ✅ | 중간 — 정상 실행마다 알림이 울리는 회귀 방지. Red 없이 통과했으나 변이 검사(조건 제거)에서 실패를 확인했다 |

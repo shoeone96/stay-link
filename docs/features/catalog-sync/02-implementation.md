@@ -147,3 +147,43 @@ api-app 의 `application.yaml` 은 D-F6-15 대로 무변경. 빌드 파일은 �
 3. `feat: [F6] 공급사별 목록 동기화 서비스와 유스케이스` — application 4 파일 · 픽스처 2 · 테스트 2 (T-09~18b)
 4. `feat: [F6] batch-app 모듈 — 잡·태스클릿·로그 알림·MySQL 메타 DDL` — `settings.gradle.kts`·`batch-app/build.gradle.kts`(메인 세션 준비분) · batch-app 소스·리소스 · E2E (T-21~23)
 5. `docs: [F6] 구현 기록과 테스트 정리표` — 이 파일 · `docs/test-cases.md`
+
+## fix-1 (2026-09-07 18:00)
+
+status: 완료
+
+`03-review.md` round-1 의 warn 4건 중 사용자가 반영으로 분류한 #1·#2 를 고쳤고, #3 은 코드를 두고 정리표에 사유를 남겼다. #4 는 개발자 범위 밖(설계·`docs/db-schema.html`)이라 손대지 않았다.
+
+### 사이클 로그
+
+리팩터링만이라 새 테스트는 없다. 고친 뒤 관련 클래스와 전체를 다시 돌렸다.
+
+| T-NN | 테스트 (클래스#메서드) | Red | Green | 비고 |
+|---|---|---|---|---|
+| T-14~T-18b | `CatalogSyncUseCaseTest` 5 · `SupplierCatalogSyncServiceTest` 7 | — (행동 변경 없음) | 5/5 · 7/7 | `./gradlew :core:test --tests` 두 클래스 지정 실행 |
+
+### 전체 테스트 결과
+- 총 188 · 통과 188 · 실패 0 · 건너뜀 0 (근거: `*/build/test-results/test/*.xml`, `./gradlew test` 2026-09-07 17:59)
+
+### 변경 파일
+- `core/src/main/java/com/stay/property/application/CatalogSyncUseCase.java` (수정) 결과 1건의 세 갈래 판정을 `private boolean syncSupplier(SupplierCatalogResult)` 로 분리. `syncAll()` 은 순회 → `if (...) synced.add(...); else skipped.add(...);` → report 조립 → 알림만 남아 16줄·깊이 2
+- `core/src/main/java/com/stay/property/application/SupplierCatalogSyncService.java` (수정) `List<CatalogProperty>` 인자명 `catalog` → `properties` (`sync`·`deactivateMissingProperties`·`applyProperties`·`applyRooms`). 이 이름을 쓰던 `findRoomsByPropertyId` 의 `List<Property>` 인자는 호출자와 같은 `existingProperties` 로 바꿔 두 종류의 목록이 같은 이름을 갖지 않게 했다
+- `docs/test-cases.md` (수정) T-17 유의미함 칸에 단언 2개 유지 사유 · 요약 줄에 재확인 시각
+
+### 설계 이탈 요청
+- 없음
+
+### 처리한 위반
+| 위반 ID(규칙 ID·파일) | 처리 | 미처리 사유 |
+|---|---|---|
+| #1 CLN-2·CLN-3 · `CatalogSyncUseCase.java` | 반영 — 위 변경 파일 첫 항목. `syncSupplier` 는 switch 식으로 `boolean` 을 돌려주고, 루프 본문은 삼항 없이 if/else 두 줄 | |
+| #2 CLN-1·DDD-1 · `SupplierCatalogSyncService.java` | 반영 — 설계 §3 시그니처의 `properties` 로 통일 | |
+| #3 TST-7 · `CatalogSyncUseCaseTest.java:97-100` | 코드 유지, 정리표에 사유 기록 | 두 번째 단언(예외로 끝난 공급사가 skipped 로 분류)은 T-18a 가 고정하지 않는다 — T-18a 는 `Failed` 결과의 분류만 본다. 사용자 분류에 따라 코드는 두고 사유만 남겼다 |
+| #4 D-F6-15·16 · `schema.sql` | 미처리 | 개발자 범위 밖. 메인 세션이 `docs/db-schema.html` 과 F1 설계 카드에 기록한다 |
+
+### 검사
+- 금지어 grep(체크리스트 원문 명령): 0건. AI 흔적 grep: 0건.
+
+### 남은 이슈·커밋 단위 제안
+- 커밋 1건 제안: `refactor: [F6] 리뷰 반영 — 공급사 결과 판정 메서드 분리, 인자명을 설계 시그니처에 맞춤` — core 2 파일 · `docs/test-cases.md` · 이 파일
+- 남은 이슈는 implement 섹션의 목록과 같다(compose 파일 경로·기존 DB 컬럼 추가·db-schema.html).

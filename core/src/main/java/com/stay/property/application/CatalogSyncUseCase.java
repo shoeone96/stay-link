@@ -38,24 +38,10 @@ public class CatalogSyncUseCase {
         List<Supplier> synced = new ArrayList<>();
         List<Supplier> skipped = new ArrayList<>();
         for (SupplierCatalogResult result : supplierCatalogPort.fetchAll()) {
-            switch (result) {
-                case SupplierCatalogResult.Failed failed -> {
-                    log.warn("공급사 목록 실패로 동기화를 건너뛴다 supplier=%s reason=%s"
-                            .formatted(failed.supplier(), failed.reason()));
-                    skipped.add(failed.supplier());
-                }
-                case SupplierCatalogResult.Fetched fetched when fetched.properties().isEmpty() -> {
-                    // 0건은 "상품 전부 소실"이 아니라 응답 결함일 가능성이 커서 매핑을 건드리지 않는다 (D-F6-7).
-                    log.error("공급사 목록이 0건이라 동기화를 건너뛴다 supplier=%s".formatted(fetched.supplier()));
-                    skipped.add(fetched.supplier());
-                }
-                case SupplierCatalogResult.Fetched fetched -> {
-                    if (syncOne(fetched.supplier(), fetched.properties())) {
-                        synced.add(fetched.supplier());
-                    } else {
-                        skipped.add(fetched.supplier());
-                    }
-                }
+            if (syncSupplier(result)) {
+                synced.add(result.supplier());
+            } else {
+                skipped.add(result.supplier());
             }
         }
         CatalogSyncReport report = new CatalogSyncReport(synced, skipped);
@@ -64,6 +50,23 @@ public class CatalogSyncUseCase {
             alerter.alert(report);
         }
         return report;
+    }
+
+    /** 공급사 하나의 결과를 세 갈래로 판정한다. 동기화가 반영됐으면 true, 어떤 이유로든 건너뛰었으면 false. */
+    private boolean syncSupplier(SupplierCatalogResult result) {
+        return switch (result) {
+            case SupplierCatalogResult.Failed failed -> {
+                log.warn("공급사 목록 실패로 동기화를 건너뛴다 supplier=%s reason=%s"
+                        .formatted(failed.supplier(), failed.reason()));
+                yield false;
+            }
+            case SupplierCatalogResult.Fetched fetched when fetched.properties().isEmpty() -> {
+                // 0건은 "상품 전부 소실"이 아니라 응답 결함일 가능성이 커서 매핑을 건드리지 않는다 (D-F6-7).
+                log.error("공급사 목록이 0건이라 동기화를 건너뛴다 supplier=%s".formatted(fetched.supplier()));
+                yield false;
+            }
+            case SupplierCatalogResult.Fetched fetched -> syncOne(fetched.supplier(), fetched.properties());
+        };
     }
 
     /**

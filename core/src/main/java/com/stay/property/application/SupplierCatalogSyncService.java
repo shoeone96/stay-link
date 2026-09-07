@@ -37,21 +37,21 @@ public class SupplierCatalogSyncService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void sync(Supplier supplier, List<CatalogProperty> catalog) {
+    public void sync(Supplier supplier, List<CatalogProperty> properties) {
         List<Property> existingProperties = propertyRepository.findAllBySupplier(supplier);
         Map<Long, List<Room>> existingRoomsByPropertyId = findRoomsByPropertyId(existingProperties);
 
-        deactivateMissingProperties(existingProperties, catalog, existingRoomsByPropertyId);
-        Map<String, Property> propertiesByCode = applyProperties(supplier, catalog, existingProperties);
-        applyRooms(catalog, propertiesByCode, existingRoomsByPropertyId);
+        deactivateMissingProperties(existingProperties, properties, existingRoomsByPropertyId);
+        Map<String, Property> propertiesByCode = applyProperties(supplier, properties, existingProperties);
+        applyRooms(properties, propertiesByCode, existingRoomsByPropertyId);
     }
 
     /** 기존 숙소가 없으면 조회를 내보내지 않는다 — 빈 IN 절을 만들 이유가 없다. */
-    private Map<Long, List<Room>> findRoomsByPropertyId(List<Property> properties) {
-        if (properties.isEmpty()) {
+    private Map<Long, List<Room>> findRoomsByPropertyId(List<Property> existingProperties) {
+        if (existingProperties.isEmpty()) {
             return Map.of();
         }
-        List<Long> propertyIds = properties.stream().map(Property::getId).toList();
+        List<Long> propertyIds = existingProperties.stream().map(Property::getId).toList();
         return roomRepository.findAllByPropertyIdIn(propertyIds).stream()
                 .collect(Collectors.groupingBy(Room::propertyId));
     }
@@ -59,10 +59,10 @@ public class SupplierCatalogSyncService {
     /** 응답에서 빠진 숙소는 판매 중단으로 기록하고, 그 숙소의 객실도 함께 내린다 (D-F6-4 쓰기 연쇄). */
     private void deactivateMissingProperties(
             List<Property> existingProperties,
-            List<CatalogProperty> catalog,
+            List<CatalogProperty> properties,
             Map<Long, List<Room>> existingRoomsByPropertyId) {
         Set<String> codesInResponse = new HashSet<>();
-        for (CatalogProperty catalogProperty : catalog) {
+        for (CatalogProperty catalogProperty : properties) {
             codesInResponse.add(catalogProperty.code());
         }
         for (Property property : existingProperties) {
@@ -76,13 +76,13 @@ public class SupplierCatalogSyncService {
 
     /** 응답의 숙소를 기존과 맞추고, 응답 코드 → 숙소(기존 또는 방금 저장된 것) 색인을 돌려준다. */
     private Map<String, Property> applyProperties(
-            Supplier supplier, List<CatalogProperty> catalog, List<Property> existingProperties) {
+            Supplier supplier, List<CatalogProperty> properties, List<Property> existingProperties) {
         Map<String, Property> propertiesByCode = new HashMap<>();
         for (Property property : existingProperties) {
             propertiesByCode.put(property.supplierPropertyCode(), property);
         }
         List<Property> newProperties = new ArrayList<>();
-        for (CatalogProperty catalogProperty : catalog) {
+        for (CatalogProperty catalogProperty : properties) {
             Property existing = propertiesByCode.get(catalogProperty.code());
             if (existing == null) {
                 newProperties.add(Property.create(supplier, catalogProperty.code(), catalogProperty.name()));
@@ -101,11 +101,11 @@ public class SupplierCatalogSyncService {
     }
 
     private void applyRooms(
-            List<CatalogProperty> catalog,
+            List<CatalogProperty> properties,
             Map<String, Property> propertiesByCode,
             Map<Long, List<Room>> existingRoomsByPropertyId) {
         List<Room> newRooms = new ArrayList<>();
-        for (CatalogProperty catalogProperty : catalog) {
+        for (CatalogProperty catalogProperty : properties) {
             // 객실 목록이 비어서 온 숙소는 판정을 건너뛴다. 응답 결함(공급사 쪽 warn, D-F3-9)일 수 있어
             // 그 숙소의 기존 객실을 전부 판매 중단으로 기록하지 않는다.
             if (catalogProperty.rooms().isEmpty()) {
