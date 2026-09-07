@@ -3,6 +3,11 @@ supplier:
     max-concurrent: 2
     per-call: 2s
     budget: 5s
+  catalog:
+    fan-out:
+      max-concurrent: 2
+      per-call: 3s
+      budget: 7s
 
 spring:
   http:
@@ -11,7 +16,11 @@ spring:
         base-url: http://supplier-a.test
         connect-timeout: 1s
         read-timeout: 2s
+        default-header:
+          X-Api-Key: test-key
       supplier-b:
         base-url: http://supplier-b.test
         connect-timeout: 1s
         read-timeout: 2s
+        default-header:
+          X-Api-Key: test-key
