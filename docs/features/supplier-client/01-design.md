@@ -260,7 +260,7 @@ supplier:
 | 패턴 | 격리하는 변화 | 검토한 대안 |
 |---|---|---|
 | Adapter / ACL — `SupplierCatalogAdapter`가 포트를 구현하고 번역기 A·B가 원본 DTO를 `CatalogProperty`로 바꾼다 | 공급사 API 모양이 바뀌어도 `core`는 표준 모델만 본다 | `core`가 DTO를 직접 읽기 — LAY-1 위반이라 탈락 |
-| Strategy — `SupplierCatalogFetcher` 인터페이스, 구현 A·B, `EnumMap<Supplier, Fetcher>` 등록 | 공급사 C 추가 = Fetcher 1개 + yaml 그룹 1개. 어댑터·포트 무변경 | 어댑터 안 `switch (supplier)` — 공급사마다 분기가 늘어 OOP-4 탈락 |
+| Strategy — `SupplierCatalogFetcher` 인터페이스, 구현 A·B, `EnumMap<Supplier, Fetcher>` 등록 | 공급사 C 추가 = Fetcher 1개 + yaml 그룹 1개. 어댑터·포트 무변경. **정정(2026-09-07)**: F5 가 뒤에 만든 `SupplierAvailabilityProperties` 는 공급사별 한도를 record 필드(`a`·`b`)와 `maxCodes(Supplier)` 의 `switch` 로 받으므로 **그 한 곳은 공급사 수에 종속**된다 — 누락은 enum 전수 `switch` 가 컴파일로 잡는다. 이 문장은 F5 보다 먼저 쓰여 그 지점이 빠져 있었다 | 어댑터 안 `switch (supplier)` — 공급사마다 분기가 늘어 OOP-4 탈락 |
 | 실패를 값으로 — `sealed SupplierCatalogResult`, F3a `Outcome`의 연장 | 한 공급사의 실패가 다른 공급사 결과나 호출 흐름을 끊지 않는다 | 예외 던지기 — D-F3-2에서 탈락 |
 
 Strategy에 `supports(type)` 선택 메서드가 없는 이유: 고르는 것이 아니라 전부 실행하므로(D-F3-1), `EnumMap`의
