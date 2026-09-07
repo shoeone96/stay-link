@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:8
     ports:
-      - "6379"
+      - "6379:6379"   # 호스트 포트 고정 — 임시 포트면 컨테이너 재기동 뒤 주소가 바뀌어 앱이 옛 주소로만 재연결한다
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
