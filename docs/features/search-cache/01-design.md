@@ -59,7 +59,7 @@ updated: 2026-09-07
 
 F9 는 캐시가 앞에 붙어도 서킷 설정을 그대로 둔다고 적었다(F9 설계 §3.7 — 호출이 줄어 표본이 느리게 쌓일 뿐 값의 뜻이 바뀌지 않고, 열리지 않을 때 비용이 0). F10 은 이 판단에 기대며 F9 의 수치를 건드리지 않는다.
 
-### 1.6 착수 전에 닫힌 것 (ai-history 89·90)
+### 1.6 착수 전에 닫힌 것 (ai-history 91·92)
 
 | 질문 | 확정 | 탈락 사유 |
 |---|---|---|
@@ -462,7 +462,7 @@ stay:
 - `docs/features/module-split/01-design.md` — D-MS-4 포트 소유 · D-MS-5 runtimeOnly 어댑터
 - `docs/features/api-response/01-design.md` — D-F0-4·10 · 예외 타입 = 오류 유형
 - `docs/features/catalog-sync/01-design.md` — D-F6-13 스캔 범위
-- 착수 전 대화: `docs/ai-history.md` 89·90번
+- 착수 전 대화: `docs/ai-history.md` 91·92번
 - 프로젝트 규칙: `.claude/skills/coding-standard`, `.claude/skills/test-standard`, `.claude/publish-checks.md`
 - 시각화: `docs/features/search-cache/design.html` (결정의 원본은 이 md)
 
@@ -502,7 +502,7 @@ stay:
 | `docs/features/README.md` | F10 절 — "Redis 장애 시 우회" 를 **503** 으로, "설정은 api-app" 을 **`cache-redis` 모듈**로 정정 · 완료 기준의 "Redis 를 내려도 200" 을 "503 이 300ms 안에" 로 · 상태표 F10 설계 날짜 |
 | `.claude/skills/test-standard/SKILL.md` | 환경 전제에 Testcontainers 예외 기록 |
 | `docs/features/stay-search-api/01-design.md` | D-F7-16 행에 "F10 의 503 핸들러가 두 번째 사례" 한 줄 |
-| `docs/ai-history.md` | 설계 대화의 의사결정 여정 (91번) |
+| `docs/ai-history.md` | 설계 대화의 의사결정 여정 (93번) |
 | `docs/test-cases.md` | T-01~T-17 정리표 (구현 단계에서 누적) |
 
 ### F9 와의 병합 조정

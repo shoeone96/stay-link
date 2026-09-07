@@ -30,8 +30,8 @@ public sealed interface Outcome<T> {
 
     /**
      * @param elapsed 호출이 실제로 나갔다 실패한 경우에는 그 호출 하나의 경과, 예산에 잘린 경우에는
-     *     <b>호출자가 기다린 전체 시간</b>이다. 후자는 동시 호출 상한 때문에 구독조차 되지 않았을 수
-     *     있어 그 호출만의 경과가 존재하지 않는다.
+     *     <b>호출자가 기다린 전체 시간</b>이다. 후자는 예산이 끊는 시점에 아직 응답이 오지 않았을 뿐이라
+     *     그 호출만의 경과를 따로 셀 수 없다.
      */
     record Failed<T>(Supplier supplier, Throwable cause, Duration elapsed) implements Outcome<T> {
 

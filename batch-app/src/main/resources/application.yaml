@@ -43,11 +43,29 @@ supplier:
     availability:
       max-codes: 50
   fan-out:
-    max-concurrent: 2
     per-call: 4s
     budget: 5s
+  resilience:                      # 검색용 재시도·서킷. 아래 값의 단위는 논리 호출이 아니라 '시도'다
+    max-attempts: 2                # 최초 호출을 포함한 총 시도 수. 재시도는 1회다
+    min-backoff: 200ms
+    max-backoff: 600ms
+    jitter-factor: 0.5             # 재시도가 한꺼번에 몰리지 않게 대기를 흩는다
+    sliding-window-size: 10
+    minimum-number-of-calls: 5     # 기본값 100 을 그대로 쓰면 우리 트래픽에서는 서킷이 영영 열리지 않는다
+    failure-rate-threshold: 50
+    wait-duration-in-open-state: 60s
+    permitted-calls-in-half-open: 2  # 임계 50% 와 짝이라 탐침이 하나라도 실패하면 다시 열린다
   catalog:
     fan-out:                       # 수집용. 배치가 기다리고 다 받는 것이 중요하므로 길다. 공급사 2 → 40s > ⌈2÷2⌉×30s
-      max-concurrent: 2
       per-call: 30s
       budget: 40s
+    resilience:                    # 수집용. 검색과 다른 것은 재시도 축뿐이다 —
+      max-attempts: 3              # 배치가 기다리고 다 받는 것이 중요하므로 시도를 하나 더 준다
+      min-backoff: 1s
+      max-backoff: 3s
+      jitter-factor: 0.5
+      sliding-window-size: 10      # 서킷 판정은 '공급사가 아픈가'를 묻는 것이라 대기 주체와 무관하다
+      minimum-number-of-calls: 5
+      failure-rate-threshold: 50
+      wait-duration-in-open-state: 60s
+      permitted-calls-in-half-open: 2

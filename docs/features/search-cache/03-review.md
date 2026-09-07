@@ -9,7 +9,7 @@ status: 수정 필요
 ### 위반 목록
 | # | severity | 규칙 ID | 파일:라인 | 인라인 | 위반 내용 | 근거 (01·02의 어느 항목) | 수정 제안 |
 |---|---|---|---|---|---|---|---|
-| 1 | error | publish-checks §1 (TST-10) | `docs/ai-history.md:738` | O | 92번 항목의 「커밋 전 검사」 문장이, 그 검사에서 **걸렸던 낱말 둘을 따옴표로 그대로 다시 인용**한다. 같은 낱말이 89번에서 3건 걸려 고쳤다고 기록한 바로 그 문장이라, 체크리스트 패턴이 그 낱말에 매치된다면 이 줄 자체가 다시 걸린다. 리뷰어는 체크리스트 파일(`../저장소-금지사항-체크리스트.md`)이 작업 디렉터리 밖이라 권한 설정으로 읽지 못했고 우회하지 않았다 — **공식 grep 은 메인 세션이 게시 전에 반드시 수행**해야 한다 | publish-checks §1 "0건이어야 한다", 절대 규칙 9 | 낱말을 인용하지 말고 "낱말 둘을 다른 표현으로 바꿔 0건" 처럼 서술한다. 메인 세션이 공식 grep 을 돌려 0건이면 이 항목은 닫는다 |
+| 1 | error | publish-checks §1 (TST-10) | `docs/ai-history.md:738` | O | 94번 항목의 「커밋 전 검사」 문장이, 그 검사에서 **걸렸던 낱말 둘을 따옴표로 그대로 다시 인용**한다. 같은 낱말이 91번에서 3건 걸려 고쳤다고 기록한 바로 그 문장이라, 체크리스트 패턴이 그 낱말에 매치된다면 이 줄 자체가 다시 걸린다. 리뷰어는 체크리스트 파일(`../저장소-금지사항-체크리스트.md`)이 작업 디렉터리 밖이라 권한 설정으로 읽지 못했고 우회하지 않았다 — **공식 grep 은 메인 세션이 게시 전에 반드시 수행**해야 한다 | publish-checks §1 "0건이어야 한다", 절대 규칙 9 | 낱말을 인용하지 말고 "낱말 둘을 다른 표현으로 바꿔 0건" 처럼 서술한다. 메인 세션이 공식 grep 을 돌려 0건이면 이 항목은 닫는다 |
 | 2 | warn | 01 §3.3 ⑤ · OOP-5 | `core/.../StaySearchCache.java:56-61` | O | `lead` 가 `RuntimeException` 만 잡는다. loader 에서 `Error`(OOM·StackOverflow)가 나면 `mine` 이 완료되지 않은 채 `finally` 가 맵에서 지워, 이미 `join()` 에 파킹된 대기자 전원이 **영원히 깨어나지 않는다**(요청 스레드가 클라이언트 타임아웃까지 매달린다). §3.3 ⑤ 의 계약 "대기자 전원에게 같은 예외"가 이 갈래에서 깨진다. 설계 의사코드도 같은 모양이라 코드가 설계와 어긋난 것은 아니다 | 01 §3.3 ⑤·⑥, §3.3 "가상 스레드에서 join 은 파킹" | catch-all 없이(CLN-6) `finally` 에서 `if (!mine.isDone()) mine.completeExceptionally(new IllegalStateException("loader exited without result"))` 한 줄. 또는 설계 §3.3 의 의사코드를 함께 고친다 |
 | 3 | warn | CLN-9 · CLN-6 | `core/.../SearchCacheUnavailableException.java:19-20` | O | 예외 메시지에 원인의 **클래스명만** 싣고 원인 메시지·스택은 버린다. `BusinessException` 에 cause 체인이 없어 advice 의 ERROR 줄에도 `cause=RedisSystemException` 까지만 남는다. 새벽 장애 때 "연결 거부인지, 인증 실패인지, 어느 호스트인지"가 로그에 없다. 02 「설계와 다르게 한 곳」 3번째 항목이 이 한계를 스스로 적었다 | 01 §3.6 "(연산, 키, 원인 클래스)" · §3.8 "예외 메시지를 로그에만" · 02 §설계와 다르게 한 곳 | 설계 문구를 넘지 않는 최소 수정: 메시지에 `cause.getMessage()` 를 덧붙인다(Lettuce 메시지는 호스트·포트·타임아웃 ms 를 담는다). `BusinessException` 에 cause 생성자를 더하는 것은 F0 구조 변경이라 별도 판단 |
 | 4 | warn | CLN-9 · CLN-6 | `cache-redis/.../RedisSearchResultStore.java:57` | O | `store` 실패 WARN 이 예외 객체를 로거에 넘기지 않고 클래스명만 찍는다. "절대 던지지 않는다"는 계약은 맞지만, 삼킨 예외의 원인 메시지가 어디에도 남지 않는다 | 01 §3.3 포트 계약 2 "WARN 한 줄(연산·키·원인 클래스)" | `log.warn("...", key, e.getClass().getSimpleName(), e)` 처럼 마지막 인자로 `e` 를 넘긴다(한 줄 원칙은 메시지 줄 기준이고 스택은 같은 이벤트다). 스택이 시끄러우면 `e.getMessage()` 만이라도 |
@@ -21,7 +21,7 @@ status: 수정 필요
 - 설계가 "구현 시 확인"으로 열어 둔 자리 4개(Testcontainers 아티팩트·Jackson 3 직렬화기·Lettuce 커스터마이저 위치·timeout 키)는 02 가 BOM·jar 근거로 채웠고, 특히 `LettuceClientOptionsBuilderCustomizer` 선택은 설계가 이름 붙인 쪽이 `TimeoutOptions` 를 지우는 함정을 피한 것이라 이탈이 아니다.
 - 이탈: 없음. `SearchStaysUseCaseTest` 가 `@InjectMocks` 대신 실물 캐시 + 가짜 store 를 쓰는 것과 E2E 의 `@MockitoBean SearchResultStore` 는 01 §5 가 명시한 방식이라 TST-3 위반으로 보지 않는다. `common.web` advice 가 컨텍스트 예외를 하나 더 import 하는 것은 D-F7-16 이 이연·기록한 사례라 LAY-6 으로 지적하지 않는다.
 - LAY-2: `core/**/domain` 의 Spring·EntityManager import 0건(grep). LAY-1: `api-app`·`batch-app` 소스에 `property.infrastructure` import 0건, `cache-redis → core` 단방향.
-- 「함께 고치는 문서」 5건(README F10 절·상태표, test-standard 환경 전제, stay-search-api D-F7-16, ai-history 89~92, test-cases) 전부 diff 에 있다. `api-docs/openapi3.json` 에 503 응답이 반영됐다.
+- 「함께 고치는 문서」 5건(README F10 절·상태표, test-standard 환경 전제, stay-search-api D-F7-16, ai-history 91~94, test-cases) 전부 diff 에 있다. `api-docs/openapi3.json` 에 503 응답이 반영됐다.
 
 ### 테스트 정리표 판정
 - 유의미함 재판정이 다른 항목: 없음. 17행 전부 높음이며 각 행이 수용 기준 또는 결정 카드를 가리킨다. 낮음 없음.
@@ -68,12 +68,12 @@ status: 통과
 - `./gradlew test --rerun-tasks`: 총 **237** · 통과 237 · 실패 0 · 건너뜀 0 — 02 fix-1 집계와 **일치**. 모듈별 core 95 · supplier-client 104 · api-app 18 · cache-redis 10 · persistence 7 · batch-app 3 (`**/build/test-results/test/TEST-*.xml`, 2026-09-07 23:03). Docker 가 있어 T-11~T-13 은 실제 Redis 컨테이너로 돌았다.
 - **변이 검사(리뷰어 수행)**: `StaySearchCache.java` 만 round-1 시점(`5a50868`)으로 되돌려 `:core:test --tests StaySearchCacheTest` 실행 → 9건 중 **1건 실패**(T-05 두 번째 메서드만). 파일은 즉시 HEAD 로 원복했고 작업 트리는 깨끗하다. 02 가 적은 Red("대기자 8건이 5초 안에 끝나지 않음")가 재현된다.
 - AI 흔적 grep(publish-checks §2, 파일·커밋 메시지): 0건 · 0건. 자격 증명·이메일(§3): 0건 · 0건. 외부 원문 확장자(§4 추적 파일): 0건.
-- **금지어 grep(§1): 이번 round 도 수행하지 않았다.** 체크리스트 파일이 작업 디렉터리 밖이라 읽을 수 없고, 호출 지시대로 시도하지 않았다. 메인 세션이 게시 전에 공식 절차를 수행해야 하며, ai-history 94번은 커밋 전 검사에서 0건이었다고 적고 있다.
+- **금지어 grep(§1): 이번 round 도 수행하지 않았다.** 체크리스트 파일이 작업 디렉터리 밖이라 읽을 수 없고, 호출 지시대로 시도하지 않았다. 메인 세션이 게시 전에 공식 절차를 수행해야 하며, ai-history 96번은 커밋 전 검사에서 0건이었다고 적고 있다.
 
 ### (round≥2) 이전 위반 해소
 | 이전 # | 해소 여부 | 근거 |
 |---|---|---|
-| #1 error · publish-checks §1 · `docs/ai-history.md:738` | **해소** | 해당 문장이 "일반 낱말 둘이라 다른 표현으로 고쳐 0건 (걸린 낱말은 기록에도 적지 않는다)" 로 바뀌어 낱말 인용이 없다(`d18f50e` amend). 공식 §1 grep 은 메인 세션 몫 — 93·94번 기록에 0건 |
+| #1 error · publish-checks §1 · `docs/ai-history.md:738` | **해소** | 해당 문장이 "일반 낱말 둘이라 다른 표현으로 고쳐 0건 (걸린 낱말은 기록에도 적지 않는다)" 로 바뀌어 낱말 인용이 없다(`d18f50e` amend). 공식 §1 grep 은 메인 세션 몫 — 95·96번 기록에 0건 |
 | #2 warn · 01 §3.3 ⑤ · OOP-5 · `StaySearchCache.java` | **해소** | `lead` 의 `finally` 가 미완료 future 를 닫는다(`StaySearchCache.java:65-67`). `getOrLoad_leaderThrowsError_wakesJoinersAndRethrowsError` 가 leader 는 같은 `Error` · 대기자 8건은 `IllegalStateException` · 재요청 시 loader 1회를 고정하고, 리뷰어의 되돌리기 검사에서 이 테스트만 실패했다. 설계 문서 쪽 반영은 남아 위 #1 |
 | #3 warn · CLN-9 · CLN-6 · `SearchCacheUnavailableException.java` | **해소** | `BusinessException.java:37-40` cause 생성자 · `SearchCacheUnavailableException.java:21-22` cause 전달 · `GlobalExceptionHandler.java:76-77` 예외 객체를 로거에. T-14 `.cause().isInstanceOf(DataAccessException)` · T-17 ERROR 이벤트 throwable·cause 단언 |
 | #4 warn · CLN-9 · CLN-6 · `RedisSearchResultStore.java` | **해소** | `RedisSearchResultStore.java:60` WARN 마지막 인자 `e`. T-14 `store` 의 WARN 이벤트 throwable 단언(`ListAppender`) |

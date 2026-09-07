@@ -6,14 +6,32 @@ supplier:
     availability:
       max-codes: 50
   fan-out:
-    max-concurrent: 2
     per-call: 2s
     budget: 5s
+  resilience:
+    max-attempts: 2
+    min-backoff: 200ms
+    max-backoff: 600ms
+    jitter-factor: 0.5
+    sliding-window-size: 10
+    minimum-number-of-calls: 5
+    failure-rate-threshold: 50
+    wait-duration-in-open-state: 60s
+    permitted-calls-in-half-open: 2
   catalog:
     fan-out:
-      max-concurrent: 2
       per-call: 3s
       budget: 7s
+    resilience:
+      max-attempts: 3
+      min-backoff: 200ms
+      max-backoff: 600ms
+      jitter-factor: 0.5
+      sliding-window-size: 10
+      minimum-number-of-calls: 5
+      failure-rate-threshold: 50
+      wait-duration-in-open-state: 60s
+      permitted-calls-in-half-open: 2
 
 spring:
   http:
