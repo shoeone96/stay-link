@@ -21,5 +21,7 @@ dependencies {
 
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core")
+    // application 계층 테스트가 포트·리포지터리를 @Mock 으로 대신한다. 도메인 테스트는 여전히 쓰지 않는다.
+    testImplementation("org.mockito:mockito-junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
