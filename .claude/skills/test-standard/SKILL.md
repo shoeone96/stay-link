@@ -15,6 +15,7 @@ description: |
 - 테스트 DB는 **H2 in-memory**. `build.gradle.kts`에 `testRuntimeOnly("com.h2database:h2")`가 있으면 Boot가 임베디드 DB를 자동 구성한다(`@DataJpaTest`는 항상, `@SpringBootTest`는 datasource url 미설정 시). 별도 `src/test/resources/application.yaml`은 MySQL 모드(`MODE=MySQL`)나 `ddl-auto` 조정이 필요할 때만 만든다.
 - H2는 MySQL 방언 차이를 잡지 못한다. 방언 의존 DDL·쿼리가 생기면 Testcontainers(MySQL) 전환을 재검토한다. 근거 없이 미리 넣지 않는다.
 - 테스트 스택: JUnit 5 + Mockito + AssertJ (`spring-boot-starter-test`). 추가 라이브러리는 근거 없이 넣지 않는다.
+- **컨테이너 의존 예외 (2026-09-07, F10)**: `cache-redis` 모듈의 Redis 왕복·TTL 테스트 3개(T-11~13)만 Testcontainers 를 쓴다. 근거는 "JSON 직렬화 왕복과 TTL 만료는 실제 Redis 없이는 검증되지 않는다"(F10 D-F10-12). Docker 가 없으면 `disabledWithoutDocker` 로 건너뛰고(⏭) 정리표에 사유를 남긴다. 다른 모듈로 확대하지 않는다 — MySQL 은 여전히 H2 다.
 - `@MockitoBean` 사용. `@MockBean`·`@SpyBean`은 Boot 4.0에서 **제거**됐다.
 - Boot 4 기준 테스트 애노테이션 위치: `@AutoConfigureMockMvc`·`@WebMvcTest`는 `org.springframework.boot.webmvc.test.autoconfigure`, `@DataJpaTest`는 `org.springframework.boot.data.jpa.test.autoconfigure`, `TestEntityManager`는 `org.springframework.boot.jpa.test.autoconfigure`. 기술별 테스트 스타터(`spring-boot-starter-webmvc-test`·`-data-jpa-test`)가 `spring-boot-starter-test`를 전이로 끌어온다.
 - 전제가 갖춰지지 않았으면 테스트를 쓰기 전에 사용자에게 보고하고 승인 후 보정한다.

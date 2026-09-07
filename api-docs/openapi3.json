@@ -61,13 +61,28 @@
                 },
                 "examples" : {
                   "stays-search-without-mapping" : {
-                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T11:30:15.551418Z\",\"data\":{\"results\":[],\"suppliers\":[]}}"
+                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T13:23:05.982810Z\",\"data\":{\"results\":[],\"suppliers\":[]}}"
                   },
                   "stays-search-partial-failure" : {
-                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T11:30:14.691367Z\",\"data\":{\"results\":[{\"propertyId\":1,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":1,\"roomName\":\"Ocean Double\",\"maxOccupancy\":2,\"bookableRooms\":1,\"soldOut\":false,\"totalAmount\":435600,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"A\"}],\"suppliers\":[{\"supplier\":\"A\",\"status\":\"OK\"},{\"supplier\":\"B\",\"status\":\"FAILED\"}]}}"
+                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T13:23:05.885582Z\",\"data\":{\"results\":[{\"propertyId\":2,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":2,\"roomName\":\"Ocean Double\",\"maxOccupancy\":2,\"bookableRooms\":1,\"soldOut\":false,\"totalAmount\":435600,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"A\"}],\"suppliers\":[{\"supplier\":\"A\",\"status\":\"OK\"},{\"supplier\":\"B\",\"status\":\"FAILED\"}]}}"
                   },
                   "stays-search" : {
-                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T11:30:15.658192Z\",\"data\":{\"results\":[{\"propertyId\":6,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":6,\"roomName\":\"Family Suite\",\"maxOccupancy\":2,\"bookableRooms\":2,\"soldOut\":false,\"totalAmount\":756000,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"B\"},{\"propertyId\":5,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":5,\"roomName\":\"Ocean Double\",\"maxOccupancy\":2,\"bookableRooms\":1,\"soldOut\":false,\"totalAmount\":435600,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"A\"}],\"suppliers\":[{\"supplier\":\"A\",\"status\":\"OK\"},{\"supplier\":\"B\",\"status\":\"OK\"}]}}"
+                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T13:23:06.098914Z\",\"data\":{\"results\":[{\"propertyId\":7,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":7,\"roomName\":\"Family Suite\",\"maxOccupancy\":2,\"bookableRooms\":2,\"soldOut\":false,\"totalAmount\":756000,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"B\"},{\"propertyId\":6,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":6,\"roomName\":\"Ocean Double\",\"maxOccupancy\":2,\"bookableRooms\":1,\"soldOut\":false,\"totalAmount\":435600,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"A\"}],\"suppliers\":[{\"supplier\":\"A\",\"status\":\"OK\"},{\"supplier\":\"B\",\"status\":\"OK\"}]}}"
+                  }
+                }
+              }
+            }
+          },
+          "503" : {
+            "description" : "503",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/api-v1-stays-search521721641"
+                },
+                "examples" : {
+                  "stays-search-unavailable" : {
+                    "value" : "{\"code\":\"SEARCH_UNAVAILABLE\",\"message\":\"Stays cannot be checked right now\",\"time\":\"2026-09-07T13:23:04.657773Z\",\"data\":null}"
                   }
                 }
               }
@@ -82,7 +97,7 @@
                 },
                 "examples" : {
                   "stays-search-invalid-request" : {
-                    "value" : "{\"code\":\"INVALID_INPUT\",\"message\":\"Request is not valid: adults\",\"time\":\"2026-09-07T11:30:15.623768Z\",\"data\":null}"
+                    "value" : "{\"code\":\"INVALID_INPUT\",\"message\":\"Request is not valid: adults\",\"time\":\"2026-09-07T13:23:06.065611Z\",\"data\":null}"
                   }
                 }
               }
@@ -97,7 +112,7 @@
                 },
                 "examples" : {
                   "stays-search-all-suppliers-failed" : {
-                    "value" : "{\"code\":\"ALL_SUPPLIERS_FAILED\",\"message\":\"All suppliers failed to respond\",\"time\":\"2026-09-07T11:30:15.520029Z\",\"data\":null}"
+                    "value" : "{\"code\":\"ALL_SUPPLIERS_FAILED\",\"message\":\"All suppliers failed to respond\",\"time\":\"2026-09-07T13:23:05.955408Z\",\"data\":null}"
                   }
                 }
               }

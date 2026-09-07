@@ -305,3 +305,45 @@ Parameterized 2건(T-12 가 2 케이스, T-16 이 3 케이스)이 펼쳐져 20 �
 - **커넥션 풀 설정 자체는 자동 테스트가 없다.** 설계가 단위 테스트 대상에서 뺐기 때문이다. 대신 **임시 프로브로 실제 컨텍스트를 띄워** 자동 구성된 커넥터가 우리 `ReactorResourceFactory` 를 쓰는지 확인하고 프로브는 삭제했다 — 결과(`maxConnections=50`, 커넥터가 든 provider 가 우리 빈의 인스턴스와 동일)는 `02-implementation.md` 「실제로 돌려서 확인한 것」에 있다. 부하에서의 동작은 k6 와 모의 서버 몫이다.
 - **다만 풀 고갈의 「결과」는 T-21·T-22 가 덮는다.** 소켓 없이 예외 객체만으로 확인할 수 있는 부분(어떤 유형이 되는가, 재시도·서킷이 그 유형을 어떻게 다루는가)이라 단위 테스트로 내려왔다. 리뷰 round-1 #1 이 정확히 이 자리가 비어 드러났다 — 풀 설정은 있었지만 그 설정이 만드는 예외가 `TIMEOUT` 으로 새고 있었다. **대기 타임아웃이 시도별 상한보다 짧다**는 부등식에는 테스트를 두지 않았다. 값이 그 상한에서 나누어 나오므로(설계 §3.2 유도식) 두 값이 어긋날 자리가 구조적으로 없고, 테스트를 쓰면 `x ÷ 2 < x` 를 확인하는 것이 된다.
 - **테스트가 태우지 않는 갈래**: `HALF_OPEN` 에서 자리를 얻은 탐침이 **타임아웃으로** 실패하는 경우(실패 신호의 종류만 다르고 판정 경로는 T-11 과 같다) · `waitDurationInOpenState` 가 지났는데 **아무 호출도 오지 않는** 구간(설계 §3.7 이 "트래픽이 없으면 회복도 없다"로 명시한 성질이고, 관측하려면 시간이 지났음을 확인할 호출이 필요해 정의상 테스트로 고정할 수 없다) · 수집용 데코레이터가 실제 목록 호출에 걸리는 경로(빈 배선은 T-20 이, 어댑터 배선은 `SupplierCatalogAdapterTest` 가 더블로 덮는다).
+
+## search-cache (2026-09-07, fix-1 반영 2026-09-07 22:54)
+
+요약: 총 26 · 통과 26 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 237 · 통과 237 · 실패 0 · 건너뜀 0 — F9 병합 후 총 298 · 통과 298 · 실패 0)
+
+집계 근거는 `./gradlew test --rerun-tasks` 뒤의 `**/build/test-results/test/TEST-*.xml` 이다. 클래스별로
+`StaySearchCacheTest` 9 · `StaySearchResultTest` 3 · `SearchStaysUseCaseTest` 에서 3(나머지 11 은 F7 몫) ·
+`RedisSearchResultStoreTest` 3 · `RedisSearchResultStoreUnreachableTest` 2 · `StaySearchCachePropertiesTest` 3 ·
+`SearchCacheRedisConfigTest` 2 · `StaySearchE2ETest` 에서 1(나머지 7 은 F7 몫). T-01~T-17 의 19 개 메서드
+(T-05 · T-14 가 각 2 메서드) 중 Parameterized 4건(T-03 · T-10 · T-15 가 각 3 케이스, T-16 이 2 케이스)이 펼쳐져
+19 − 4 + 11 = 26 다. Docker 가 있는 환경에서 돌려 T-11~T-13 은 건너뛰지 않고 실제 Redis 컨테이너에 대고 통과했다.
+
+리뷰 round-1 반영(D-F10-16)으로 T-05 에 메서드 하나가 늘고 T-14 · T-17 에 단언이 더해졌다. 설계 §5 의 리스트에
+행이 늘지 않았으므로 기존 ID 의 갈래로 적는다. 상세는 `02-implementation.md` 「fix-1」.
+
+| # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
+|---|---|---|---|---|---|
+| T-01 | `StaySearchCacheTest#getOrLoad_withoutStoredResult_loadsOnceAndStores` | application | 저장값 없음 → loader 1회 · 결과가 store 에 저장 · outcome MISS | ✅ | 높음 — Cache-Aside 의 miss 경로(D-F10-1) 전체를 고정한다. Red 는 컴파일 실패 |
+| T-02 | `StaySearchCacheTest#getOrLoad_withStoredResult_returnsStoredWithoutLoading` | application | 저장값 있음 → loader 0회 · outcome HIT · 저장값 그대로 | ✅ | 높음 — 수용 기준 2("30초 안 두 번째 요청은 공급사도 DB 도 부르지 않는다")의 컴포넌트 쪽 근거. Red 없이 통과했고 **변이 검사 A**(find 결과 무시)에서 이 테스트만 실패했다 |
+| T-03 | `StaySearchCacheTest#getOrLoad_anyShapeOfResult_storesItAsIs` (Parameterized 3) | application | 전원 OK / 부분 실패 / 전원 FAILED → 셋 다 그대로 저장 | ✅ | 높음 — D-F10-3·D-F10-8 (부분 실패·전원 실패도 결과로 저장). Red 없이 통과했고 **변이 검사 B**(전원 FAILED 는 저장하지 않음)에서 "전원 FAILED" 케이스만 실패했다 |
+| T-04 | `StaySearchCacheTest#getOrLoad_concurrentMissesOfSameCommand_loadsOnceAndJoinsOthers` | application | leader 를 latch 로 붙들고 가상 스레드 8개가 같은 명령으로 진입 → loader 1회 · 전원 같은 결과 · 8건 JOINED | ✅ | 높음 — 수용 기준 1(동시 N 요청에 공급사 호출 1회), D-F10-6. Red 는 대기자 8건이 전부 loader 안에서 붙들린 것(TIMED_WAITING) |
+| T-05 | `StaySearchCacheTest#getOrLoad_leaderFails_propagatesSameExceptionToJoinersAndRetriesNextTime` | application | leader 의 loader 가 던짐 → 대기자 8건이 같은 인스턴스의 예외 · 다음 요청은 다시 loader 호출 | ✅ | 높음 — 실패한 future 가 in-flight 맵에 남으면 그 조건의 검색이 영원히 같은 예외를 받는다. Red 없이 통과했고 **변이 검사 C**(실패 시 항목을 지우지 않음)에서 이 테스트만 실패했다 |
+| T-05 | `StaySearchCacheTest#getOrLoad_leaderThrowsError_wakesJoinersAndRethrowsError` (fix-1) | application | leader 의 loader 가 `Error` 를 던짐 → leader 는 같은 `Error` · 대기자 8건은 매달리지 않고 `IllegalStateException` 으로 깨어남 · 다음 요청은 다시 loader 호출 | ✅ | 높음 — 리뷰 #2(OOP-5). `Error` 는 잡지 않으므로 `finally` 가 미완료 future 를 닫지 않으면 대기자 전원이 클라이언트 타임아웃까지 파킹된다(D-F10-16). Red 는 대기자가 5초 안에 끝나지 않은 것 |
+| T-06 | `StaySearchCacheTest#getOrLoad_storeUnreachable_propagatesWithoutLoading` | application | 가짜 store 의 `find` 가 저장소 불가 예외 → 그대로 전파 · loader 0회 | ✅ | 높음 — D-F10-4(fail-closed). 우회하면 캐시 장애가 곧 공급사 한도 초과 경로다. Red 없이 통과했고 **변이 검사 D**(예외를 miss 로 취급)에서 이 테스트만 실패했다 |
+| T-07 | `SearchStaysUseCaseTest#search_allSuppliersFailedResultCached_throwsWithoutCallingAnything` | application | store 에 전원 FAILED 결과 → 리포지토리·포트 무호출 · `AllSuppliersFailedException` | ✅ | 높음 — 수용 기준 4(기억된 전원 실패는 호출 없이 502). hit 든 miss 든 같은 판정 한 줄을 지나는지 |
+| T-08 | `SearchStaysUseCaseTest#search_resultCached_returnsItWithoutCallingAnything` | application | store 에 정상 결과 → 리포지토리·포트 무호출 · 그 결과 반환 | ✅ | 높음 — 수용 기준 2 의 유스케이스 쪽 근거 |
+| T-09 | `SearchStaysUseCaseTest#search_allSuppliersFailedOnFetch_storesFailedResultBeforeThrowing` | application | A·B 실패 묶음만 → 예외가 나기 **전에** 전원 FAILED 결과가 store 에 저장 | ✅ | 높음 — F7 의 "판정 → throw" 를 "저장 → 판정" 으로 바꾼 자리(§3.4). `fetch` 가 던지면 저장이 건너뛰어져 negative cache 가 사라진다 |
+| T-10 | `StaySearchResultTest#allSuppliersFailed_byOutcomes_isTrueOnlyWhenNonEmptyAndAllFailed` (Parameterized 3) | application | outcomes 빈 / 전부 FAILED / FAILED+PARTIAL → false / true / false | ✅ | 높음 — D-F7-15 공허참 방지가 `Collected` 에서 값 객체로 옮겨 온 자리. F7 T-20 과 같은 규칙을 값 쪽에서 고정한다. Red 는 컴파일 실패 |
+| T-11 | `RedisSearchResultStoreTest#findAfterStore_roundTripsEqualResult` (Testcontainers) | infrastructure | 부분 실패 결과(Money·Currency·enum·Long·boolean·List) store → find 가 `equals` 로 같은 값 | ✅ | 높음 — Jackson 3 타입 지정 직렬화기가 record·`Currency` 를 왕복하는지는 실제 Redis 없이 알 수 없다(D-F10-12). Red 는 컴파일 실패 |
+| T-12 | `RedisSearchResultStoreTest#store_rawEntry_hasVersionedKeyAndJsonValue` (Testcontainers) | infrastructure | 저장 후 문자열 템플릿으로 원시 조회 → 키 `stay-search:v1:2026-09-10:2026-09-13:2:0` 의 값이 `{` 로 시작 | ✅ | 높음 — D-F10-11 키 버전 접두. Red 없이 통과했고 **변이 검사 E**(`v1:` 제거)에서 이 테스트만 실패했다 |
+| T-13 | `RedisSearchResultStoreTest#find_afterTtlElapsed_returnsEmpty` (Testcontainers) | infrastructure | ttl 1s 저장 → 1.2s 뒤 find 가 empty | ✅ | 높음 — TTL 이 `SET` 에 실제로 실리는지. Red 없이 통과했고 **변이 검사 F**(TTL 없이 `set`)에서 이 테스트만 실패했다 |
+| T-14 | `RedisSearchResultStoreUnreachableTest#find_storeUnreachable_throwsSearchCacheUnavailable` · `#store_storeUnreachable_doesNotThrow` | infrastructure | 닫힌 포트를 향한 연결 팩토리 → find 는 `SearchCacheUnavailableException`(메시지에 `operation=find`·키, **cause 가 `DataAccessException`**) · store 는 예외 없음이고 **WARN 이벤트에 예외 객체가 실린다** | ✅ | 높음 — 포트 계약 1·2(§3.3). Docker 없이 돈다. 둘 다 Red 없이 통과했고 **변이 검사 G**(find 의 `DataAccessException` 변환 제거)·**H**(store 의 삼킴 제거)에서 각각 해당 메서드만 실패했다. fix-1 에서 cause 단언(리뷰 #3)과 WARN throwable 단언(리뷰 #4, `ListAppender`)을 더했고 둘 다 Red 를 거쳤다 |
+| T-15 | `StaySearchCachePropertiesTest#bind_withoutPositiveTtl_failsAtStartupNamingTheKey` (Parameterized 3) | infrastructure | ttl 부재 / 0s / -1s → 바인딩 실패, 근본 원인 메시지에 `stay.search-cache.ttl` | ✅ | 높음 — 요청이 들어온 뒤가 아니라 기동 시점에 실패(F3a 와 같은 방식). Red 는 컴파일 실패 |
+| T-16 | `SearchCacheRedisConfigTest#searchResultStore_byEnabled_isRedisOrNoOp` (Parameterized 2) | infrastructure | `enabled=true` / `false` → `RedisSearchResultStore` / `NoOpSearchResultStore` 가 빈으로 | ✅ | 높음 — D-F10-5. 설정 실수가 조용한 무캐시가 아니라 대역으로 드러난다. Red 는 컴파일 실패 |
+| T-17 | `StaySearchE2ETest#search_searchResultStoreUnreachable_returnsServiceUnavailableWithoutData` | E2E | `@MockitoBean SearchResultStore` 의 find 가 던짐 → **503** · `SEARCH_UNAVAILABLE` · `data` 없음 · 공급사 포트 무호출 · `stays-search-unavailable` 스니펫 · **advice ERROR 이벤트에 예외 객체(cause 포함)가 실린다** | ✅ | 높음 — 수용 기준 5 를 응답 계약으로. Red 는 500(마지막 그물). fix-1 에서 ERROR throwable 단언(리뷰 #3, `ListAppender`)을 더했고 Red 를 거쳤다 |
+
+- **F7 E2E T-15~T-19 는 무변경으로 통과했다** (수용 기준 8). 클래스에 `@MockitoBean SearchResultStore` 가 더해졌지만 스텁하지 않은 mock 의 `find` 는 빈 `Optional` 이라 다섯 갈래는 캐시 없이 돌던 때와 같은 경로를 지난다. 나머지 api-app 컨텍스트(`ApiResponseE2ETest`·`StayLinkApplicationTests`)는 테스트 yaml 의 `enabled=false` 로 NoOp 이 떠서 그대로 통과했다.
+- **만들지 않은 것 (TDD-8, 설계 §5)**: `batch-app` 컨텍스트 기동(기존 `CatalogSyncE2ETest` 3건이 대역 빈과 함께 통과) · Lettuce 즉시 거절 옵션 자체(라이브러리 동작 — 대신 실기동에서 Redis 를 내리고 503 이 10ms 안에 나오는 것을 확인, `02-implementation.md`) · hit 로그 출력(F7 과 같은 이유 — 실기동 로그를 눈으로 확인) · `NoOpSearchResultStore` · `Properties → 빈` 단순 위임.
+- **Red 없이 통과한 것 8건**(T-02·T-03·T-05·T-06·T-12·T-13·T-14 의 두 메서드)은 전부 **앞선 사이클이 그 규칙을 함께 구현한 경우**다. 설계 §3.3 의 절차는 find → putIfAbsent → load → store → complete 가 한 덩어리라, T-01 이 find 와 store 를, T-04 가 예외 전파와 정리를 함께 들여왔다. 어댑터도 키·TTL·예외 변환이 메서드 둘에 같이 산다. 그래서 여덟 건에 **변이 검사 A~H** 를 붙여 각각 "그 줄을 고치면 이 테스트가 실패한다"를 확인했다(상세는 `02-implementation.md`).
+- **T-07~T-09 는 Red 가 하나였다.** 유스케이스 생성자에 `StaySearchCache` 가 더해지는 순간 셋이 함께 컴파일 실패였고, 사이클 1회에 셋을 Green 으로 만들었다. 셋은 같은 변경(§3.4 의 `search` 재구성)의 세 갈래라 나누면 중간 상태가 컴파일되지 않는다.
+- **T-14 는 메서드 둘이다.** 설계의 한 행이 서로 다른 두 행동(find 는 던진다 · store 는 던지지 않는다)을 적었고, 한 테스트에 몰지 않는다(TST-2).
+- **T-13 은 실제로 1.2초를 잔다.** TTL 만료는 Redis 가 세는 것이라 시계를 대신 돌릴 수 없다. 이 모듈의 테스트 시간 대부분이 이 한 건과 컨테이너 기동이다.

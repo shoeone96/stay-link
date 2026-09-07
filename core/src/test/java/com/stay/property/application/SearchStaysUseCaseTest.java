@@ -15,10 +15,10 @@ import com.stay.property.domain.RoomRepository;
 import com.stay.property.domain.Supplier;
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -37,8 +37,16 @@ class SearchStaysUseCaseTest {
     @Mock
     private SupplierAvailabilityPort supplierAvailabilityPort;
 
-    @InjectMocks
+    /** 캐시는 mock 이 아니라 가짜 store 를 넣은 실물이다 — 경계는 store 이지 캐시가 아니다 (TST-5). */
+    private final FakeSearchResultStore searchResultStore = new FakeSearchResultStore();
+
     private SearchStaysUseCase searchStaysUseCase;
+
+    @BeforeEach
+    void setUp() {
+        searchStaysUseCase = new SearchStaysUseCase(
+                propertyRepository, roomRepository, supplierAvailabilityPort, new StaySearchCache(searchResultStore));
+    }
 
     @Test
     @DisplayName("두 공급사가 모두 결과를 주면 항목이 합쳐지고 내부 숙소·객실 식별자가 부여된다")
@@ -278,6 +286,56 @@ class SearchStaysUseCaseTest {
 
         // then
         assertThat(result).isEqualTo(new StaySearchResult(List.of(), List.of()));
+    }
+
+    @Test
+    @DisplayName("캐시에 전원 실패 결과가 있으면 리포지토리·공급사를 부르지 않고 전 공급사 실패 예외를 던진다")
+    void search_allSuppliersFailedResultCached_throwsWithoutCallingAnything() {
+        // given
+        searchResultStore.store(COMMAND, StaySearchResultFixture.allFailed());
+
+        // when
+        // then
+        assertThatThrownBy(() -> searchStaysUseCase.search(COMMAND))
+                .isInstanceOf(AllSuppliersFailedException.class);
+        then(propertyRepository).shouldHaveNoInteractions();
+        then(roomRepository).shouldHaveNoInteractions();
+        then(supplierAvailabilityPort).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("캐시에 정상 결과가 있으면 리포지토리·공급사를 부르지 않고 그 결과를 돌려준다")
+    void search_resultCached_returnsItWithoutCallingAnything() {
+        // given
+        StaySearchResult cached = StaySearchResultFixture.allSucceeded();
+        searchResultStore.store(COMMAND, cached);
+
+        // when
+        StaySearchResult result = searchStaysUseCase.search(COMMAND);
+
+        // then
+        assertThat(result).isEqualTo(cached);
+        then(propertyRepository).shouldHaveNoInteractions();
+        then(roomRepository).shouldHaveNoInteractions();
+        then(supplierAvailabilityPort).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("공급사 전원 실패로 fetch 하면 전원 FAILED 결과가 저장된 뒤에 예외가 난다")
+    void search_allSuppliersFailedOnFetch_storesFailedResultBeforeThrowing() {
+        // given
+        givenBothSuppliersMapping();
+        given(supplierAvailabilityPort.searchAll(any(AvailabilityQuery.class)))
+                .willReturn(List.of(partlyFailed(Supplier.A), partlyFailed(Supplier.B)));
+
+        // when
+        assertThatThrownBy(() -> searchStaysUseCase.search(COMMAND)).isInstanceOf(AllSuppliersFailedException.class);
+
+        // then
+        assertThat(searchResultStore.find(COMMAND))
+                .get()
+                .extracting(StaySearchResult::allSuppliersFailed, StaySearchResult::suppliers)
+                .containsExactly(true, List.of(Supplier.A, Supplier.B));
     }
 
     /** 항목 하나짜리 시나리오가 반복되므로 매핑 준비를 모은다. 숙소 1 · 객실 1 · 둘 다 ACTIVE. */

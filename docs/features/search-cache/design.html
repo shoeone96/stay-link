@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F10 search-cache 설계 협의</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  .sheet.wide{max-width:1300px}
+
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>F10 · 확정 — 결정의 원본은 01-design.md</span>
+      <h1 class="title">검색 결과 캐시<br><span class="hl">그리고 전원 실패의 기억</span></h1>
+      <p class="lede">같은 검색 조건이 30초 안에 다시 오면 공급사를 부르지 않는다. <b>부분 실패도 그대로, 전원 실패도 30초 기억</b>해 한 인스턴스가 겪은 장애가 Redis 를 통해 나머지 인스턴스를 바로 보호한다. 정확성 장치가 아니라 <b>공급사 호출량 절감 장치</b>다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">RANGE</span><span class="v">F10 search-cache</span></div>
+        <div class="chip"><span class="k">DEPENDS</span><span class="v">F7 (병합) · F9 (설계중, 선행)</span></div>
+        <div class="chip"><span class="k">DECISIONS</span><span class="v">확정 15 (착수 전 3 포함)</span></div>
+        <div class="chip"><span class="k">FIGURES</span><span class="v">11</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">범위와 전제<span class="hint">착수 전 확정 3</span></a></li>
+      <li><a href="#s2">확정 구조 — 구성도·클래스<span class="hint">FIG 01·02</span></a></li>
+      <li><a href="#s3">결정 A — 캐시가 끼는 자리<span class="hint">FIG 03 · 3안</span></a></li>
+      <li><a href="#s4">결정 B — 저장소 접근 수단<span class="hint">FIG 04 · 확정</span></a></li>
+      <li><a href="#s5">결정 C — 전원 실패를 어떻게 기억하나<span class="hint">FIG 05 · 3안</span></a></li>
+      <li><a href="#s6">정상 경로 — miss 와 hit<span class="hint">FIG 06</span></a></li>
+      <li><a href="#s7">single-flight — 동시 miss<span class="hint">FIG 07·08</span></a></li>
+      <li><a href="#s8">전원 실패 — 기억하고 즉시 502<span class="hint">FIG 09</span></a></li>
+      <li><a href="#s9">결정 D — Redis 장애 처리<span class="hint">FIG 10 · 3안</span></a></li>
+      <li><a href="#s10">결정 E — batch-app 기동<span class="hint">FIG 11 · 3안</span></a></li>
+      <li><a href="#s11">로그 · 키 · 설정 · 검증</a></li>
+      <li><a href="#s12">결정 카드 요약</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- ========== 1 ========== -->
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">SCOPE</p><h2 class="sec">범위와 전제</h2></div>
+    </div>
+
+    <p class="lead">캐시 자리는 <span class="term">SearchStaysUseCase.search()</span> 경계, 키는 <span class="term">StaySearchCommand</span> 넷(checkIn·checkOut·adults·children)이다. <strong>TTL 은 30초 하나</strong>이고 정확성이 아니라 절감 배수로 정한 값이라 설정 키로 뺀다.</p>
+
+    <h3>착수 전에 닫힌 것 (ai-history 91·92)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>질문</th><th>탈락한 안</th><th>확정</th></tr></thead>
+        <tbody>
+          <tr><td>저장소</td><td>로컬 캐시(Caffeine) — 공급사 한도가 계정 단위라 인스턴스 수만큼 호출을 곱하고, 롤링 배포마다 비어 공급사에 몰린다</td><td>Redis + JSON 직렬화</td></tr>
+          <tr><td>부분 실패 응답</td><td>미캐시(장애 중 부하 증폭) · 짧은 TTL(항목별 만료가 수단을 묶음) · 3분 마지막 정상 값(판매 불가를 판매 가능처럼 노출)</td><td>그대로 30초 저장</td></tr>
+          <tr><td>전원 실패</td><td>서킷(F9)에 위임 — 인스턴스별·프로세스 로컬이라 N 개가 각자 실패를 겪어야 열린다</td><td>30초 기억 → 호출 없이 즉시 502</td></tr>
+          <tr><td>수단</td><td><span class="term">@Cacheable(sync = true)</span> — Redis 백엔드는 키 단위 single-flight 가 없고, 예외는 저장되지 않으며, 오류 우회 경로에서 유스케이스 예외가 Redis 예외로 바뀐다</td><td>캐시 컴포넌트 직접</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">선행이 F9 인 이유</span>재시도 없이 캐시가 먼저 들어가면 1회 타임아웃이 30초 동안 그 공급사의 미노출로 굳는다 — 도메인이 반대한 바로 그 경우다. <strong>재시도를 거친 FAILED 는 그 시점의 사실</strong>이라 30초 저장이 거짓이 아니다.</div>
+
+    <h3>제외 — 그대로 밖에 둔다</h3>
+    <p>soft/hard 이중 TTL · 비동기 갱신 · 마지막 정상 값 fallback · 견적 시각 · 목록 대표 가격 · 분산 락 · 로컬 캐시 · 503 + Retry-After(전원 실패) · rate limiter(F9 가 넘긴 항목, 한도 초과가 여전히 관측되지 않는다) · <strong>매핑 색인 캐시</strong>(사용자 결정 2026-09-07, 재검토 항목으로도 두지 않는다).</p>
+
+    <h3>DDD 전술 패턴은 적용하지 않는다</h3>
+    <p>불변식을 지키는 Aggregate 가 없다. F7 과 같이 <strong>유스케이스 + 캐시 컴포넌트 + 값 객체</strong>로 간다. <span class="term">core</span> 에 새로 생기는 것은 컴포넌트 하나와 값 객체의 메서드 하나뿐이다.</p>
+  </section>
+
+  <!-- ========== 2 ========== -->
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">STRUCTURE</p><h2 class="sec">확정 구조 — 구성도·클래스 <span class="stchip ok">확정</span></h2></div>
+    </div>
+
+    <p class="lead">아래 두 그림은 결정 A~E 의 <strong>확정안을 조합한 모습</strong>이다. 캐시 서비스는 <span class="term">core.application</span> 에, Redis 는 새 모듈 <span class="term">cache-redis</span> 에 산다 — <span class="term">persistence</span>·<span class="term">supplier-client</span> 와 같은 모양이다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 1120 660" role="img" aria-label="F10 구성도. api-app 의 presentation, core application 의 캐시 컴포넌트와 포트, cache-redis 모듈의 어댑터와 설정, batch-app 의 대역이 위에서 아래로 놓이고 의존은 안쪽으로만 향한다.">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <text class="svg-l" x="30" y="22" fill="#8B95A1">api-app · presentation — 인프라 설정 없음 (D-MS-5 유지)</text>
+          <rect x="24" y="34" width="1072" height="96" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.5"/>
+          <rect x="44" y="54" width="300" height="56" rx="13" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="44" y="54" width="300" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">StaySearchController</div><div class="s">F7 · 무변경</div></div></foreignObject>
+          <rect x="364" y="54" width="360" height="56" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="364" y="54" width="360" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">GlobalExceptionHandler + 503 핸들러 1개</div><div class="s">SearchCacheUnavailableException → SEARCH_UNAVAILABLE</div></div></foreignObject>
+          <rect x="744" y="54" width="332" height="56" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="744" y="54" width="332" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">build: runtimeOnly(":cache-redis")</div><div class="s">yaml: ttl 30s · redis timeout · 테스트는 enabled=false</div></div></foreignObject>
+
+          <line x1="194" y1="132" x2="194" y2="166" stroke="#3182F6" stroke-width="2.2" marker-end="url(#a1)"/>
+
+          <text class="svg-l" x="30" y="186" fill="#8B95A1">core · application — 캐시 서비스와 포트</text>
+          <rect x="24" y="198" width="1072" height="150" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.5"/>
+          <rect x="44" y="218" width="300" height="110" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="44" y="218" width="300" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SearchStaysUseCase (수정)</div><div class="s">search() = cache.getOrLoad(fetch)</div><div class="s">→ 기억된 전원 실패 판정 → 502</div></div></foreignObject>
+          <rect x="364" y="218" width="360" height="110" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.8"/>
+          <foreignObject x="364" y="218" width="360" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchCache (신규)</div><div class="s">store.find → JVM single-flight → loader → store.store</div><div class="s">Redis 라는 단어를 모른다</div></div></foreignObject>
+          <rect x="744" y="218" width="332" height="110" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="744" y="218" width="332" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SearchResultStore &#171;port&#187; (신규)</div><div class="s">find(command) / store(command, result)</div><div class="s">+ NoOpSearchResultStore · SearchCacheUnavailableException</div><div class="s">+ StayErrorCode.SEARCH_UNAVAILABLE · StaySearchResult.allSuppliersFailed()</div></div></foreignObject>
+          <line x1="346" y1="272" x2="362" y2="272" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
+          <line x1="726" y1="272" x2="742" y2="272" stroke="#3182F6" stroke-width="2" marker-end="url(#a1)"/>
+
+          <line x1="194" y1="350" x2="194" y2="384" stroke="#3182F6" stroke-width="2.2" marker-end="url(#a1)"/>
+          <line x1="910" y1="450" x2="910" y2="352" stroke="#8B95A1" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#a1)"/>
+          <line x1="544" y1="350" x2="544" y2="384" stroke="#3182F6" stroke-width="2.2" marker-end="url(#a1)"/>
+
+          <text class="svg-l" x="30" y="404" fill="#8B95A1">core 가 부르는 다른 포트</text>
+          <rect x="24" y="416" width="320" height="64" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="24" y="416" width="320" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">SupplierAvailabilityPort (F5)</div><div class="s">searchAll(query) — 무변경</div></div></foreignObject>
+          <rect x="364" y="416" width="360" height="64" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="364" y="416" width="360" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">PropertyRepository · RoomRepository (F7)</div><div class="s">fetch 안에서만 — hit 경로에는 DB 가 없다</div></div></foreignObject>
+
+          <text class="svg-l" x="750" y="404" fill="#8B95A1">cache-redis · infrastructure (신규 모듈)</text>
+          <rect x="744" y="416" width="352" height="150" rx="18" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.5"/>
+          <rect x="760" y="452" width="320" height="50" rx="12" fill="#fff" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="760" y="452" width="320" height="50"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">RedisSearchResultStore</div><div class="s">RedisTemplate · 키·TTL · Redis 예외 → 도메인 예외</div></div></foreignObject>
+          <rect x="760" y="508" width="320" height="50" rx="12" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="760" y="508" width="320" height="50"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SearchCacheRedisConfig · Properties</div><div class="s">JSON 직렬화기 · Lettuce 즉시 거절 · enabled 스위치</div></div></foreignObject>
+
+          <line x1="184" y1="482" x2="184" y2="586" stroke="#8B95A1" stroke-width="1.8" stroke-dasharray="6 4"/>
+          <line x1="544" y1="482" x2="544" y2="586" stroke="#8B95A1" stroke-width="1.8" stroke-dasharray="6 4"/>
+          <line x1="910" y1="568" x2="910" y2="586" stroke="#8B95A1" stroke-width="1.8" stroke-dasharray="6 4"/>
+
+          <rect x="24" y="588" width="320" height="56" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="24" y="588" width="320" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">supplier-client — F5·F9 어댑터</div></div></foreignObject>
+          <rect x="364" y="588" width="360" height="56" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="364" y="588" width="360" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">persistence — JPA 구현 · batch-app 은 여기까지만 + NoOp 빈 1줄</div></div></foreignObject>
+          <rect x="744" y="588" width="352" height="56" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="744" y="588" width="352" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Redis — compose.yaml · 자동 감지 접속</div></div></foreignObject>
+          <text class="svg-l" x="1090" y="186" text-anchor="end" fill="#6B7684">의존은 안쪽으로만 (LAY-1)</text>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 오른쪽 점선이 <b>구현이 포트를 향하는 역방향</b>이다. <span style="font-family:var(--mono)">cache-redis</span> 는 <span style="font-family:var(--mono)">persistence</span> 와 같은 자리에 서고, <span style="font-family:var(--mono)">batch-app</span> 은 그 모듈을 의존하지 않아 Redis 를 모르는 것이 빌드 그래프로 지켜진다.</figcaption>
+    </figure>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 02">
+        <svg viewBox="0 0 1120 760" role="img" aria-label="F10 클래스 다이어그램. 캐시 컴포넌트, 포트 인터페이스와 대역, 유스케이스의 변경, 결과 값 객체의 새 메서드, cache-redis 모듈의 어댑터와 설정, batch-app 의 대역 빈이 시그니처와 함께 놓인다.">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <!-- StaySearchCache -->
+          <rect x="20" y="20" width="430" height="300" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="36" y="44" fill="#1B64DA">StaySearchCache &#171;@Component, core.application&#187;</text>
+          <line x1="20" y1="54" x2="450" y2="54" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="36" y="74" fill="#4E5968">- store : SearchResultStore</text>
+          <text class="svg-s" x="36" y="92" fill="#4E5968">- inFlight : ConcurrentHashMap&lt;StaySearchCommand,</text>
+          <text class="svg-s" x="36" y="108" fill="#4E5968">&#160;&#160;&#160;&#160;CompletableFuture&lt;StaySearchResult&gt;&gt;&#160;&#160;— record 동등성이 곧 키</text>
+          <line x1="20" y1="120" x2="450" y2="120" stroke="#E5E8EB" stroke-width="1"/>
+          <text class="svg-s" x="36" y="140" fill="#1B64DA">+ getOrLoad(StaySearchCommand, Loader) : CachedSearch</text>
+          <text class="svg-s" x="36" y="158" fill="#4E5968">&#160;&#160;store.find(cmd) → 있으면 HIT</text>
+          <text class="svg-s" x="36" y="174" fill="#4E5968">&#160;&#160;inFlight.putIfAbsent → 이미 있으면 join → JOINED</text>
+          <text class="svg-s" x="36" y="190" fill="#4E5968">&#160;&#160;loader.load() → store.store(cmd, result) → complete → MISS</text>
+          <text class="svg-s" x="36" y="206" fill="#4E5968">&#160;&#160;finally inFlight.remove(cmd, future)</text>
+          <line x1="20" y1="218" x2="450" y2="218" stroke="#E5E8EB" stroke-width="1"/>
+          <text class="svg-s" x="36" y="238" fill="#8B95A1">Loader { load() : StaySearchResult }&#160;&#160;— Supplier 이름 충돌 회피</text>
+          <text class="svg-s" x="36" y="256" fill="#8B95A1">record CachedSearch(StaySearchResult result, CacheOutcome outcome)</text>
+          <text class="svg-s" x="36" y="274" fill="#8B95A1">enum CacheOutcome { HIT, MISS, JOINED }</text>
+          <text class="svg-s" x="36" y="298" fill="#8B95A1">중첩 타입 셋 · Redis 예외는 여기 도달하지 않는다 (포트 계약)</text>
+
+          <!-- Port -->
+          <rect x="20" y="356" width="430" height="150" rx="14" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.6"/>
+          <text class="svg-t" x="36" y="380" fill="#1B64DA">SearchResultStore &#171;port, core.application&#187;</text>
+          <line x1="20" y1="390" x2="450" y2="390" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="36" y="410" fill="#1B64DA">+ find(StaySearchCommand) : Optional&lt;StaySearchResult&gt;</text>
+          <text class="svg-s" x="36" y="426" fill="#C9303C">&#160;&#160;저장소에 못 닿으면 SearchCacheUnavailableException</text>
+          <text class="svg-s" x="36" y="446" fill="#1B64DA">+ store(StaySearchCommand, StaySearchResult)</text>
+          <text class="svg-s" x="36" y="462" fill="#4E5968">&#160;&#160;절대 던지지 않는다 — 실패는 구현이 WARN 으로 삼킨다</text>
+          <text class="svg-s" x="36" y="486" fill="#8B95A1">NoOpSearchResultStore — find 는 empty, store 는 아무것도 (배치·테스트)</text>
+          <line x1="235" y1="322" x2="235" y2="354" stroke="#3182F6" stroke-width="2" marker-end="url(#a2)"/>
+
+          <!-- UseCase -->
+          <rect x="490" y="20" width="360" height="200" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <text class="svg-t" x="506" y="44" fill="#1B64DA">SearchStaysUseCase &#171;수정&#187;</text>
+          <line x1="490" y1="54" x2="850" y2="54" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="506" y="74" fill="#8B95A1">- properties · rooms · suppliers&#160;&#160;(F7)</text>
+          <text class="svg-s" x="506" y="92" fill="#1B64DA">- cache : StaySearchCache&#160;&#160;(신규)</text>
+          <line x1="490" y1="104" x2="850" y2="104" stroke="#E5E8EB" stroke-width="1"/>
+          <text class="svg-s" x="506" y="124" fill="#1B64DA">+ search(StaySearchCommand) : StaySearchResult</text>
+          <text class="svg-s" x="506" y="142" fill="#4E5968">&#160;&#160;cached = cache.getOrLoad(command, () -&gt; fetch(command))</text>
+          <text class="svg-s" x="506" y="158" fill="#4E5968">&#160;&#160;HIT·JOINED 면 요약 1줄 (cache=…)</text>
+          <text class="svg-s" x="506" y="174" fill="#4E5968">&#160;&#160;result.allSuppliersFailed() 면 throw AllSuppliersFailed</text>
+          <text class="svg-s" x="506" y="196" fill="#4E5968">- fetch(StaySearchCommand) : StaySearchResult</text>
+          <text class="svg-s" x="506" y="212" fill="#8B95A1">&#160;&#160;F7 본문 그대로, 단 던지지 않고 전원 FAILED 결과를 돌려준다</text>
+          <line x1="488" y1="92" x2="454" y2="92" stroke="#3182F6" stroke-width="2" marker-end="url(#a2)"/>
+
+          <!-- Result -->
+          <rect x="870" y="20" width="230" height="200" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-t" x="886" y="44" fill="#1B64DA">StaySearchResult</text>
+          <line x1="870" y1="54" x2="1100" y2="54" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="886" y="74" fill="#8B95A1">+ items · outcomes&#160;&#160;(F7)</text>
+          <line x1="870" y1="86" x2="1100" y2="86" stroke="#E5E8EB" stroke-width="1"/>
+          <text class="svg-s" x="886" y="106" fill="#1B64DA">+ allSuppliersFailed()</text>
+          <text class="svg-s" x="886" y="122" fill="#4E5968">&#160;&#160;: boolean</text>
+          <text class="svg-s" x="886" y="140" fill="#8B95A1">&#160;&#160;outcomes 비면 false</text>
+          <text class="svg-s" x="886" y="156" fill="#8B95A1">&#160;&#160;(D-F7-15 공허참 방지)</text>
+          <text class="svg-s" x="886" y="178" fill="#1B64DA">+ suppliers() : List&lt;Supplier&gt;</text>
+          <text class="svg-s" x="886" y="196" fill="#8B95A1">&#160;&#160;예외 메시지용</text>
+          <line x1="852" y1="124" x2="866" y2="124" stroke="#8B95A1" stroke-width="1.6" marker-end="url(#a2)"/>
+
+          <!-- Exception -->
+          <rect x="490" y="250" width="610" height="90" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.4"/>
+          <text class="svg-t" x="506" y="274" fill="#C9303C">SearchCacheUnavailableException &#171;core.application, 신규&#187;</text>
+          <line x1="490" y1="284" x2="1100" y2="284" stroke="#F04452" stroke-width="1"/>
+          <text class="svg-s" x="506" y="304" fill="#4E5968">extends BusinessException (StayErrorCode.SEARCH_UNAVAILABLE — "지금은 매물을 확인할 수 없다")</text>
+          <text class="svg-s" x="506" y="322" fill="#4E5968">메시지에 연산·키·원인 클래스 — 로그용, 응답에는 안 나간다 (D-F0-10) · advice 가 503 으로</text>
+
+          <!-- cache-redis module -->
+          <text class="svg-l" x="490" y="378" fill="#8B95A1">cache-redis · com.stay.property.infrastructure</text>
+          <rect x="490" y="388" width="610" height="200" rx="14" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.5"/>
+          <rect x="506" y="404" width="290" height="170" rx="12" fill="#fff" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-t" x="520" y="426" fill="#1B64DA">RedisSearchResultStore</text>
+          <line x1="506" y1="436" x2="796" y2="436" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="520" y="454" fill="#4E5968">- template : RedisTemplate&lt;String,</text>
+          <text class="svg-s" x="520" y="470" fill="#4E5968">&#160;&#160;&#160;&#160;StaySearchResult&gt;</text>
+          <text class="svg-s" x="520" y="486" fill="#4E5968">- ttl : Duration</text>
+          <text class="svg-s" x="520" y="506" fill="#1B64DA">+ find / + store</text>
+          <text class="svg-s" x="520" y="524" fill="#4E5968">- keyOf(cmd) "stay-search:v1:…"</text>
+          <text class="svg-s" x="520" y="542" fill="#C9303C">catch DataAccessException ·</text>
+          <text class="svg-s" x="520" y="558" fill="#C9303C">&#160;&#160;SerializationException 만</text>
+          <rect x="810" y="404" width="276" height="170" rx="12" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-t" x="824" y="426" fill="#1B64DA">SearchCacheRedisConfig</text>
+          <line x1="810" y1="436" x2="1086" y2="436" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="824" y="454" fill="#4E5968">@Bean RedisTemplate — String 키,</text>
+          <text class="svg-s" x="824" y="470" fill="#4E5968">&#160;&#160;타입 지정 JSON 값 (Jackson 3)</text>
+          <text class="svg-s" x="824" y="488" fill="#4E5968">@Bean Lettuce 커스터마이저</text>
+          <text class="svg-s" x="824" y="504" fill="#4E5968">&#160;&#160;끊긴 동안 즉시 거절</text>
+          <text class="svg-s" x="824" y="522" fill="#4E5968">@Bean SearchResultStore</text>
+          <text class="svg-s" x="824" y="538" fill="#4E5968">&#160;&#160;enabled → Redis 구현</text>
+          <text class="svg-s" x="824" y="554" fill="#4E5968">&#160;&#160;enabled=false → NoOp</text>
+          <text class="svg-s" x="824" y="570" fill="#8B95A1">Properties(ttl, enabled) — ttl ≤ 0 기동 실패</text>
+          <line x1="506" y1="404" x2="452" y2="380" stroke="#8B95A1" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#a2)"/>
+
+          <!-- batch-app -->
+          <text class="svg-l" x="20" y="540" fill="#8B95A1">batch-app</text>
+          <rect x="20" y="550" width="430" height="60" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.4"/>
+          <text class="svg-t" x="36" y="574" fill="#333D4B">StaySearchCacheStandIn&#160;&#160;@Bean SearchResultStore → new NoOpSearchResultStore()</text>
+          <text class="svg-s" x="36" y="596" fill="#8B95A1">cache-redis 를 의존하지 않는다 — 검색 유스케이스가 스캔되므로 대역만 (결정 E)</text>
+
+          <!-- api-app -->
+          <text class="svg-l" x="20" y="644" fill="#8B95A1">api-app</text>
+          <rect x="20" y="654" width="1080" height="80" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <text class="svg-t" x="36" y="678" fill="#1B64DA">GlobalExceptionHandler&#160;&#160;+ handleSearchCacheUnavailable → 503 · ERROR 로그</text>
+          <text class="svg-s" x="36" y="700" fill="#4E5968">build.gradle.kts: runtimeOnly(project(":cache-redis")) — 컴파일 참조 불가, 배선은 런타임 (D-MS-5)</text>
+          <text class="svg-s" x="36" y="718" fill="#8B95A1">D-F7-16 이연 카드(공통 advice 가 컨텍스트 예외를 안다)의 사례가 하나 더 쌓인다 — 거기 기록</text>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 포트 계약이 예외의 방향을 정한다. <span style="font-family:var(--mono)">find</span> 는 못 닿으면 <b>도메인 예외</b>를 던지고 <span style="font-family:var(--mono)">store</span> 는 <b>절대 던지지 않는다.</b> 어댑터만 Redis 예외 타입을 알고, 컴포넌트는 Redis 라는 단어를 모른다.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 3 ========== -->
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">DECISION A</p><h2 class="sec">캐시가 끼는 자리 <span class="stchip ok">확정 · 안 3</span></h2></div>
+    </div>
+
+    <p class="lead">"컴포넌트를 직접 쓴다"까지는 닫혔다. 남은 것은 <strong>그 컴포넌트가 유스케이스와 어떤 관계로 서느냐</strong>다 — 유스케이스 안에 들어갈지, 유스케이스를 감쌀지, 유스케이스가 부를지.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 03">
+        <svg viewBox="0 0 1120 500" role="img" aria-label="캐시 자리 세 안의 클래스 비교. 유스케이스에 인라인, 인터페이스를 뽑아 데코레이터로 감싸기, 유스케이스가 부르는 컴포넌트를 나란히 놓았다.">
+          <defs>
+            <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">같은 자리의 박스가 어떻게 달라지는지 세로로 비교</text>
+
+          <!-- 안 1 -->
+          <rect x="14" y="34" width="356" height="450" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="32" y="62" fill="#333D4B">안 1 — 유스케이스 안에 인라인</text>
+          <rect x="30" y="78" width="324" height="110" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="78" width="324" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">SearchStaysUseCase</div><div class="s">- store : SearchResultStore · - inFlight : Map</div><div class="s">+ search() — 조회·single-flight·저장·</div><div class="s">역매핑·판정·로그를 한 클래스가</div></div></foreignObject>
+          <line x1="192" y1="190" x2="192" y2="216" stroke="#8B95A1" stroke-width="2" marker-end="url(#a3)"/>
+          <rect x="30" y="218" width="324" height="56" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="218" width="324" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">SearchResultStore · SupplierAvailabilityPort</div></div></foreignObject>
+          <rect x="30" y="290" width="324" height="178" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="290" width="324" height="178"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 클래스가 늘지 않는다. 호출 순서가 한 메서드에 다 보인다.</div><div class="d" style="margin-top:5px"><b>−</b> 변경 이유가 둘이 된다 — 검색 조립 규칙과 캐시 정책(키·single-flight·장애). OOP-3 위반.</div><div class="d" style="margin-top:5px"><b>−</b> F7 테스트 12개가 전부 캐시를 거치게 되어 <b>기존 테스트를 손봐야</b> 한다. 캐시 단위 테스트는 유스케이스 픽스처 전체를 끌고 온다.</div></div></foreignObject>
+
+          <!-- 안 2 -->
+          <rect x="382" y="34" width="356" height="450" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="400" y="62" fill="#333D4B">안 2 — 인터페이스 + 데코레이터</text>
+          <rect x="398" y="78" width="324" height="110" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="78" width="324" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">CachedSearchStays &#171;@Primary&#187;</div><div class="s">implements SearchStays</div><div class="s">- delegate : SearchStays · - cache · - inFlight</div><div class="s">+ search() — 조회·delegate 호출·저장</div></div></foreignObject>
+          <line x1="560" y1="190" x2="560" y2="216" stroke="#8B95A1" stroke-width="2" marker-end="url(#a3)"/>
+          <rect x="398" y="218" width="324" height="56" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="218" width="324" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">SearchStays &#171;interface, 신설&#187; ← SearchStaysUseCase</div><div class="s">컨트롤러·E2E 가 인터페이스로 갈아탄다</div></div></foreignObject>
+          <rect x="398" y="290" width="324" height="178" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="290" width="324" height="178"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> PAT-4 가 말하는 교과서적 Decorator. 유스케이스는 캐시의 존재를 모른다.</div><div class="d" style="margin-top:5px"><b>−</b> 같은 인터페이스 빈이 둘 — 컨트롤러·batch-app 양쪽에서 <b>어느 것을 주입받는지</b> 를 @Primary 로 고정해야 하고, 실수하면 조용히 캐시 없이 돈다.</div><div class="d" style="margin-top:5px"><b>−</b> 클래스 3개(인터페이스·데코레이터·기존)에 컨트롤러·E2E 수정. 전원 실패 기억은 delegate 의 예외를 잡아야 해 F7 의 throw 구조를 데코레이터가 알아야 한다.</div></div></foreignObject>
+
+          <!-- 안 3 -->
+          <rect x="750" y="34" width="356" height="450" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="768" y="62" fill="#1B64DA">안 3 — 유스케이스가 부르는 컴포넌트 · 추천</text>
+          <rect x="766" y="78" width="324" height="110" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="766" y="78" width="324" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SearchStaysUseCase (수정 최소)</div><div class="s">+ search() = cache.getOrLoad(cmd, () -&gt; fetch(cmd))</div><div class="s">→ 기억 판정 → throw / return</div><div class="s">- fetch() = F7 본문, 던지지 않음</div></div></foreignObject>
+          <line x1="928" y1="190" x2="928" y2="216" stroke="#3182F6" stroke-width="2" marker-end="url(#a3)"/>
+          <rect x="766" y="218" width="324" height="56" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="766" y="218" width="324" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchCache &#171;신규&#187;</div><div class="s">getOrLoad(command, loader) : CachedSearch</div></div></foreignObject>
+          <rect x="766" y="290" width="324" height="178" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="766" y="290" width="324" height="178"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 새 클래스 하나. 유스케이스는 진입점으로 남고 요약 로그 규칙("검색 1건 = 1줄")이 한곳에 유지된다.</div><div class="d" style="margin-top:5px"><b>+</b> 캐시 단위 테스트가 유스케이스와 분리된다 — 맵 기반 가짜 <span style="font-family:var(--mono)">SearchResultStore</span> + 람다 loader 로 끝.</div><div class="d" style="margin-top:5px"><b>+</b> 전원 실패 기억이 "결과의 한 종류" 라 예외를 가로챌 필요가 없다 (결정 C).</div><div class="d" style="margin-top:5px"><b>−</b> 유스케이스가 캐시의 존재를 한 줄 안다. 인터페이스 없이 구체 클래스를 주입받는다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 안 2 는 유스케이스를 깨끗하게 두는 대신 <b>같은 타입 빈 둘</b>이라는 배선 위험을 두 앱에 심는다. 안 3 은 유스케이스에 한 줄을 넣는 대신 배선이 한 가지뿐이다.</figcaption>
+    </figure>
+
+    <div class="note"><span class="tag">사용자 확정 사항과의 관계</span>"<span class="term">@Cacheable</span> 말고 cache service 를 쓴다"는 확정은 세 안 모두 만족한다. 이 카드는 그 service 가 <strong>어디에 서느냐</strong>만 정한다.</div>
+  </section>
+
+  <!-- ========== 4 ========== -->
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">DECISION B</p><h2 class="sec">저장소 접근 수단 <span class="stchip ok">확정 · 안 1</span></h2></div>
+    </div>
+
+    <p class="lead">첫 그림은 Redis 설정을 <span class="term">api-app</span> 에 두었다. 사용자가 "모듈을 따로 두는 것 아니었나"를 물어 다시 쟀고, <strong>이 저장소의 관례(포트는 core.application, 어댑터는 별도 모듈)를 빠뜨렸던 것</strong>이 드러나 추천을 바꿨다. 갈리는 축은 <strong>core 가 무엇을 아느냐</strong>와 <strong>Redis 예외를 누가 잡느냐</strong>다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 04">
+        <svg viewBox="0 0 1120 540" role="img" aria-label="저장소 접근 수단 세 안의 구성 비교. 자체 포트와 cache-redis 모듈 어댑터, Spring Cache 추상화와 모듈 안 자동설정, Spring Cache 추상화와 api-app 설정을 나란히 놓았다.">
+          <defs>
+            <marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">위 = core 가 아는 것 · 가운데 = 어디에 무엇을 만드나 · 아래 = 테스트·배치에서 끄는 법</text>
+
+          <!-- 안 1 -->
+          <rect x="14" y="34" width="356" height="490" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="32" y="62" fill="#1B64DA">안 1 — 자체 포트 + cache-redis 어댑터 · 확정</text>
+          <rect x="30" y="78" width="324" height="64" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="30" y="78" width="324" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">core: SearchResultStore &#171;port&#187;</div><div class="s">순수 자바 인터페이스 · Spring 타입 0</div></div></foreignObject>
+          <line x1="192" y1="144" x2="192" y2="168" stroke="#3182F6" stroke-width="2" marker-end="url(#a4)"/>
+          <rect x="30" y="170" width="324" height="104" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="30" y="170" width="324" height="104"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">cache-redis (신규 모듈): 어댑터 + 설정</div><div class="s">RedisTemplate · 타입 지정 JSON · TTL · Lettuce 옵션</div><div class="s">Redis 예외 → 도메인 예외 변환은 여기서만</div><div class="s">api-app 은 runtimeOnly 로 얹는다</div></div></foreignObject>
+          <line x1="192" y1="276" x2="192" y2="300" stroke="#3182F6" stroke-width="2" marker-end="url(#a4)"/>
+          <rect x="30" y="302" width="324" height="64" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="30" y="302" width="324" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">끄기: stay.search-cache.enabled=false → NoOp</div><div class="s">batch-app 은 모듈 없이 NoOp 빈 한 줄</div></div></foreignObject>
+          <rect x="30" y="382" width="324" height="128" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="30" y="382" width="324" height="128"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> persistence·supplier-client 와 <b>같은 모양</b>. api-app 은 인프라 설정 없이 남는다 (D-MS-5).</div><div class="d" style="margin-top:5px"><b>+</b> 어댑터가 <b>정확한 예외 타입</b>만 잡아 변환한다 (LAY-8). 쓰지 않는 장치가 뜨지 않는다.</div><div class="d" style="margin-top:5px"><b>−</b> 파일 셋이 더 생긴다 — 인터페이스·NoOp·어댑터. 그리고 모듈 하나.</div></div></foreignObject>
+
+          <!-- 안 2 -->
+          <rect x="382" y="34" width="356" height="490" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="400" y="62" fill="#333D4B">안 2 — Spring Cache + 자동설정 (모듈 안)</text>
+          <rect x="398" y="78" width="324" height="64" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="78" width="324" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">core: org.springframework.cache.Cache</div><div class="s">spring-context 안이라 새 의존은 0</div></div></foreignObject>
+          <line x1="560" y1="144" x2="560" y2="168" stroke="#8B95A1" stroke-width="2" marker-end="url(#a4)"/>
+          <rect x="398" y="170" width="324" height="104" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="170" width="324" height="104"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">cache-redis: @EnableCaching + 설정 빈</div><div class="s">RedisCacheConfiguration(TTL·JSON)</div><div class="s">자동설정이 RedisCacheManager 를 만든다</div></div></foreignObject>
+          <line x1="560" y1="276" x2="560" y2="300" stroke="#8B95A1" stroke-width="2" marker-end="url(#a4)"/>
+          <rect x="398" y="302" width="324" height="64" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="302" width="324" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">끄기: spring.cache.type=none</div><div class="s">batch-app 은 NoOpCacheManager 빈 한 줄</div></div></foreignObject>
+          <rect x="398" y="382" width="324" height="128" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="382" width="324" height="128"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 인터페이스·NoOp 을 우리가 안 만든다. 설정 둘로 끝.</div><div class="d" style="margin-top:5px"><b>−</b> core 의 컴포넌트가 Redis 예외를 <span style="font-family:var(--mono)">RuntimeException</span> 으로 넓게 잡아야 한다 — 연결·타임아웃과 직렬화 실패의 예외 뿌리가 달라서다.</div><div class="d" style="margin-top:5px"><b>−</b> 어노테이션 0개인데 <span style="font-family:var(--mono)">@EnableCaching</span> 인터셉터가 뜬다. 범용 직렬화기라 JSON 에 <span style="font-family:var(--mono)">@class</span> 가 붙는다.</div></div></foreignObject>
+
+          <!-- 안 3 -->
+          <rect x="750" y="34" width="356" height="490" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="768" y="62" fill="#333D4B">안 3 — Spring Cache + 설정은 api-app</text>
+          <rect x="766" y="78" width="324" height="64" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="78" width="324" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">core: Cache</div><div class="s">안 2 와 같음</div></div></foreignObject>
+          <line x1="928" y1="144" x2="928" y2="168" stroke="#8B95A1" stroke-width="2" marker-end="url(#a4)"/>
+          <rect x="766" y="170" width="324" height="104" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="170" width="324" height="104"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">api-app: 설정 클래스 + starter 둘</div><div class="s">첫 그림의 모양</div><div class="s">api-app 이 처음으로 인프라 설정을 갖는다</div></div></foreignObject>
+          <line x1="928" y1="276" x2="928" y2="300" stroke="#8B95A1" stroke-width="2" marker-end="url(#a4)"/>
+          <rect x="766" y="302" width="324" height="64" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="302" width="324" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">끄기: spring.cache.type=none</div><div class="s">안 2 와 같음</div></div></foreignObject>
+          <rect x="766" y="382" width="324" height="128" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="382" width="324" height="128"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 모듈이 늘지 않는다.</div><div class="d" style="margin-top:5px"><b>−</b> module-split 이 api-app 을 "presentation + 실행"으로 못박고 어댑터를 runtimeOnly 로만 얹게 한 결정(D-MS-5)과 어긋난다. Testcontainers 테스트도 api-app 에 들어온다.</div><div class="d" style="margin-top:5px"><b>−</b> 안 2 의 단점을 전부 함께 가진다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 안 1 이 치르는 값은 <b>파일 셋</b>이고, 안 2·3 이 치르는 값은 <b>core 가 Redis 예외를 넓게 잡는 것</b>과 안 쓰는 인터셉터다. 이 저장소가 이미 하는 모양을 따르는 쪽이 안 1 이다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">포트 계약 두 줄</span><span class="term">find</span> 는 저장소에 못 닿으면 <span class="term">SearchCacheUnavailableException</span> 을 던진다. <span class="term">store</span> 는 절대 던지지 않는다 — 실패는 구현이 WARN 한 줄로 남긴다. 이 비대칭이 결정 D 의 "읽기 실패는 503, 쓰기 실패는 결과 반환"을 <strong>계약으로</strong> 고정한다.</div>
+  </section>
+
+  <!-- ========== 5 ========== -->
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">DECISION C</p><h2 class="sec">전원 실패를 어떻게 기억하나 <span class="stchip ok">확정 · 안 3</span></h2></div>
+    </div>
+
+    <p class="lead">"30초 기억 → 즉시 502"는 닫혔다. 남은 것은 <strong>그 기억이 캐시 안에서 어떤 값이냐</strong>다. F7 은 전원 실패를 예외로 표현하는데, 예외는 캐시에 넣을 수 없다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 05">
+        <svg viewBox="0 0 1120 470" role="img" aria-label="전원 실패 기억 형태 세 안의 비교. 결과와 플래그를 묶은 래퍼, 실패 전용 캐시 둘째, 결과 값 객체를 그대로 저장하고 읽는 쪽이 판정하는 안을 나란히 놓았다.">
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">Redis 에 무엇이 들어가고, 읽는 쪽이 무엇으로 502 를 판정하나</text>
+
+          <!-- 안 1 -->
+          <rect x="14" y="34" width="356" height="420" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="32" y="62" fill="#333D4B">안 1 — 래퍼 타입</text>
+          <rect x="30" y="78" width="324" height="96" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="78" width="324" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d" style="font-family:var(--mono);font-size:11.5px">stay-search::v1:… =<br/>CachedSearch {<br/>&#160;&#160;result: {…} | null,<br/>&#160;&#160;allSuppliersFailed: true }</div></div></foreignObject>
+          <rect x="30" y="190" width="324" height="70" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="190" width="324" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">읽는 쪽: 플래그 검사</div><div class="s">true 면 throw AllSuppliersFailed</div></div></foreignObject>
+          <rect x="30" y="276" width="324" height="164" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="276" width="324" height="164"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 기억이 <b>명시적</b>이다. JSON 만 봐도 무엇인지 안다.</div><div class="d" style="margin-top:5px"><b>−</b> 캐시 전용 타입이 하나 생기고, 같은 사실이 두 벌이 된다 — <span style="font-family:var(--mono)">outcomes</span> 가 전부 FAILED 인 것과 플래그. 둘이 어긋나는 값이 만들어질 수 있다.</div><div class="d" style="margin-top:5px"><b>−</b> 유스케이스의 fetch 가 여전히 던져야 하고 컴포넌트가 잡아 플래그로 바꾼다 — 예외를 값으로, 값을 다시 예외로.</div></div></foreignObject>
+
+          <!-- 안 2 -->
+          <rect x="382" y="34" width="356" height="420" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="400" y="62" fill="#333D4B">안 2 — 실패 전용 캐시 둘째</text>
+          <rect x="398" y="78" width="324" height="96" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="78" width="324" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d" style="font-family:var(--mono);font-size:11.5px">stay-search::v1:… = {…}<br/>stay-search-failed::v1:… = true<br/><br/>둘 중 하나만 존재한다 (약속)</div></div></foreignObject>
+          <rect x="398" y="190" width="324" height="70" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="190" width="324" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">읽는 쪽: GET 두 번</div><div class="s">실패 키 → 있으면 502, 없으면 결과 키</div></div></foreignObject>
+          <rect x="398" y="276" width="324" height="164" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="276" width="324" height="164"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 실패 기억의 TTL 을 결과와 다르게 줄 수 있다 — 지금은 <b>필요 없는</b> 자유도다.</div><div class="d" style="margin-top:5px"><b>−</b> 요청마다 Redis 왕복이 둘. "둘 중 하나만"은 코드가 지키는 약속일 뿐 저장소가 보장하지 않는다.</div><div class="d" style="margin-top:5px"><b>−</b> 캐시 이름 둘, 설정 둘, 테스트 갈래 둘.</div></div></foreignObject>
+
+          <!-- 안 3 -->
+          <rect x="750" y="34" width="356" height="420" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="768" y="62" fill="#1B64DA">안 3 — 결과 그대로 + 읽는 쪽 판정 · 추천</text>
+          <rect x="766" y="78" width="324" height="96" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="766" y="78" width="324" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d" style="font-family:var(--mono);font-size:11.5px">stay-search::v1:… =<br/>StaySearchResult {<br/>&#160;&#160;items: [],<br/>&#160;&#160;outcomes: [A FAILED, B FAILED] }</div></div></foreignObject>
+          <rect x="766" y="190" width="324" height="70" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="766" y="190" width="324" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">읽는 쪽: result.allSuppliersFailed()</div><div class="s">hit 든 miss 든 같은 한 줄이 502 를 정한다</div></div></foreignObject>
+          <rect x="766" y="276" width="324" height="164" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="766" y="276" width="324" height="164"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 새 타입 0. F7 의 <span style="font-family:var(--mono)">Collected.toResult()</span> 가 이미 이 값을 만든다 — 저장 로직은 "받은 것을 넣는다" 하나.</div><div class="d" style="margin-top:5px"><b>+</b> 판정 규칙이 값 객체 안으로 들어간다 (DDD-5). D-F7-15 의 공허참 방지도 같은 자리에 산다.</div><div class="d" style="margin-top:5px"><b>+</b> fetch 는 던지지 않고, 유스케이스가 <b>캐시 앞뒤 어느 쪽에서 왔든</b> 같은 자리에서 던진다.</div><div class="d" style="margin-top:5px"><b>−</b> 기억이 암묵적이다 — JSON 만 보면 "빈 결과"처럼 보인다. 메서드 이름으로 드러낸다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 안 3 에서는 전원 실패가 <b>결과의 한 종류</b>가 된다. 그래서 예외를 잡았다 다시 던지는 자리가 없고, 502 를 정하는 코드가 <b>한 줄, 한 곳</b>이다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">안 3 이 F7 에 요구하는 변경</span><span class="term">Collected.allFailed()</span> 의 판정(빈 outcomes 는 false)을 <span class="term">StaySearchResult.allSuppliersFailed()</span> 로 옮기고, <span class="term">fetch</span> 는 ERROR 요약 로그만 남긴 채 <strong>결과를 돌려준다.</strong> 던지는 자리는 <span class="term">search()</span> 하나다. F7 의 T-10(전원 실패 → 예외)은 그대로 통과한다 — 밖에서 보는 행동은 같다.</div>
+  </section>
+
+  <!-- ========== 6 ========== -->
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">HAPPY PATH</p><h2 class="sec">정상 경로 — miss 와 hit</h2></div>
+    </div>
+
+    <p class="lead">miss 는 F7 의 경로 앞뒤에 <strong>포트 호출 둘(Redis 왕복 둘)</strong>이 붙은 것이고, hit 는 <strong>Redis 왕복 하나</strong>로 끝난다. 그 사이에 DB 도 공급사도 없다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="SEQUENCE · FIG. 06">
+        <svg viewBox="0 0 1120 640" role="img" aria-label="검색 요청의 miss 와 hit 시퀀스. 유스케이스가 캐시 컴포넌트를 부르고, 컴포넌트가 Redis 를 조회해 없으면 loader 로 F7 경로를 타서 저장하고, 있으면 바로 돌려준다.">
+          <defs>
+            <marker id="a6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="14" y="14" width="150" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="14" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Controller</div><div class="s">F7 · 무변경</div></div></foreignObject>
+          <rect x="192" y="14" width="150" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="192" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">UseCase</div><div class="s">search()</div></div></foreignObject>
+          <rect x="370" y="14" width="170" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="370" y="14" width="170" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchCache</div><div class="s">getOrLoad()</div></div></foreignObject>
+          <rect x="568" y="14" width="150" height="52" rx="13" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="568" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SearchResultStore</div><div class="s">cache-redis 어댑터</div></div></foreignObject>
+          <rect x="746" y="14" width="150" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="746" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">fetch (F7)</div><div class="s">DB 색인 → 포트</div></div></foreignObject>
+          <rect x="926" y="14" width="170" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="926" y="14" width="170" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">공급사 A·B</div><div class="s">F5 어댑터 · F9 재시도</div></div></foreignObject>
+
+          <line x1="89" y1="70" x2="89" y2="610" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="267" y1="70" x2="267" y2="610" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="455" y1="70" x2="455" y2="610" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="643" y1="70" x2="643" y2="610" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="821" y1="70" x2="821" y2="610" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="1011" y1="70" x2="1011" y2="610" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+
+          <text class="svg-l" x="20" y="92" fill="#8B95A1">① MISS — 이 키의 첫 요청</text>
+          <line x1="89" y1="112" x2="263" y2="112" stroke="#3182F6" stroke-width="2" marker-end="url(#a6)"/>
+          <text class="svg-l" x="176" y="104" text-anchor="middle" fill="#1B64DA">search(command)</text>
+          <line x1="267" y1="140" x2="451" y2="140" stroke="#3182F6" stroke-width="2" marker-end="url(#a6)"/>
+          <text class="svg-l" x="359" y="132" text-anchor="middle" fill="#1B64DA">getOrLoad(cmd, () → fetch)</text>
+          <line x1="455" y1="168" x2="639" y2="168" stroke="#3182F6" stroke-width="2" marker-end="url(#a6)"/>
+          <text class="svg-l" x="547" y="160" text-anchor="middle" fill="#1B64DA">find(command) → GET stay-search:v1:…</text>
+          <line x1="639" y1="196" x2="459" y2="196" stroke="#8B95A1" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a6)"/>
+          <text class="svg-l" x="547" y="188" text-anchor="middle" fill="#6B7684">null (miss)</text>
+
+          <rect x="366" y="210" width="178" height="42" rx="11" fill="#F4F9FF" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="366" y="210" width="178" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">inFlight.putIfAbsent → 내가 leader</div></div></foreignObject>
+
+          <line x1="455" y1="276" x2="817" y2="276" stroke="#3182F6" stroke-width="2" marker-end="url(#a6)"/>
+          <text class="svg-l" x="636" y="268" text-anchor="middle" fill="#1B64DA">loader.load()</text>
+          <line x1="821" y1="306" x2="1007" y2="306" stroke="#3182F6" stroke-width="2.2" marker-end="url(#a6)"/>
+          <text class="svg-l" x="914" y="298" text-anchor="middle" fill="#1B64DA">searchAll(query)</text>
+          <line x1="1007" y1="336" x2="825" y2="336" stroke="#15C47E" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a6)"/>
+          <text class="svg-l" x="914" y="328" text-anchor="middle" fill="#0A8F5B">offers + failures</text>
+          <rect x="730" y="350" width="182" height="42" rx="11" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1"/>
+          <foreignObject x="730" y="350" width="182" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="s">역매핑 · 정렬 · 요약 로그 1줄</div></div></foreignObject>
+          <line x1="817" y1="412" x2="459" y2="412" stroke="#15C47E" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a6)"/>
+          <text class="svg-l" x="636" y="404" text-anchor="middle" fill="#0A8F5B">StaySearchResult (던지지 않는다)</text>
+
+          <line x1="455" y1="442" x2="639" y2="442" stroke="#3182F6" stroke-width="2" marker-end="url(#a6)"/>
+          <text class="svg-l" x="547" y="434" text-anchor="middle" fill="#1B64DA">store(command, result) · SET EX 30s</text>
+          <rect x="366" y="456" width="178" height="42" rx="11" fill="#F4F9FF" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="366" y="456" width="178" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">future.complete → inFlight.remove</div></div></foreignObject>
+          <line x1="451" y1="518" x2="271" y2="518" stroke="#15C47E" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a6)"/>
+          <text class="svg-l" x="361" y="510" text-anchor="middle" fill="#0A8F5B">CachedSearch(result, MISS)</text>
+          <rect x="180" y="530" width="176" height="42" rx="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1"/>
+          <foreignObject x="180" y="530" width="176" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="s">allSuppliersFailed()? 아니오</div></div></foreignObject>
+          <line x1="263" y1="594" x2="93" y2="594" stroke="#15C47E" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a6)"/>
+          <text class="svg-l" x="178" y="586" text-anchor="middle" fill="#0A8F5B">200</text>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 저장은 <b>future 를 완료하기 전</b>에 한다. 그래야 대기자가 깨어난 뒤 들어오는 다음 요청이 Redis 에서 같은 값을 만난다. 요약 로그는 <span style="font-family:var(--mono)">fetch</span> 안에서 F7 형식 그대로 남고, hit 일 때만 유스케이스가 짧은 한 줄을 따로 남긴다 (§11).</figcaption>
+    </figure>
+
+    <p><strong>hit 는 위 그림의 ①~② 만으로 끝난다.</strong> GET 이 값을 돌려주면 컴포넌트는 in-flight 도 loader 도 건드리지 않고 <span class="term">CachedSearch(result, HIT)</span> 를 돌려주며, 유스케이스는 같은 판정(<span class="term">allSuppliersFailed()</span>)을 거쳐 200 또는 502 를 낸다. DB 조회 두 번도 이 경로에는 없다.</p>
+  </section>
+
+  <!-- ========== 7 ========== -->
+  <section id="s7" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">7</div>
+      <div><p class="sec-eyebrow">SINGLE-FLIGHT</p><h2 class="sec">동시 miss — 한 번만 부른다 <span class="stchip ok">확정 · JVM 로컬</span></h2></div>
+    </div>
+
+    <p class="lead">같은 조건의 모든 사용자가 같은 키를 치므로, 만료 순간 동시에 들어온 요청은 전부 miss 다. 그대로 두면 <strong>30초마다 스탬피드</strong>다. 한 JVM 안에서는 첫 요청이 부르고 나머지는 그 결과를 기다린다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="SEQUENCE · FIG. 07">
+        <svg viewBox="0 0 1120 560" role="img" aria-label="같은 키로 동시에 들어온 세 요청의 시퀀스. 첫 요청이 in-flight 항목을 만들어 공급사를 부르고, 나머지 둘은 그 future 를 기다렸다가 같은 결과를 받는다.">
+          <defs>
+            <marker id="a7" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="14" y="14" width="130" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="14" y="14" width="130" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">요청 R1</div><div class="s">가상 스레드</div></div></foreignObject>
+          <rect x="172" y="14" width="130" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="172" y="14" width="130" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">요청 R2</div><div class="s">같은 키</div></div></foreignObject>
+          <rect x="330" y="14" width="130" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="330" y="14" width="130" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">요청 R3</div><div class="s">같은 키</div></div></foreignObject>
+          <rect x="500" y="14" width="200" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="500" y="14" width="200" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchCache.inFlight</div><div class="s">ConcurrentHashMap</div></div></foreignObject>
+          <rect x="740" y="14" width="150" height="52" rx="13" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="740" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">Redis</div></div></foreignObject>
+          <rect x="936" y="14" width="160" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="936" y="14" width="160" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">공급사</div></div></foreignObject>
+
+          <line x1="79" y1="70" x2="79" y2="530" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="237" y1="70" x2="237" y2="530" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="395" y1="70" x2="395" y2="530" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="600" y1="70" x2="600" y2="530" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="815" y1="70" x2="815" y2="530" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="1016" y1="70" x2="1016" y2="530" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+
+          <line x1="79" y1="100" x2="811" y2="100" stroke="#3182F6" stroke-width="2" marker-end="url(#a7)"/>
+          <text class="svg-l" x="445" y="92" text-anchor="middle" fill="#1B64DA">R1 · find → empty</text>
+          <line x1="79" y1="130" x2="596" y2="130" stroke="#3182F6" stroke-width="2" marker-end="url(#a7)"/>
+          <text class="svg-l" x="337" y="122" text-anchor="middle" fill="#1B64DA">putIfAbsent(key, new future) → null = 내가 leader</text>
+          <line x1="79" y1="160" x2="1012" y2="160" stroke="#3182F6" stroke-width="2.4" marker-end="url(#a7)"/>
+          <text class="svg-l" x="545" y="152" text-anchor="middle" fill="#1B64DA">loader.load() — 공급사 호출은 이것 한 번</text>
+
+          <line x1="237" y1="200" x2="811" y2="200" stroke="#3182F6" stroke-width="2" marker-end="url(#a7)"/>
+          <text class="svg-l" x="524" y="192" text-anchor="middle" fill="#1B64DA">R2 · find → empty (아직 저장 전)</text>
+          <line x1="237" y1="230" x2="596" y2="230" stroke="#3182F6" stroke-width="2" marker-end="url(#a7)"/>
+          <text class="svg-l" x="416" y="222" text-anchor="middle" fill="#1B64DA">putIfAbsent → R1 의 future</text>
+          <rect x="150" y="242" width="174" height="36" rx="10" fill="#F4F9FF" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="150" y="242" width="174" height="36"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">future.join() — 대기</div></div></foreignObject>
+
+          <line x1="395" y1="300" x2="811" y2="300" stroke="#3182F6" stroke-width="2" marker-end="url(#a7)"/>
+          <text class="svg-l" x="603" y="292" text-anchor="middle" fill="#1B64DA">R3 · find → empty</text>
+          <line x1="395" y1="330" x2="596" y2="330" stroke="#3182F6" stroke-width="2" marker-end="url(#a7)"/>
+          <text class="svg-l" x="495" y="322" text-anchor="middle" fill="#1B64DA">putIfAbsent → 같은 future</text>
+          <rect x="308" y="342" width="174" height="36" rx="10" fill="#F4F9FF" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="308" y="342" width="174" height="36"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">future.join() — 대기</div></div></foreignObject>
+
+          <line x1="1012" y1="400" x2="83" y2="400" stroke="#15C47E" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a7)"/>
+          <text class="svg-l" x="545" y="392" text-anchor="middle" fill="#0A8F5B">StaySearchResult</text>
+          <line x1="79" y1="430" x2="811" y2="430" stroke="#3182F6" stroke-width="2" marker-end="url(#a7)"/>
+          <text class="svg-l" x="445" y="422" text-anchor="middle" fill="#1B64DA">store · SET EX 30s</text>
+          <line x1="79" y1="460" x2="596" y2="460" stroke="#15C47E" stroke-width="2.2" marker-end="url(#a7)"/>
+          <text class="svg-l" x="337" y="452" text-anchor="middle" fill="#0A8F5B">future.complete(result) → remove(key, future)</text>
+          <line x1="596" y1="490" x2="241" y2="490" stroke="#15C47E" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a7)"/>
+          <line x1="596" y1="512" x2="399" y2="512" stroke="#15C47E" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a7)"/>
+          <text class="svg-l" x="700" y="504" text-anchor="start" fill="#0A8F5B">R2·R3 깨어남 → CachedSearch(result, JOINED)</text>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — <span style="font-family:var(--mono)">putIfAbsent</span> 의 반환값이 <b>leader 인지 follower 인지</b>를 정한다. leader 가 예외로 끝나면 <span style="font-family:var(--mono)">completeExceptionally</span> 로 대기자에게 같은 예외가 가고, <span style="font-family:var(--mono)">finally</span> 의 remove 로 다음 요청은 다시 leader 가 된다.</figcaption>
+    </figure>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="TIMELINE · FIG. 08">
+        <svg viewBox="0 0 1120 400" role="img" aria-label="api-app 두 인스턴스의 70초 시간 흐름. 0초에 인스턴스 1이 miss 로 저장하고, 2초에 인스턴스 2가 hit 하며, 30초 만료 직후 두 인스턴스가 각각 한 번씩 부르고, 40초 전원 실패가 저장되어 70초까지 두 인스턴스 모두 즉시 502 를 낸다.">
+          <defs>
+            <marker id="a8" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <text class="svg-l" x="20" y="22" fill="#8B95A1">같은 키 하나 · api-app 2 대 · 가로축 초</text>
+
+          <!-- axis -->
+          <line x1="150" y1="330" x2="1090" y2="330" stroke="#B0B8C1" stroke-width="1.4" marker-end="url(#a8)"/>
+          <g class="svg-s" fill="#6B7684">
+            <text x="150" y="350" text-anchor="middle">0</text>
+            <text x="284" y="350" text-anchor="middle">10</text>
+            <text x="418" y="350" text-anchor="middle">20</text>
+            <text x="552" y="350" text-anchor="middle">30</text>
+            <text x="686" y="350" text-anchor="middle">40</text>
+            <text x="820" y="350" text-anchor="middle">50</text>
+            <text x="954" y="350" text-anchor="middle">60</text>
+            <text x="1088" y="350" text-anchor="middle">70</text>
+          </g>
+          <line x1="552" y1="60" x2="552" y2="330" stroke="#F04452" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <text class="svg-l" x="552" y="52" text-anchor="middle" fill="#C9303C">만료 (TTL 30)</text>
+          <line x1="686" y1="60" x2="686" y2="330" stroke="#F04452" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <text class="svg-l" x="686" y="52" text-anchor="middle" fill="#C9303C">전원 실패 저장</text>
+          <line x1="1088" y1="60" x2="1088" y2="330" stroke="#F04452" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <text class="svg-l" x="1088" y="52" text-anchor="middle" fill="#C9303C">기억 만료</text>
+
+          <!-- Redis lane -->
+          <text class="svg-t" x="20" y="100" fill="#1B64DA">Redis</text>
+          <rect x="150" y="80" width="402" height="30" rx="8" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <text class="svg-s" x="351" y="99" text-anchor="middle" fill="#0A8F5B">결과 (부분 실패 포함) · EX 30</text>
+          <rect x="565" y="80" width="121" height="30" rx="8" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <text class="svg-s" x="625" y="99" text-anchor="middle" fill="#0A8F5B">새 결과</text>
+          <rect x="686" y="80" width="402" height="30" rx="8" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-s" x="887" y="99" text-anchor="middle" fill="#C9303C">전원 FAILED 결과 · EX 30 (기억)</text>
+
+          <!-- I1 lane -->
+          <text class="svg-t" x="20" y="176" fill="#333D4B">인스턴스 1</text>
+          <rect x="150" y="150" width="40" height="40" rx="9" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-s" x="170" y="175" text-anchor="middle" fill="#1B64DA">MISS</text>
+          <text class="svg-s" x="196" y="164" fill="#4E5968">공급사 1회 → 저장</text>
+          <rect x="300" y="150" width="40" height="40" rx="9" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <text class="svg-s" x="320" y="175" text-anchor="middle" fill="#0A8F5B">HIT</text>
+          <rect x="565" y="150" width="40" height="40" rx="9" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-s" x="585" y="175" text-anchor="middle" fill="#1B64DA">MISS</text>
+          <rect x="690" y="150" width="40" height="40" rx="9" fill="#FEEFEF" stroke="#F04452" stroke-width="1.4"/>
+          <text class="svg-s" x="710" y="175" text-anchor="middle" fill="#C9303C">MISS</text>
+          <text class="svg-s" x="736" y="164" fill="#C9303C">A·B 모두 실패 → 저장 → 502</text>
+          <rect x="860" y="150" width="40" height="40" rx="9" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-s" x="880" y="175" text-anchor="middle" fill="#C9303C">HIT</text>
+          <text class="svg-s" x="906" y="164" fill="#C9303C">호출 없이 502</text>
+
+          <!-- I2 lane -->
+          <text class="svg-t" x="20" y="256" fill="#333D4B">인스턴스 2</text>
+          <rect x="177" y="230" width="40" height="40" rx="9" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <text class="svg-s" x="197" y="255" text-anchor="middle" fill="#0A8F5B">HIT</text>
+          <text class="svg-s" x="223" y="244" fill="#4E5968">인스턴스 1 이 저장한 값</text>
+          <rect x="570" y="230" width="40" height="40" rx="9" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-s" x="590" y="255" text-anchor="middle" fill="#1B64DA">MISS</text>
+          <text class="svg-s" x="616" y="244" fill="#4E5968">각자 1회 — 분산 락 없음</text>
+          <rect x="760" y="230" width="40" height="40" rx="9" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-s" x="780" y="255" text-anchor="middle" fill="#C9303C">HIT</text>
+          <text class="svg-s" x="806" y="244" fill="#C9303C">인스턴스 1 의 실패를 공유 → 즉시 502</text>
+          <rect x="980" y="230" width="40" height="40" rx="9" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <text class="svg-s" x="1000" y="255" text-anchor="middle" fill="#C9303C">HIT</text>
+
+          <rect x="150" y="290" width="940" height="30" rx="8" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1"/>
+          <text class="svg-s" x="620" y="309" text-anchor="middle" fill="#6B7684">한 인스턴스 안의 동시 miss 는 FIG 07 로 1회 · 인스턴스 사이는 최대 인스턴스 수만큼 · 복구 감지 지연 ≤ 30초</text>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 30초 지점에서 두 인스턴스가 <b>각각 한 번씩</b> 부른다. 이것이 분산 락을 두지 않는 대가이고 상한은 인스턴스 수다. 40초 이후의 빨간 HIT 가 negative cache 의 값어치다 — 인스턴스 2 는 실패를 겪지 않고도 보호된다.</figcaption>
+    </figure>
+
+    <div class="note"><span class="tag">분산 락을 두지 않는 근거</span>얻는 것은 만료 순간 호출 수를 "인스턴스 수 → 1"로 줄이는 것이고, 치르는 값은 Redis 락의 만료·재진입·leader 사망 처리와 대기 방식이다. 인스턴스 수 × 키당 30초 1건이 공급사 한도에 닿는다는 관측이 나오기 전에는 넣지 않는다.</div>
+  </section>
+
+  <!-- ========== 8 ========== -->
+  <section id="s8" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">8</div>
+      <div><p class="sec-eyebrow">NEGATIVE CACHE</p><h2 class="sec">전원 실패 — 기억하고 즉시 502 <span class="stchip ok">확정 · 30초</span></h2></div>
+    </div>
+
+    <p class="lead">결정 C 의 안 3 위에서 이 경로는 <strong>새 코드가 거의 없다.</strong> fetch 가 전원 FAILED 결과를 돌려주고, 컴포넌트는 그것을 여느 결과처럼 저장하며, 유스케이스는 hit 든 miss 든 같은 한 줄로 던진다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="SEQUENCE · FIG. 09">
+        <svg viewBox="0 0 1120 500" role="img" aria-label="전원 실패의 시퀀스. 첫 요청이 공급사 둘 다 실패한 결과를 저장하고 502 를 내며, 30초 안의 다음 요청은 캐시 hit 로 그 결과를 읽어 공급사 호출 없이 502 를 낸다.">
+          <defs>
+            <marker id="a9" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="14" y="14" width="150" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="14" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">advice</div><div class="s">F7 · 502 매핑</div></div></foreignObject>
+          <rect x="192" y="14" width="150" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="192" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">UseCase</div></div></foreignObject>
+          <rect x="370" y="14" width="170" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="370" y="14" width="170" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchCache</div></div></foreignObject>
+          <rect x="568" y="14" width="150" height="52" rx="13" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="568" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">Redis</div></div></foreignObject>
+          <rect x="746" y="14" width="150" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="746" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">fetch (F7)</div></div></foreignObject>
+          <rect x="926" y="14" width="170" height="52" rx="13" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <foreignObject x="926" y="14" width="170" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">공급사 A·B</div><div class="s">둘 다 죽음</div></div></foreignObject>
+
+          <line x1="89" y1="70" x2="89" y2="470" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="267" y1="70" x2="267" y2="470" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="455" y1="70" x2="455" y2="470" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="643" y1="70" x2="643" y2="470" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="821" y1="70" x2="821" y2="470" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="1011" y1="70" x2="1011" y2="470" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+
+          <text class="svg-l" x="20" y="92" fill="#8B95A1">① 첫 요청 — miss</text>
+          <line x1="267" y1="112" x2="451" y2="112" stroke="#3182F6" stroke-width="2" marker-end="url(#a9)"/>
+          <text class="svg-l" x="359" y="104" text-anchor="middle" fill="#1B64DA">getOrLoad</text>
+          <line x1="455" y1="140" x2="639" y2="140" stroke="#3182F6" stroke-width="2" marker-end="url(#a9)"/>
+          <text class="svg-l" x="547" y="132" text-anchor="middle" fill="#1B64DA">find → empty</text>
+          <line x1="455" y1="170" x2="817" y2="170" stroke="#3182F6" stroke-width="2" marker-end="url(#a9)"/>
+          <text class="svg-l" x="636" y="162" text-anchor="middle" fill="#1B64DA">loader.load()</text>
+          <line x1="821" y1="198" x2="1007" y2="198" stroke="#3182F6" stroke-width="2" marker-end="url(#a9)"/>
+          <text class="svg-l" x="914" y="190" text-anchor="middle" fill="#1B64DA">searchAll (F9 재시도 포함)</text>
+          <line x1="1007" y1="226" x2="825" y2="226" stroke="#F04452" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a9)"/>
+          <text class="svg-l" x="914" y="218" text-anchor="middle" fill="#C9303C">A FAILED · B FAILED</text>
+          <rect x="730" y="238" width="182" height="42" rx="11" fill="#FEEFEF" stroke="#F04452" stroke-width="1"/>
+          <foreignObject x="730" y="238" width="182" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="s">ERROR 요약 1줄 (F7 그대로)</div></div></foreignObject>
+          <line x1="817" y1="300" x2="459" y2="300" stroke="#F04452" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a9)"/>
+          <text class="svg-l" x="636" y="292" text-anchor="middle" fill="#C9303C">StaySearchResult(items=[], outcomes=all FAILED)</text>
+          <line x1="455" y1="330" x2="639" y2="330" stroke="#3182F6" stroke-width="2" marker-end="url(#a9)"/>
+          <text class="svg-l" x="547" y="322" text-anchor="middle" fill="#1B64DA">store — 여느 결과와 똑같이 · EX 30s</text>
+          <line x1="451" y1="358" x2="271" y2="358" stroke="#F04452" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a9)"/>
+          <text class="svg-l" x="361" y="350" text-anchor="middle" fill="#C9303C">CachedSearch(result, MISS)</text>
+          <line x1="263" y1="386" x2="93" y2="386" stroke="#F04452" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a9)"/>
+          <text class="svg-l" x="178" y="378" text-anchor="middle" fill="#C9303C">throw AllSuppliersFailed → 502</text>
+
+          <text class="svg-l" x="20" y="418" fill="#8B95A1">② 30초 안의 다음 요청 — hit</text>
+          <line x1="267" y1="438" x2="639" y2="438" stroke="#3182F6" stroke-width="2" marker-end="url(#a9)"/>
+          <text class="svg-l" x="453" y="430" text-anchor="middle" fill="#1B64DA">getOrLoad → find → 전원 FAILED 결과</text>
+          <line x1="639" y1="462" x2="93" y2="462" stroke="#F04452" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a9)"/>
+          <text class="svg-l" x="366" y="454" text-anchor="middle" fill="#C9303C">allSuppliersFailed() → WARN 1줄 (cache=HIT) → throw → 502 · 공급사·DB 호출 0</text>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — ①과 ②에서 502 를 정하는 코드는 <b>같은 한 줄</b>이다. ②의 로그가 ERROR 가 아니라 WARN 인 이유는 조치 대상이 ①에서 이미 ERROR 로 올라갔고, ②는 <b>알려진 이상을 다시 만난 것</b>이기 때문이다 (advice 의 502 ERROR 는 F7 그대로 남는다).</figcaption>
+    </figure>
+
+    <div class="note warn"><span class="tag">복구 감지 지연 ≤ 30초</span>공급사가 살아나도 기억이 만료될 때까지 이 키는 502 다. 서킷(F9)의 반개방 탐침과 달리 <strong>키마다 30초에 한 번은 miss 가 나므로</strong> 지연 상한이 TTL 로 고정된다. 503 + Retry-After 로 바꾸는 것은 클라이언트가 그 힌트를 읽게 될 때 재검토한다.</div>
+  </section>
+
+  <!-- ========== 9 ========== -->
+  <section id="s9" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">9</div>
+      <div><p class="sec-eyebrow">DECISION D</p><h2 class="sec">Redis 장애 처리 <span class="stchip ok">확정 · 안 2</span></h2></div>
+    </div>
+
+    <p class="lead">처음 제안(우회)을 뒤집었다. 이 캐시는 있으면 좋은 최적화가 아니라 <strong>공급사 한도 안에 머무르기 위한 장치</strong>다. 그 장치가 빠졌을 때 트래픽을 그대로 흘리면, 적중률 0 에 인스턴스 수를 곱한 호출이 공급사로 간다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 10">
+        <svg viewBox="0 0 1120 500" role="img" aria-label="Redis 장애 처리 세 안의 비교. 공급사로 우회, 읽기 실패를 503 으로 내는 안, 로컬 5초 캐시로 낮춰 돌리는 안을 나란히 놓았다.">
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">find 가 Redis 에 못 닿았을 때 검색 1건이 어디로 가나</text>
+
+          <!-- 안 1 -->
+          <rect x="14" y="34" width="356" height="450" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="32" y="62" fill="#333D4B">안 1 — 우회 (fail-open)</text>
+          <rect x="30" y="78" width="324" height="96" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="78" width="324" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">find 실패 → WARN → fetch</div><div class="s">공급사 호출 → 200 (F7 과 같은 응답)</div><div class="s">store 실패 → WARN → 결과 반환</div></div></foreignObject>
+          <rect x="30" y="190" width="324" height="70" rx="11" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <foreignObject x="30" y="190" width="324" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">적중률 0 × 인스턴스 수</div><div class="s">공급사 호출이 캐시 이전으로 돌아간다</div></div></foreignObject>
+          <rect x="30" y="276" width="324" height="192" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="276" width="324" height="192"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 사용자는 장애를 느끼지 않는다. 공급사 여유가 충분하면 이것이 정답이다.</div><div class="d" style="margin-top:5px"><b>−</b> 캐시가 <b>한도 안에 머무르기 위한 장치</b>라면, 우회는 그 한도를 우리가 깨는 경로다. 끝은 429 → F9 서킷 → 전원 실패 502 이고, 게다가 그 502 는 이제 기억되지도 않는다.</div><div class="d" style="margin-top:5px"><b>−</b> 전원 실패 기억도 함께 사라진다 — 공급사·Redis 동시 장애에서 보호가 0 이다.</div></div></foreignObject>
+
+          <!-- 안 2 -->
+          <rect x="382" y="34" width="356" height="450" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="400" y="62" fill="#1B64DA">안 2 — 읽기 실패는 503 (fail-closed) · 추천</text>
+          <rect x="398" y="78" width="324" height="96" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="398" y="78" width="324" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">find 실패 → SearchCacheUnavailableException</div><div class="s">advice → 503 SEARCH_UNAVAILABLE "지금은 매물을 확인할 수 없다" · 공급사 호출 0</div><div class="s">store 실패 → WARN → 결과는 돌려준다</div></div></foreignObject>
+          <rect x="398" y="190" width="324" height="70" rx="11" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="398" y="190" width="324" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">즉시 실패가 조건</div><div class="s">끊긴 동안 즉시 거절 + 명령 타임아웃 300ms</div></div></foreignObject>
+          <rect x="398" y="276" width="324" height="192" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="398" y="276" width="324" height="192"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 공급사 한도를 우리가 깨는 경로가 없다. Redis 장애가 공급사 장애로 번지지 않는다.</div><div class="d" style="margin-top:5px"><b>+</b> 503 의 뜻("이 서버가 잠시 불가")이 우리 인프라 문제와 맞는다. F7 이 전원 실패에 503 을 탈락시킨 이유(상류 문제)는 여기 해당하지 않는다.</div><div class="d" style="margin-top:5px"><b>+</b> F0 구조 그대로 — 예외 하나, 오류 코드 값 하나, advice 한 줄.</div><div class="d" style="margin-top:5px"><b>−</b> Redis 가 죽은 동안 검색이 전부 503 이다. <b>Redis 고가용 구성이 전제</b>이며 그 전제는 F10 밖(배포)이다.</div></div></foreignObject>
+
+          <!-- 안 3 -->
+          <rect x="750" y="34" width="356" height="450" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="768" y="62" fill="#333D4B">안 3 — 로컬 5초 캐시로 낮춰 돌리기</text>
+          <rect x="766" y="78" width="324" height="96" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="78" width="324" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">find 실패 → 인스턴스 로컬 맵 (TTL 5s)</div><div class="s">없으면 fetch → 로컬에 저장 → 200</div><div class="s">Redis 복구 시 다시 Redis 로</div></div></foreignObject>
+          <rect x="766" y="190" width="324" height="70" rx="11" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="190" width="324" height="70"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">호출 상한 = 인스턴스 수 × 키 / 5초</div><div class="s">정상의 6배, 우회보다는 훨씬 적다</div></div></foreignObject>
+          <rect x="766" y="276" width="324" height="192" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="276" width="324" height="192"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 가용성과 공급사 보호를 둘 다 얻는다.</div><div class="d" style="margin-top:5px"><b>−</b> 두 번째 캐시 계층이 생긴다 — TTL 있는 로컬 맵(직접 만들거나 제외한 Caffeine)과 전환 로직, 그리고 그 계층의 테스트. 지금 코드의 두 배다.</div><div class="d" style="margin-top:5px"><b>−</b> 5초도 30초처럼 근거 없는 숫자가 하나 더 생긴다.</div><div class="d" style="margin-top:5px"><b>재검토 조건</b> — Redis 장애가 길거나 잦다고 관측되면(고가용 전제가 깨지면) 이 안으로 간다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 세 안은 "Redis 가 죽었을 때 누가 손해를 보나"가 다르다. 안 1 은 <b>공급사</b>, 안 2 는 <b>사용자(잠시)</b>, 안 3 은 <b>우리 코드 양</b>이다. 캐시의 목적이 공급사 보호이므로 안 1 이 가장 먼저 탈락한다.</figcaption>
+    </figure>
+
+    <h3>안 2 의 세부</h3>
+    <ul class="checklist">
+      <li><span class="box"></span><b>잡는 자리는 cache-redis 의 어댑터</b>다. 연결·타임아웃은 <span class="term">DataAccessException</span> 계열이고 JSON 역직렬화 실패는 <span class="term">SerializationException</span> 이라 이 둘만 잡아 <span class="term">SearchCacheUnavailableException</span> 으로 바꾼다. 컴포넌트는 포트 계약만 믿는다<span class="tag">LAY-8</span></li>
+      <li><span class="box"></span><b>store 실패는 503 이 아니다.</b> 공급사를 이미 불렀으므로 결과를 버리는 것은 호출 낭비다. WARN 한 줄(연산·키·원인 클래스)을 남기고 결과를 돌려준다<span class="tag">비대칭</span></li>
+      <li><span class="box"></span><b>advice 에 Redis 예외 핸들러는 두지 않는다.</b> 컴포넌트가 다 잡으므로 올라올 일이 없고, 올라온다면 버그라 500 이 맞다 (D-F0-4)<span class="tag">F0</span></li>
+      <li><span class="box"></span><b>기동 시 Redis 가 없어도 앱은 뜬다</b>(지연 연결). 그 상태의 검색은 전부 503 이며, 이것이 "조용히 캐시 없이 돈다"보다 낫다<span class="tag">fail fast</span></li>
+      <li><span class="box"></span>서킷은 넣지 않는다 — 어댑터가 Resilience4j 를 받을 수는 있지만 근거 없는 코드다. 즉시 거절 옵션이 끊김을, 타임아웃이 느림을 각각 상한한다. "타임아웃 503 이 반복 관측"되면 어댑터에 실패 후 N초 건너뛰기를 붙인다<span class="tag">재검토</span></li>
+    </ul>
+  </section>
+
+  <!-- ========== 10 ========== -->
+  <section id="s10" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">10</div>
+      <div><p class="sec-eyebrow">DECISION E</p><h2 class="sec">batch-app 기동 <span class="stchip ok">확정 · 안 1</span></h2></div>
+    </div>
+
+    <p class="lead"><span class="term">batch-app</span> 은 <span class="term">com.stay</span> 전체를 스캔해 <span class="term">SearchStaysUseCase</span> 를 <strong>이미</strong> 띄우고 있다. 컴포넌트가 <span class="term">SearchResultStore</span> 빈을 요구하는 순간 배치가 기동에 실패한다. "batch-app 은 Redis 를 모른다"를 지키면서 푸는 세 안이다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 11">
+        <svg viewBox="0 0 1120 400" role="img" aria-label="batch-app 기동 세 안의 구성 비교. 대역 NoOp 빈, 스캔에서 검색 빈 제외, core 가 포트를 선택 주입받는 안을 나란히 놓았다.">
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">batch-app 컨텍스트에서 SearchResultStore 가 어디서 오나</text>
+
+          <!-- 안 1 -->
+          <rect x="14" y="34" width="356" height="350" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="32" y="62" fill="#1B64DA">안 1 — 대역 NoOp 빈 · 추천</text>
+          <rect x="30" y="78" width="324" height="82" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="30" y="78" width="324" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">batch-app: StaySearchCacheStandIn</div><div class="s">@Bean SearchResultStore → new NoOpSearchResultStore()</div><div class="s">core 의 클래스 · cache-redis 의존 없음</div></div></foreignObject>
+          <rect x="30" y="176" width="324" height="192" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="30" y="176" width="324" height="192"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 한 줄. 배치는 cache-redis 모듈 자체를 의존하지 않는다.</div><div class="d" style="margin-top:5px"><b>+</b> 선례와 같은 모양 — 배치 yaml 이 이미 "이 모듈이 쓰지 않는 검색용 fan-out 값"을 들고 있다.</div><div class="d" style="margin-top:5px"><b>−</b> 검색 전용 배선이 배치에 들어오는 <b>두 번째 사례</b>다. 세 번째가 오면 스캔 범위를 앱이 정하도록 바꾼다 (PAT-2 Rule of Three).</div></div></foreignObject>
+
+          <!-- 안 2 -->
+          <rect x="382" y="34" width="356" height="350" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="400" y="62" fill="#333D4B">안 2 — 스캔에서 검색 빈 제외</text>
+          <rect x="398" y="78" width="324" height="82" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="78" width="324" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">@ComponentScan(excludeFilters = …)</div><div class="s">SearchStaysUseCase · StaySearchCache 를 이름으로</div></div></foreignObject>
+          <rect x="398" y="176" width="324" height="192" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="176" width="324" height="192"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 배치에 검색 빈 자체가 없어진다 — 원인을 없애는 방향.</div><div class="d" style="margin-top:5px"><b>−</b> 제외 목록이 검색 클래스가 늘 때마다 자라고, 빠뜨리면 기동 실패가 아니라 <b>엉뚱한 빈이 조용히 뜬다.</b> F6 의 D-F6-13(스캔 범위) 결정을 다시 여는 일이다.</div></div></foreignObject>
+
+          <!-- 안 3 -->
+          <rect x="750" y="34" width="356" height="350" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="768" y="62" fill="#333D4B">안 3 — core 가 선택 주입</text>
+          <rect x="766" y="78" width="324" height="82" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="78" width="324" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">StaySearchCache(ObjectProvider&lt;SearchResultStore&gt;)</div><div class="s">없으면 NoOp 으로 스스로 대체</div></div></foreignObject>
+          <rect x="766" y="176" width="324" height="192" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="176" width="324" height="192"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 어느 앱도 손대지 않는다.</div><div class="d" style="margin-top:5px"><b>−</b> <b>api-app 설정 실수 = 캐시 없이 조용히 돈다.</b> 결정 D 가 fail-closed 를 고른 이유와 정면으로 어긋난다. 기동 로그 한 줄로만 드러나는 결함이다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 안 3 은 편하지만 결정 D 와 모순된다. 안 1 은 "배치가 검색 빈을 안고 뜬다"는 기존 사실을 <b>바꾸지 않고</b> 한 줄로 막는다.</figcaption>
+    </figure>
+
+    <div class="note"><span class="tag">compose 부수 효과</span><span class="term">compose.yaml</span> 에 redis 서비스를 넣으면 <span class="term">batch-app</span> 의 <span class="term">bootRun</span> 도 그 컨테이너를 띄운다 (compose 는 파일 전체를 올린다). 배치는 그 컨테이너에 연결하지 않으므로 낭비일 뿐 오류는 아니다. compose 프로파일로 가르는 것은 지금 하지 않는다.</div>
+  </section>
+
+  <!-- ========== 11 ========== -->
+  <section id="s11" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">11</div>
+      <div><p class="sec-eyebrow">DETAILS</p><h2 class="sec">로그 · 키 · 설정 · 검증</h2></div>
+    </div>
+
+    <h3>로그 — "검색 1건 = 요약 1줄"을 지킨다</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>경로</th><th>누가 남기나</th><th>형식 · 레벨</th></tr></thead>
+        <tbody>
+          <tr><td>MISS</td><td><span class="term">fetch</span> 안 (F7 그대로)</td><td>F7 요약 형식 그대로 · INFO/WARN/ERROR 규칙 무변경. 이 줄만이 공급사별 성공률의 재료다</td></tr>
+          <tr><td>HIT · JOINED</td><td>유스케이스 <span class="term">search()</span></td><td><span class="term">searchStays checkIn=… children=… cache=HIT results=5 elapsedMs=1</span> · 전원 실패 기억이면 WARN, 아니면 INFO</td></tr>
+          <tr><td>Redis 읽기 실패</td><td>advice (503 핸들러)</td><td>ERROR — 조치 필요(우리 인프라). 메시지에 연산·키·원인 클래스</td></tr>
+          <tr><td>Redis 쓰기 실패</td><td>cache-redis 어댑터</td><td>WARN 한 줄 · 결과는 정상 반환</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>적중률은 <span class="term">cache=</span> 필드가 있는 줄 ÷ 전체 검색 줄로 산출된다. F7 줄의 형식을 바꾸지 않으므로 기존 파서·k6 검사가 그대로 선다.</p>
+
+    <h3>키와 버전</h3>
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFC56B"></span><span class="dot" style="background:#15C47E"></span><span class="fn">Redis key</span></div>
+<pre>stay-search:v1:2026-09-10:2026-09-13:2:0
+<span class="cm">   │          │   └─ checkIn : checkOut : adults : children  (StaySearchCommand 넷, ISO 날짜)</span>
+<span class="cm">   │          └─ 값의 JSON 모양 버전. StaySearchResult 필드가 바뀌면 올린다</span>
+<span class="cm">   └─ 키 접두. 어댑터가 만든다 — core 는 키 문자열을 모른다</span></pre>
+    </div>
+    <div class="note"><span class="tag">버전을 키에 두는 이유</span>롤링 배포 중 구·신 인스턴스가 같은 키를 쓰면 한쪽이 못 읽는 JSON 이 30초씩 오간다. 접두를 올리면 두 버전이 <strong>서로 다른 키</strong>를 쓴다. 못 읽는 경우 자체는 결정 D 의 읽기 실패로 잡히므로 500 은 아니지만, 배포 때마다 503 이 나는 것을 막는 값이다.</div>
+
+    <h3>설정</h3>
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFC56B"></span><span class="dot" style="background:#15C47E"></span><span class="fn">api-app/application.yaml (추가분) · 프로퍼티 클래스는 cache-redis</span></div>
+<pre>stay:
+  search-cache:
+    ttl: 30s              <span class="cm"># 정확성이 아니라 절감 배수의 값. 실측 후 재조정</span>
+    enabled: true         <span class="cm"># 테스트 프로필은 false → 모듈이 NoOp 을 등록한다</span>
+spring:
+  data:
+    redis:
+      connect-timeout: 300ms
+      timeout: 300ms      <span class="cm"># 명령(read) 타임아웃. 503 은 이 안에 나간다</span>
+  <span class="cm"># 접속 정보는 compose 자동 감지 (spring-boot-docker-compose)</span></pre>
+    </div>
+    <p>키 이름 존재는 Boot 4.0.6 jar 메타데이터로 확인했고 4.1 은 구현 첫 사이클에서 다시 본다. <span class="term">compose.yaml</span> 에는 <span class="term">redis</span> 이미지 서비스 하나(포트 무작위 · <span class="term">redis-cli ping</span> 헬스체크)가 붙는다.</p>
+
+    <h3>검증 — 무엇을 어디서</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>층</th><th>수단</th><th>확인하는 것</th></tr></thead>
+        <tbody>
+          <tr><td>core 컴포넌트</td><td>순수 JUnit · 맵 기반 가짜 <span class="term">SearchResultStore</span> + 람다 loader</td><td>miss/hit · 세 종류 결과 저장 · single-flight(동시 N → loader 1회) · leader 예외 전파와 in-flight 정리 · find 예외가 그대로 나간다</td></tr>
+          <tr><td>core 유스케이스</td><td>Mockito (F7 방식)</td><td>기억된 전원 실패 → 포트 호출 없이 예외 · 전원 실패 결과가 저장된다 · <span class="term">allSuppliersFailed()</span> 공허참 방지</td></tr>
+          <tr><td>cache-redis 어댑터</td><td><b>Testcontainers Redis 1개</b> · Docker 없으면 건너뜀(⏭)</td><td>JSON 왕복 동등성 · 저장 형식이 JSON(바이트가 <span class="term">{</span> 로 시작) · 키 형식 · TTL 만료 · Redis 를 내리면 find 는 도메인 예외, store 는 조용히 WARN · 프로퍼티 결손 시 기동 실패</td></tr>
+          <tr><td>E2E</td><td>기존 F7 E2E (enabled=false → NoOp)</td><td>무변경 통과 — 캐시가 응답 계약을 바꾸지 않는다는 증거</td></tr>
+          <tr><td>batch-app</td><td>기존 <span class="term">CatalogSyncE2ETest</span></td><td>대역 빈으로 컨텍스트가 뜬다</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>실측(k6)은 §12 뒤 md 에 적는다 — 동일 조건 N 동시 요청에 모의 서버 접근 로그가 1건인지, Redis 를 내렸을 때 503 이 300ms 안에 나오는지, 두 공급사를 내린 뒤 30초 안 요청이 모의 서버에 닿지 않는지.</p>
+  </section>
+
+  <!-- ========== 12 ========== -->
+  <section id="s12" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">12</div>
+      <div><p class="sec-eyebrow">CARDS</p><h2 class="sec">결정 카드 요약</h2></div>
+    </div>
+
+    <p class="lead">전문(탈락 안의 사유 포함)은 <span class="term">01-design.md</span> 에 간다. 여기는 한눈에 보는 표다. 협의 과정의 추천·뒤집힘은 md 의 탈락 사유에 있다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>질문</th><th>상태</th></tr></thead>
+        <tbody>
+          <tr><td>D-F10-1</td><td>캐시가 끼는 자리</td><td><span class="stchip ok">확정</span> 유스케이스가 부르는 컴포넌트 (§3)</td></tr>
+          <tr><td>D-F10-2</td><td>저장소 접근 수단</td><td><span class="stchip ok">확정</span> 자체 포트 + cache-redis 모듈 어댑터 (§4)</td></tr>
+          <tr><td>D-F10-3</td><td>전원 실패의 기억 형태</td><td><span class="stchip ok">확정</span> 결과 그대로 + <span class="term">allSuppliersFailed()</span> (§5)</td></tr>
+          <tr><td>D-F10-4</td><td>Redis 장애 처리</td><td><span class="stchip ok">확정</span> 읽기 실패 503 · 쓰기 실패 WARN · 즉시 거절 + 300ms (§9)</td></tr>
+          <tr><td>D-F10-5</td><td>batch-app 기동</td><td><span class="stchip ok">확정</span> 대역 <span class="term">NoOpSearchResultStore</span> 빈 (§10)</td></tr>
+          <tr><td>D-F10-6</td><td>single-flight 수단</td><td>JVM 로컬 <span class="term">CompletableFuture</span> 맵 · 분산 락 탈락 (§7)</td></tr>
+          <tr><td>D-F10-7</td><td>저장소 (착수 전)</td><td>Redis · 로컬 캐시 탈락 (§1)</td></tr>
+          <tr><td>D-F10-8</td><td>TTL 과 부분 실패 (착수 전)</td><td>30초 하나 · 부분 실패 그대로 저장 (§1)</td></tr>
+          <tr><td>D-F10-9</td><td>수단 (착수 전)</td><td>컴포넌트 직접 · <span class="term">@Cacheable(sync)</span> 탈락 (§1)</td></tr>
+          <tr><td>D-F10-10</td><td>hit 로그</td><td>유스케이스가 짧은 1줄 · 기억된 실패는 WARN (§11)</td></tr>
+          <tr><td>D-F10-11</td><td>키 버전 접두</td><td><span class="term">v1:</span> · JSON 모양이 바뀌면 올린다 (§11)</td></tr>
+          <tr><td>D-F10-12</td><td>Docker 없는 환경</td><td>Testcontainers 테스트 건너뜀(⏭) · 사유는 정리표에 (사용자 결정)</td></tr>
+          <tr><td>D-F10-13</td><td>매핑 색인 캐시</td><td>제외 · 재검토 항목으로도 두지 않는다 (사용자 결정)</td></tr>
+          <tr><td>D-F10-14</td><td>rate limiter (F9 이월)</td><td>제외 · 한도 초과 미관측, 캐시가 먼저 호출 수를 줄인다</td></tr>
+          <tr><td>D-F10-15</td><td>구현 순서</td><td>F9 를 기다리지 않고 시작, F9 병합 후 이 브랜치에 병합해 재검토 (사용자 결정)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    F10 search-cache — 설계 확정본 시각화<br>
+    결정의 원본은 docs/features/search-cache/01-design.md
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>
