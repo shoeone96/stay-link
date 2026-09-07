@@ -32,6 +32,10 @@ public class Property {
     @Column(name = "property_name", nullable = false)
     private String propertyName;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle", nullable = false, length = 16)
+    private PropertyLifecycle lifecycle;
+
     protected Property() {
     }
 
@@ -39,6 +43,7 @@ public class Property {
         this.supplier = supplier;
         this.supplierPropertyCode = supplierPropertyCode;
         this.propertyName = propertyName;
+        this.lifecycle = PropertyLifecycle.ACTIVE;
     }
 
     public static Property create(Supplier supplier, String supplierPropertyCode, String propertyName) {
@@ -53,7 +58,35 @@ public class Property {
         }
     }
 
+    /** 멱등 — 이미 ACTIVE 여도 예외 없이 ACTIVE 를 유지한다. 호출자가 상태 분기를 갖지 않게 하기 위함이다. */
+    public void activate() {
+        this.lifecycle = PropertyLifecycle.ACTIVE;
+    }
+
+    /** 멱등 — 이미 INACTIVE 여도 예외 없이 INACTIVE 를 유지한다. */
+    public void deactivate() {
+        this.lifecycle = PropertyLifecycle.INACTIVE;
+    }
+
+    /** 공급사 응답 원문의 미러를 갱신한다. 이 값은 고객 노출용 표시명이 아니라 매 실행 덮어써진다. */
+    public void rename(String propertyName) {
+        requireText(propertyName, "propertyName");
+        this.propertyName = propertyName;
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public String supplierPropertyCode() {
+        return supplierPropertyCode;
+    }
+
+    public String propertyName() {
+        return propertyName;
+    }
+
+    public PropertyLifecycle lifecycle() {
+        return lifecycle;
     }
 }
