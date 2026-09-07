@@ -1,6 +1,6 @@
 rootProject.name = "stay-link"
 
-include("core", "persistence", "supplier-client", "api-app", "batch-app")
+include("core", "persistence", "supplier-client", "cache-redis", "api-app", "batch-app")
 
 // 모의 공급사 서버. 공급사마다 별도 프로세스로 띄워야 "A만 내렸을 때 B는 정상"을
 // 재현할 수 있어서 프로젝트를 둘로 나눈다. 둘은 서로 의존하지 않고 공유 프로젝트도 없다.
