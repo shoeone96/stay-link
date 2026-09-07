@@ -96,7 +96,7 @@ com.stay.property
 | ID | 질문 | 선택지 | 결정(또는 기본값) | 구현 차단 여부 |
 |---|---|---|---|---|
 | D-F1-1 | 테스트 DB | H2 / Testcontainers(MySQL) | **H2** (사용자 결정 2026-09-03). MySQL 전용 쿼리·DDL이 생기면 재검토 | 닫힘 |
-| D-F1-2 | 로컬 스키마 관리 | `schema.sql` + `validate` / `ddl-auto: update` / Flyway | **`schema.sql` + `validate`** (사용자: 로컬 validate). Flyway는 새 의존성이라 보류 — 스키마 변경이 2회 이상 쌓이면 재검토 | 닫힘 |
+| D-F1-2 | 로컬 스키마 관리 | `schema.sql` + `validate` / `ddl-auto: update` / Flyway | **`schema.sql` + `validate`** (사용자: 로컬 validate). Flyway는 새 의존성이라 보류 — 스키마 변경이 2회 이상 쌓이면 재검토. **2026-09-07 재검토(F6)**: 조건은 충족됐으나(F1 fix-3·4 재생성, F6 `lifecycle` 컬럼으로 3회째) **도입하지 않는다** — 공유되는 영속 환경이 없어 전진 경로는 `docs/db-schema.html` 변경 이력의 ALTER 문장으로 충분하고, 새 의존성은 근거 확인 후에만 넣는다. 재검토 조건을 **공유되는 영속 DB 가 생길 때**로 바꾼다 — 손으로 적용하는 ALTER 는 그 순간부터 드리프트가 시작되기 때문이다 | 닫힘 |
 | D-F1-3 | 패키지명 | `property` / `catalog` / `mapping` | **`property`** — 도메인 개념 이름을 따른다 (사용자 결정) | 닫힘 |
 | D-F1-4 | `Room` Aggregate | 별도 root(식별자 참조) / `Property` 내부 | **별도 root** — 자체 보유 상품이 들어오면 객실 유형 단위 독립 쓰기 경로가 생김. 스키마 동일, 요금·재고는 어느 쪽이든 별도 Aggregate (사용자 결정) | 닫힘 |
 | D-F1-5 | Repository 형태 | domain 인터페이스 + infra 이중 상속 / domain이 JpaRepository 직접 상속 / 수동 어댑터 | **이중 상속** — LAY-2 준수 + 위임 코드 0 | 닫힘 |
