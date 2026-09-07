@@ -14,7 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import reactor.core.publisher.Mono;
 
@@ -28,16 +28,18 @@ class FanOutExecutorTest {
     private static final Duration BUDGET = Duration.ofSeconds(5);
 
     /**
-     * {@code k=1} 만 태우면 "상한"이 아니라 "직렬"을 확인하는 셈이라 {@code concatMap} 으로 바꿔도
-     * 통과한다. 상한 자체는 {@code k>1} 에서만 드러나므로 경계 양쪽을 함께 건다.
+     * 동시 상한을 설정값이 아니라 <b>요청마다 호출 수</b>로 잡으면 웨이브가 항상 1 이 되고, 지켜야 하는
+     * 부등식이 {@code budget > per-call} 하나로 줄어든다 — 바인딩 지점이 이미 강제하는 조건이다
+     * (D-F9-5). 그 성질을 고정하는 자리라 "넘지 않는다"가 아니라 "정확히 같다"를 건다. 넘지 않는
+     * 것만 보면 {@code concatMap} 으로 바꿔도 통과한다.
      */
-    @ParameterizedTest(name = "호출 {0}건 · 상한 {1}")
-    @CsvSource({"2, 1", "3, 2"})
-    @DisplayName("동시 구독 수가 동시 호출 상한을 넘지 않는다")
-    void runAll_withConcurrencyLimit_neverSubscribesBeyondLimit(int callCount, int maxConcurrent) {
+    @ParameterizedTest(name = "호출 {0}건")
+    @ValueSource(ints = {2, 3})
+    @DisplayName("동시 구독 수가 요청의 호출 수와 같아 한 웨이브에 전부 나간다")
+    void runAll_withAnyNumberOfCalls_subscribesThemAllInOneWave(int callCount) {
         // given — 공급사는 둘뿐이라 3건째는 같은 공급사가 다시 들어온다(포트 계약 5)
         SubscriptionGauge gauge = new SubscriptionGauge();
-        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(maxConcurrent, PER_CALL, BUDGET));
+        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(PER_CALL, BUDGET));
         List<SupplierCall<String>> calls =
                 IntStream.range(0, callCount)
                         .mapToObj(
@@ -50,15 +52,15 @@ class FanOutExecutorTest {
         // when
         executor.runAll(calls);
 
-        // then — 상한에 정확히 도달하고 넘지는 않는다
-        assertThat(gauge.peak()).isEqualTo(maxConcurrent);
+        // then
+        assertThat(gauge.peak()).isEqualTo(callCount);
     }
 
     @Test
     @DisplayName("한 호출만 호출당 상한을 넘기면 그 건만 실패 값이 되고 나머지는 성공으로 돌아온다")
     void runAll_whenOneCallExceedsPerCall_failsOnlyThatCall() {
         // given
-        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(2, Duration.ofMillis(100), BUDGET));
+        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(Duration.ofMillis(100), BUDGET));
         List<SupplierCall<String>> calls =
                 List.of(
                         new SupplierCall<>(Supplier.A, Mono.just("a")),
@@ -79,7 +81,7 @@ class FanOutExecutorTest {
     void runAll_whenOneCallErrors_absorbsCauseIntoValue() {
         // given
         IllegalStateException cause = new IllegalStateException("공급사 B 연결 실패");
-        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(2, PER_CALL, BUDGET));
+        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(PER_CALL, BUDGET));
         List<SupplierCall<String>> calls =
                 List.of(
                         new SupplierCall<>(Supplier.A, Mono.just("a")),
@@ -100,7 +102,7 @@ class FanOutExecutorTest {
     void runAll_whenBudgetExpires_keepsArrivedAndFillsMissing() {
         // given — 예산 부등식을 지키면 이 경로에 도달할 수 없으므로 정책을 일부러 뒤집는다
         FanOutExecutor executor =
-                new FanOutExecutor(new FanOutPolicy(2, Duration.ofSeconds(5), Duration.ofMillis(150)));
+                new FanOutExecutor(new FanOutPolicy(Duration.ofSeconds(5), Duration.ofMillis(150)));
         List<SupplierCall<String>> calls =
                 List.of(
                         new SupplierCall<>(Supplier.A, Mono.just("a")),
@@ -121,7 +123,7 @@ class FanOutExecutorTest {
     void runAll_withSameSupplierTwice_fillsMissingSlotInRequestOrder() {
         // given — 코드 묶음을 나누면 같은 공급사로 호출이 여러 건 생긴다
         FanOutExecutor executor =
-                new FanOutExecutor(new FanOutPolicy(2, Duration.ofSeconds(5), Duration.ofMillis(150)));
+                new FanOutExecutor(new FanOutPolicy(Duration.ofSeconds(5), Duration.ofMillis(150)));
         List<SupplierCall<String>> calls =
                 List.of(
                         new SupplierCall<>(Supplier.A, Mono.never()),
@@ -161,22 +163,26 @@ class FanOutExecutorTest {
         return Stream.of(
                 arguments(
                         "전부 도착",
-                        new FanOutPolicy(2, PER_CALL, BUDGET),
+                        new FanOutPolicy(PER_CALL, BUDGET),
                         List.of(
                                 new SupplierCall<>(Supplier.A, Mono.just("a")),
                                 new SupplierCall<>(Supplier.B, Mono.just("b")))),
-                arguments("한 곳이 호출당 상한 초과", new FanOutPolicy(2, Duration.ofMillis(100), BUDGET), oneSlowCall),
+                arguments("한 곳이 호출당 상한 초과", new FanOutPolicy(Duration.ofMillis(100), BUDGET), oneSlowCall),
                 arguments(
                         "한 곳이 예산에 잘림",
-                        new FanOutPolicy(2, Duration.ofSeconds(5), Duration.ofMillis(150)),
+                        new FanOutPolicy(Duration.ofSeconds(5), Duration.ofMillis(150)),
                         oneSlowCall));
     }
 
+    /**
+     * 동시 상한을 {@code calls.size()} 로 잡은 뒤로는 이 자리가 {@code Math.max(1, ...)} 가드를 지키는
+     * 곳이 됐다 — {@code flatMap} 이 동시성 0 을 거부하므로, 가드가 빠지면 빈 목록에서 터진다.
+     */
     @Test
     @DisplayName("호출 목록이 비면 예외가 아니라 빈 리스트가 돌아온다")
     void runAll_withNoCalls_returnsEmptyList() {
         // given
-        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(2, PER_CALL, BUDGET));
+        FanOutExecutor executor = new FanOutExecutor(new FanOutPolicy(PER_CALL, BUDGET));
 
         // when
         List<Outcome<String>> outcomes = executor.runAll(List.of());
