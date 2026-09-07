@@ -145,6 +145,40 @@ class StaySearchCacheTest {
     }
 
     @Test
+    @DisplayName("leader 의 loader 가 Error 를 던지면 leader 는 그 Error 를 그대로 받고 대기자 전원은 매달리지 않고 깨어나며 다음 요청은 다시 loader 를 부른다")
+    void getOrLoad_leaderThrowsError_wakesJoinersAndRethrowsError() throws Exception {
+        // given
+        StackOverflowError failure = new StackOverflowError("simulated");
+        HeldLoader loader = new HeldLoader(() -> {
+            throw failure;
+        });
+        List<Throwable> thrown = new CopyOnWriteArrayList<>();
+        Thread leader = Thread.ofVirtual().start(() -> thrown.add(catchThrowable(() -> cache.getOrLoad(COMMAND, loader))));
+        loader.awaitEntered();
+        List<Throwable> joinerThrown = new CopyOnWriteArrayList<>();
+        List<Thread> followers = startFollowers(FOLLOWERS,
+                () -> joinerThrown.add(catchThrowable(() -> cache.getOrLoad(COMMAND, loader))));
+        awaitParked(followers);
+
+        // when
+        loader.release();
+        join(leader);
+        followers.forEach(StaySearchCacheTest::join);
+        AtomicInteger retries = new AtomicInteger();
+        cache.getOrLoad(COMMAND, () -> {
+            retries.incrementAndGet();
+            return StaySearchResultFixture.allSucceeded();
+        });
+
+        // then
+        assertThat(thrown).singleElement().isSameAs(failure);
+        assertThat(joinerThrown)
+                .hasSize(FOLLOWERS)
+                .allSatisfy(t -> assertThat(t).isInstanceOf(IllegalStateException.class).hasMessageContaining("loader"));
+        assertThat(retries).hasValue(1);
+    }
+
+    @Test
     @DisplayName("저장소에 닿지 못해 find 가 던지면 그 예외가 그대로 나가고 loader 는 불리지 않는다")
     void getOrLoad_storeUnreachable_propagatesWithoutLoading() {
         // given

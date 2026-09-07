@@ -46,6 +46,10 @@ public class StaySearchCache {
     /**
      * 공급사 호출은 leader 만 한다. 완료 전에 저장하는 이유는, 대기자가 깨어난 뒤에 도착하는 요청이 다시
      * miss 가 아니라 저장소에서 만나게 하기 위해서다.
+     *
+     * <p>{@code Error} 는 잡지 않고 그대로 올린다 (CLN-6). 대신 {@code finally} 가 미완료 future 를 닫아
+     * 대기자가 영원히 파킹되지 않게 한다 — 그 갈래에서 대기자는 leader 의 원인을 받지 못하고 "결과 없이
+     * 끝났다"만 받는다 (D-F10-16).
      */
     private CachedSearch lead(StaySearchCommand command, Loader loader, CompletableFuture<StaySearchResult> mine) {
         try {
@@ -58,6 +62,9 @@ public class StaySearchCache {
             mine.completeExceptionally(e);
             throw e;
         } finally {
+            if (!mine.isDone()) {
+                mine.completeExceptionally(new IllegalStateException("loader exited without result: " + command));
+            }
             inFlight.remove(command, mine);
         }
     }
