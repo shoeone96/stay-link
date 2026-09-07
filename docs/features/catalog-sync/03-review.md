@@ -39,3 +39,44 @@ status: 통과
 
 ### 통계
 - error 0 · warn 4 · 인라인 4 · 요약본문 0
+
+## round-2 (2026-09-07 18:04) · PR #10
+
+status: 통과
+
+검사 범위는 round-1 이후 커밋 3건(`78c60cc` PR 기록 · `7539c8f` fix-1 · `fae7f69` 전진 문장·D-F1-2)과 `origin/main..HEAD` 전체다. 입력은 `02-implementation.md` fix-1 섹션.
+
+### 위반 목록
+| # | severity | 규칙 ID | 파일:라인 | 인라인 | 위반 내용 | 근거 (01·02의 어느 항목) | 수정 제안 |
+|---|---|---|---|---|---|---|---|
+| — | — | — | — | — | 없음 | — | — |
+
+### 설계 일치 판정
+- T-NN 커버: 25/25 (변동 없음). fix-1 은 리팩터링만이라 새 테스트 없음 — 02 fix-1 「사이클 로그」의 "행동 변경 없음" 주장은 `CatalogSyncUseCaseTest` 5·`SupplierCatalogSyncServiceTest` 7 이 수정 없이 통과한 것으로 확인.
+- 결정 카드 반영: round-1 과 동일. fix-1 이 건드린 두 파일은 D-F6-7(0건 건너뜀 → `syncSupplier` 두 번째 갈래)·D-F6-10(`REQUIRES_NEW`)·§3 「건너뛴 공급사 처리」의 로그 레벨(Failed=WARN·0건=ERROR)을 그대로 유지한다.
+- §3 「주요 시그니처」 `sync(Supplier supplier, List<CatalogProperty> properties)` 와 코드가 이제 글자 단위로 같다.
+- LAY-1·2: domain import 는 `jakarta.persistence`·`java.util`·`common.error` 뿐, batch-app 의 infrastructure·supplier-client import 없음 (grep 재확인).
+- 이탈: 없음. 02 fix-1 「설계 이탈 요청」 없음과 일치.
+
+### 테스트 정리표 판정
+- 유의미함 재판정이 다른 항목: 없음.
+- T-17 유의미함 칸에 더해진 사유("예외 경로의 분류는 다른 어느 테스트도 고정하지 않는다")는 사실이다 — T-14·T-16 은 각각 0건·`Failed` 결과의 분류, T-18a 는 `Failed` 결과의 알림 인자만 본다. 예외로 끝난 공급사가 `skipped` 로 가는 것을 고정하는 단언은 T-17 100행뿐이다.
+
+### 실행 검증
+- `./gradlew test --rerun-tasks` (2026-09-07 18:03): 총 188 · 통과 188 · 실패 0 · 건너뜀 0 — 02 fix-1 집계(188)와 일치. 모듈별 core 66 · persistence 5 · supplier-client 104 · api-app 10 · batch-app 3. F6 클래스: `PropertyTest` 15 · `RoomTest` 16 · `SupplierCatalogSyncServiceTest` 7 · `CatalogSyncUseCaseTest` 5 · `PropertyJpaRepositoryTest` 2 · `RoomJpaRepositoryTest` 3 · `CatalogSyncE2ETest` 3.
+- 금지어 grep(체크리스트 원문 명령 + `*.yaml`·`*.sql`·`*.http`·`*.js` 확장): 0건. 커밋 메시지(`origin/main..HEAD` 11건)·브랜치명: 0건. AI 흔적 grep(파일·커밋): 0건. 자격 증명·이메일: 0건. 외부 문서 확장자 추적 파일: 0건. 작업 트리 미커밋 변경: 없음.
+
+### (round≥2) 이전 위반 해소
+| 이전 # | 해소 여부 | 근거 |
+|---|---|---|
+| 1 (CLN-2·CLN-3) | 해소 | `CatalogSyncUseCase.java:37-53` `syncAll()` 17줄(시그니처·닫는 괄호 포함), 깊이 `for → if` 2. 세 갈래 판정은 `syncSupplier()`(56-70행, switch 식, 깊이 2)로 분리. 로그 레벨·메시지·순서는 이동 전과 동일 |
+| 2 (CLN-1·DDD-1) | 해소 | `SupplierCatalogSyncService.java:40,62,79,104` 네 메서드의 `List<CatalogProperty>` 인자가 `properties`. `findRoomsByPropertyId` 의 `List<Property>` 인자는 `existingProperties` 로 바꿔 두 목록이 같은 이름을 갖지 않는다 |
+| 3 (TST-7) | 종결 (사용자 결정, 코드 유지) | 정리표 T-17 유의미함 칸과 02 fix-1 「처리한 위반」에 사유 기록. 사유의 사실관계는 위 「테스트 정리표 판정」에서 확인. 단언은 여전히 둘이므로 TST-7 문언과는 어긋나지만 사용자가 근거를 보고 내린 결정이라 재지적하지 않는다 |
+| 4 (D-F6-15·16 · 전진 배포) | 해소 | `docs/db-schema.html:553` 변경 이력 2026-09-07 행에 테이블별 전진 문장 2줄(`ADD COLUMN ... NOT NULL DEFAULT 'ACTIVE'` → `ALTER COLUMN ... DROP DEFAULT`, MySQL 8.4 문법 유효)과 "적용 후 스키마 = CREATE TABLE" 명시. 467행 「운영 주의」가 이 행을 가리킨다. `property-mapping/01-design.md:99` D-F1-2 재검토를 "도입하지 않음, 재검토 조건은 공유 영속 DB 발생 시"로 종결. round-1 의 제안(변경 이력 또는 README 에 전진 문장)과 일치 |
+
+### 시니어 관점 코멘트
+- 새벽 장애·신규 입사자·10배 트래픽: round-1 판정 유지(모두 예 또는 발동 조건이 카드에 있음). fix-1 로 `syncAll()` 이 순회·집계·알림만 남아 읽는 순서가 시퀀스 다이어그램과 같아졌다.
+- 롤백·전진: 롤백 가능(round-1 근거). 전진은 기존 DB 에서 `db-schema.html` 변경 이력의 두 문장으로 가능 — round-1 의 "아니오" 가 "예" 로 바뀌었다. warn 없음.
+
+### 통계
+- error 0 · warn 0 · 인라인 0 · 요약본문 0
