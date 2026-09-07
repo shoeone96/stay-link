@@ -184,6 +184,10 @@ sequenceDiagram
 
 ### API 문서 (OpenAPI)
 
+- 스펙 파일: [`api-docs/openapi3.json`](api-docs/openapi3.json) — OpenAPI 3.0, 검색 엔드포인트의 파라미터·200·400·502·503 응답 예시가 실제 테스트 요청·응답에서 생성됩니다.
+- 뷰어: [`api-docs/index.html`](api-docs/index.html) — 같은 폴더의 스펙을 읽어 렌더링합니다. GitHub에서 직접 열리지 않으므로 아래처럼 로컬 정적 서버로 봅니다.
+- 원본: `api-app/src/test` 의 컨트롤러 테스트(Spring REST Docs + restdocs-api-spec). 생성 태스크는 `:api-app:copyApiSpec`.
+
 **문서를 손으로 쓰지 않습니다. 컨트롤러 테스트가 만듭니다.**
 
 ```bash
@@ -626,7 +630,7 @@ flowchart TB
 | `docs/supplier-response-comparison.html` · `docs/domain-background.html` | A·B 응답 비교와 도메인 배경 |
 | `docs/architecture.html` | 연동 구조도 — F3 병합 시점 스냅샷. 최신 전체 구조는 이 README 상단 다이어그램 |
 | `docs/mock-supplier-behavior.html` · `docs/tech-reference-research.html` | 모의 서버 동작 표·실측, 클라이언트 배선 조사 |
-| `api-docs/index.html` | OpenAPI 문서 (테스트가 생성, 브라우저로 바로 열림) |
+| [`api-docs/openapi3.json`](api-docs/openapi3.json) · [`api-docs/index.html`](api-docs/index.html) | OpenAPI 스펙과 뷰어 — 컨트롤러 테스트가 생성, `python3 -m http.server 8000 -d api-docs` 로 열람 (「API 문서」 절) |
 | `k6/` | 부하·꼬리 지연·검색 API 회귀 스크립트 |
 | `docs/db-schema.html` | 테이블 정의 원본 |
 | `docs/test-cases.md` | 테스트 정리표 |
