@@ -123,3 +123,51 @@
 - 테스트가 태우지 않는 갈래: 분류기 규칙 3(계약에 없는 HTTP 상태 → UNEXPECTED)과 규칙 7(`WebClientRequestException` 사슬의 `ReadTimeoutException` → TIMEOUT), `CatalogProperty.rooms` null → 빈 목록, 번역기의 `roomTypes`/`rooms` null → 빈 객실 목록. 설계 리스트에 없어 케이스를 늘리지 않았고, 규칙 7 은 5.2 의 k6 "per-call 초과" 항목과 겹친다.
 - fix-1에서 바뀐 것(PR #8 리뷰 반영): 테스트 목록은 그대로다(20건, 63개). 반영한 두 건(#1 규칙 3 의 ERROR 로그, #3 번역기의 객실 없는 숙소 집계 warn)은 **로그만 더한 것**이라 돌려주는 값·예외가 바뀌지 않았고, 01 §5.1 테스트 리스트에 해당 T-NN 이 없다(TDD-1) — 리스트를 늘리지 않았다. 대신 **임시 프로브를 실행해 로그 원문을 확인하고 프로브를 삭제**했다 — 원문은 `docs/features/supplier-client/02-implementation.md` fix-1 「실제로 돌려서 확인한 것」에 있다. #4 는 이 요약의 숫자 정정이다.
 - 승격으로 사라진 것: F3a T-10 의 탐침 인터페이스 `ProbeSupplierClient`. 같은 테스트 클래스가 실제 두 인터페이스를 주입받는 T-18 이 됐다.
+
+## supplier-availability-adapter (2026-09-07, fix-1 갱신 — round-1 리뷰 반영)
+
+요약: 총 49 · 통과 49 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 153 · 통과 153 · 실패 0 · 건너뜀 0)
+
+**웹 서버를 띄우지 않는다.** 표준 값은 순수 단위 테스트, 번역기는 계약 문서의 응답을 DTO 로 옮겨 놓고 태우며, Fetcher 는 HTTP Interface 를
+Mockito 로 대체하고, 어댑터는 조합기 실물(테스트용 정책) + Fetcher 더블, 설정은 `ApplicationContextRunner` 다. 실제 소켓·타임아웃은 설계 §1 의
+제외 항목(k6)이라 자동 테스트로 두지 않았고, 대신 **모의 공급사 서버를 띄워 임시 프로브로 한 번 태운 뒤 삭제**했다 — 거기서 날짜 파라미터 표기
+결함을 하나 잡았다(`02-implementation.md` 「실제로 돌려서 확인한 것」).
+
+| # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
+|---|---|---|---|---|---|
+| T-01 | `MoneyTest#plus_withSameCurrency_addsAmountAndKeepsCurrency` | core | 같은 통화 두 금액 → 더함 → 합산되고 통화 보존 | ✅ | 중간 — A 날짜별 합산의 기본 동작. 통화를 잃어버리는 회귀(단순 `long` 반환)에 실패한다 |
+| T-02 | `MoneyTest#plus_withDifferentCurrency_throwsIllegalArgument` | core | KRW + USD → `IllegalArgumentException`, 메시지에 두 코드 | ✅ | 높음 — `Money` 를 값 객체로 둔 이유 그 자체(D-F5-1). 환율을 모르는 자리에서 숫자만 더한 값이 정렬 1등이 되는 것을 막는다 |
+| T-03 | `AvailabilityQueryTest#create_withBrokenInvariant_throwsIllegalArgument` (Parameterized 3) | core | 0박 / 성인 0명 / 빈 조회 대상 → `IllegalArgumentException`, 메시지에 어긋난 조건 | ✅ | 높음 — 0박 요청이 번역기까지 내려가면 숙박일 집합이 비어 총액 0 짜리 항목이 만들어진다. 경계에서 막는다(DDD-4) |
+| T-04 | `AvailabilityQueryTest#stayDates_forThreeNights_excludesCheckOutDate` | core | 09-10~09-13 → 09-10·11·12 | ✅ | 높음 — 계약 §1 의 "체크아웃일은 숙박일이 아니다"를 실행으로 고정한다. 이 집합이 번역기 순회의 기준이라 하루가 밀리면 총액과 재고가 함께 틀린다 |
+| T-05 | `AvailabilityOfferTest#create_withBrokenInvariant_throwsIllegalArgument` (Parameterized 5) | core | 코드·이름 null/공백 4 + `bookableRooms` 음수 → `IllegalArgumentException`, 메시지에 필드명 | ✅ | 높음 — 표준 항목의 자기 검증(DDD-4). 번역기가 잡지 못한 빈 값이 검색 결과로 나가는 것을 막는 마지막 문이다 |
+| T-06 | `AAvailabilityTranslatorTest#translate_contractResponse_sumsDailyRatesAndTakesMinimumRooms` | supplier-client | 계약 §5 ② 3박 응답 → `Money(435600, KRW)`, `bookableRooms` 1 | ✅ | 높음 — 수용 기준 2 의 A 쪽. 세금을 빼먹거나 `nightlyRate` 만 더하는 회귀에 실패한다 |
+| T-07 | `BAvailabilityTranslatorTest#translate_contractResponse_keepsTotalPriceAndTakesMinimumRooms` | supplier-client | 계약 §6 ② 3박 응답 → `Money(453600, KRW)`, `bookableRooms` 1 | ✅ | 높음 — 수용 기준 2 의 B 쪽. 서로 다른 두 응답이 같은 표준 항목이 되는지를 A 와 나란히 고정한다 |
+| T-08 | `AAvailabilityTranslatorTest#translate_withExtraDates_sumsOnlyRequestedStayDates` · `BAvailabilityTranslatorTest#translate_withExtraDates_takesMinimumFromRequestedStayDatesOnly` | supplier-client | 체크인 전날·체크아웃일이 더 붙고 그 날 잔여 0 → 총액 435,600 / 453,600 유지, 최솟값 1 유지 | ✅ | 높음 — D-F5-8 의 "요청 숙박일을 돈다"가 지켜지는지. 응답 배열을 도는 방식으로 되돌리면 총액과 재고가 함께 틀린다. Red 없이 통과했다(구조상 이미 참) |
+| T-09 | `A·BAvailabilityTranslatorTest#translate_withMissingStayDateInOneItem_dropsOnlyThatItem` | supplier-client | 항목 2개 중 하나에 09-12 없음 → 그 항목만 빠지고 나머지는 남음 | ✅ | 높음 — 2박치 총액은 3박 요청의 답이 아니면서 값이 작아 정렬 1등이 된다. 추가 전 Red 는 NPE 였다 |
+| T-10 | `A·BAvailabilityTranslatorTest#translate_withAllItemsMissingStayDate_throwsInvalidSupplierResponse` | supplier-client | 모든 항목이 하루치만 옴 → `InvalidSupplierResponseException`, 메시지에 공급사·`items=2` | ✅ | 높음 — 항목별 제외로만 끝내면 "공급사가 아는 상품이 없다"(정상, T-18)와 구분되지 않아 기간 불일치가 조용히 빈 결과가 된다 |
+| T-11 | `A·BAvailabilityTranslatorTest#translate_withBlankRequiredField_throwsInvalidSupplierResponse` (Parameterized 6×2) | supplier-client | `items`·숙소 코드/이름·객실 코드/이름·`currency` 중 하나가 null·공백 → `InvalidSupplierResponseException`, 메시지에 계약 필드명 | ✅ | 높음 — 범용 예외로 새면 분류기가 UNEXPECTED("우리 버그")로 보내 계약 위반 신호가 죽는다(F3 D-F3-7 과 같은 갈래). Red 없이 통과했다 |
+| T-12 | `A·BAvailabilityTranslatorTest#translate_withZeroRemainingRoomsOnOneDate_keepsOfferWithZeroBookableRooms` | supplier-client | 숙박일 하루의 잔여가 0 → `bookableRooms` 0, 항목은 유지 | ✅ | 높음 — 수용 기준 3(D8). 품절을 어댑터에서 빼면 복구할 수 없고 F7 의 `soldOut` 파생이 성립하지 않는다. Red 없이 통과했다 |
+| T-13 | `BAvailabilityTranslatorTest#translate_withFailureResultCode_throwsSupplierBResultException` | supplier-client | `resultCode` `E503` + `data: null` → `SupplierBResultException`, `resultCode()` 보존 | ✅ | 높음 — B 는 실패도 HTTP 200 이라 이 검사가 없으면 장애가 "빈 결과"로 내려간다. 코드 보존은 분류기의 입력이다. Red 없이 통과했다 |
+| T-14 | `SupplierAvailabilityAdapterTest#searchAll_withCodesOverLimit_splitsIntoChunksKeepingOrder` (Parameterized 4) | supplier-client | 한도 50 에 코드 49·50·51·60 → 묶음 1·1·2·2, 코드 순서·내용 보존 | ✅ | 높음 — 수용 기준 4 의 앞쪽. 경계(49·50·51)를 함께 태워 off-by-one 을 잡는다. 자른 순서가 곧 `FailedChunk` 의 내용이다 |
+| T-15 | `SupplierAvailabilityAdapterTest#searchAll_whenAllChunksSucceed_mergesOffersPerSupplier` | supplier-client | 공급사 2곳 × 2묶음 전부 성공(등록 순서 B, A) → 공급사당 결과 1개, 두 묶음 항목 합침, `failures` 빈 목록, `Supplier` 값 순서 | ✅ | 높음 — 묶음이 여러 건이어도 소비자가 보는 단위는 공급사 하나(D-F5-7). 등록 순서를 뒤집어 넣어 `List` 순서를 그대로 흘리는 회귀에 실패한다 |
+| T-16 | `SupplierAvailabilityAdapterTest#searchAll_whenOneChunkFails_keepsOtherOffersAndRecordsFailedChunk` | supplier-client | A 첫 묶음이 `TimeoutException` → 둘째 묶음 offers 유지 + `FailedChunk(["A-1"], TIMEOUT)` | ✅ | 높음 — 수용 기준 4 의 핵심이자 분류기가 실제로 불리는지 보는 유일한 테스트. 인덱스로 짝짓지 않으면 실패한 묶음의 코드를 만들 수 없다 |
+| T-17 | `SupplierAvailabilityAdapterTest#searchAll_whenAllChunksOfOneSupplierFail_keepsOtherSupplierIntact` | supplier-client | A 두 묶음 모두 실패 → A 는 offers 비고 failures 2개, B 결과는 그대로 | ✅ | 중간 — 한 공급사 전멸이 다른 공급사 결과를 지우지 않는지. Red 없이 통과했다(T-16 구현이 덮는 갈래) |
+| T-18 | `SupplierAvailabilityAdapterTest#searchAll_whenSupplierKnowsNoneOfTheCodes_returnsEmptyResultWithoutFailure` | supplier-client | 호출 성공 + `items: []` → offers·failures 둘 다 빈 목록, 예외 없음 | ✅ | 높음 — 설계 §2 의 "둘 다 비어도 된다" 경계. 이것을 오류로 바꾸면 계약 §8("아는 코드만 돌려준다")이 매번 장애로 보인다. Red 없이 통과했고, 모의 서버 프로브에서도 같은 모양을 확인했다 |
+| T-19 | `SupplierAvailabilityPropertiesTest#bind_withMissingOrNonPositiveLimit_failsAtStartup` (Parameterized 3) | supplier-client | `max-codes` 0 / 음수 / 키 누락 → 기동 실패, 메시지에 `supplier.<공급사>.availability.max-codes` | ✅ | 높음 — 0 이면 묶음이 무한히 생기고 누락은 요청이 들어온 뒤에야 드러난다. 키 이름을 보므로 다른 공급사 설정으로는 통과하지 않는다(D-F5-6) |
+| T-20 | `SupplierAvailabilityAdapterTest#create_withDuplicateOrMissingFetcher_throwsIllegalState` (Parameterized 2) | supplier-client | A 가 둘 / B 가 없음 → 생성 시 `IllegalStateException`, 메시지에 해당 공급사 | ✅ | 높음 — 중복은 `EnumMap` 이 하나를 덮어쓰고, 누락은 그 공급사 코드가 담긴 질의에서 NPE 가 된다 |
+| T-21 | `SupplierAAvailabilityFetcherTest#call_whenApiThrowsSynchronously_failsInsideMono` · `SupplierBAvailabilityFetcherTest#…` | supplier-client | 프록시 mock 이 호출 즉시 던짐 → `call()` 은 안 던지고 `block()` 에서 같은 예외 | ✅ | 높음 — `Mono.defer` 가 빠지면 조합기 밖에서 예외가 터져 그 검색의 다른 공급사까지 함께 죽는다(F3 T-14 와 같은 계약) |
+
+- 만들지 않은 것(TDD-8, 설계 §5): 재고·요금 DTO record 와 `FailedChunk`·`SupplierAvailabilityResult` 의 단순 생성(값 보관만 하고 규칙이 없다) ·
+  `FailureClassifier` 재검증(F3 T-08~13 이 덮고, F5 는 그것이 실제로 불리는지만 T-16 으로 본다) · `FanOutExecutor` 동작(F3a T-01~06, 변경 없음) ·
+  실제 소켓·타임아웃(설계 §1 제외, k6) · `soldOut` 파생(F7).
+- Red 없이 통과한 6건(T-08·T-11·T-12·T-13·T-17·T-18)은 직전 사이클의 구현이 이미 덮은 행동이다. 전부 "되돌리는 수정"에 실패하는 회귀 테스트로 남겼고,
+  사이클별 Red 근거는 `docs/features/supplier-availability-adapter/02-implementation.md` 의 사이클 로그에 있다.
+- 자동 테스트가 덮지 않는 것 — **쿼리 파라미터의 실제 표기**. `LocalDate` 파라미터가 로케일 표기(`26. 9. 10.`)로 나가 모의 서버가 400 으로 거절한 결함은
+  단위 테스트가 아니라 임시 프로브가 잡았고, `@DateTimeFormat(iso = ISO.DATE)` 로 고친 뒤 재현으로 확인했다(`02-implementation.md`). 같은 갈래의 회귀를
+  잡으려면 k6 시나리오(F6)에 재고·요금 호출이 들어가야 한다.
+- 테스트가 태우지 않는 갈래: `AvailabilityQuery` 의 `children < 0`, `AvailabilityOffer` 의 `maxOccupancy < 1`(설계 §2 의 불변식이지만 테스트 리스트에 행이 없다) ·
+  번역기의 여분 날짜 warn·중복 날짜 색인 · A 합산 근거 debug 로그 · 어댑터의 실패 warn. 값과 예외가 아니라 로그·부수 갈래라 리스트를 늘리지 않았다.
+- **fix-1(round-1 위반 #2)로 어댑터의 실패 warn 이 바뀌었지만 테스트는 늘리지 않았다.** 반환값(`FailedChunk`·`SupplierAvailabilityResult`)이 그대로라
+  T-16·T-17 이 고정한 행동에 변화가 없고, 새로 늘어난 것은 로그 문구뿐이다. 설계 §5 의 테스트 리스트에 로그를 대상으로 한 행이 없어 리스트 밖 테스트가
+  되며(TDD-1), 문구를 단언하면 로그를 다듬을 때마다 깨지는 「유의미함 낮음」 테스트가 되어 `test-standard` 「적용하지 않을 때」에 걸린다(TDD-8). 대신
+  임시 프로브로 실제 출력을 한 번 확인하고 지웠다(`02-implementation.md` fix-1).
