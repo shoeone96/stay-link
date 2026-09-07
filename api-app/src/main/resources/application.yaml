@@ -28,9 +28,18 @@ spring:
         default-header:
           X-Api-Key: test-key
 
-# 조합기의 상한. budget 은 per-call 보다 커야 하며, 어긋나면 기동이 실패한다.
-# 지켜야 하는 부등식은 budget > ⌈공급사 수 ÷ max-concurrent⌉ × per-call 이다.
+# max-codes 는 재고·요금 한 요청에 담을 수 있는 숙소 코드 수다. 초과분은 어댑터가 묶음으로 잘라 여러 번 부른다.
+# 공급사별로 두는 이유는 지금 두 값이 같은 것이 우연이기 때문이다. 값이 없거나 1 미만이면 기동이 실패한다.
+#
+# 조합기의 상한(fan-out)은 budget 이 per-call 보다 커야 하며, 어긋나면 기동이 실패한다.
+# 지켜야 하는 부등식은 budget > ⌈호출 수 ÷ max-concurrent⌉ × per-call 이고, 호출 수는 공급사 수가 아니라 묶음 수다.
 supplier:
+  a:
+    availability:
+      max-codes: 50              # 계약 §5 ②
+  b:
+    availability:
+      max-codes: 50              # 계약 §6 ②
   fan-out:                         # 검색용. 사용자가 기다리므로 짧다
     max-concurrent: 2
     per-call: 4s

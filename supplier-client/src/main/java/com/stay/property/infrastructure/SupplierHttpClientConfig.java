@@ -17,7 +17,7 @@ import org.springframework.web.service.registry.ImportHttpServices;
  * 하나로 찍어낼 수 없으므로 인터페이스·DTO·번역기는 공급사별 하위 패키지에 있고, 여기는 배선만 한다.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(FanOutProperties.class)
+@EnableConfigurationProperties({FanOutProperties.class, SupplierAvailabilityProperties.class})
 @ImportHttpServices(
         group = SupplierHttpClientConfig.SUPPLIER_A_GROUP,
         clientType = ClientType.WEB_CLIENT,
@@ -31,12 +31,15 @@ public class SupplierHttpClientConfig {
     public static final String SUPPLIER_A_GROUP = "supplier-a";
     public static final String SUPPLIER_B_GROUP = "supplier-b";
 
+    /** 조합기 빈이 검색용·수집용 둘이라 주입 지점은 이름으로 고른다. */
+    public static final String FAN_OUT_EXECUTOR = "fanOutExecutor";
+
     @Bean
     FanOutPolicy fanOutPolicy(FanOutProperties properties) {
         return properties.toPolicy();
     }
 
-    @Bean
+    @Bean(FAN_OUT_EXECUTOR)
     FanOutExecutor fanOutExecutor(FanOutPolicy policy) {
         return new FanOutExecutor(policy);
     }

@@ -23,6 +23,12 @@ spring:
           X-Api-Key: test-key
 
 supplier:
+  a:
+    availability:
+      max-codes: 50
+  b:
+    availability:
+      max-codes: 50
   fan-out:
     max-concurrent: 2
     per-call: 2s
