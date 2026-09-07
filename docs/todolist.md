@@ -15,7 +15,7 @@
 - [x] **2. supplier 모듈 생성 + mock supplier API 2종** → F2 `mock-supplier-server` (2026-09-05 병합). 독립 모듈 `mock-supplier-a`·`mock-supplier-b`
   - [x] 두 공급사의 응답 포맷을 서로 다르게 구성 (필드명·요금 표현·구조)
 - [x] **3. supplier 연동 클라이언트 설정** → F3a `webclient-config` + F3 `supplier-client` (2026-09-07 병합)
-  - [x] WebClient + 타임아웃 계층 (connect / response / 전체 예산) — 값은 실측 전 자리표시자, F9에서 묶음 수·재시도와 함께 재산정
+  - [x] WebClient + 타임아웃 계층 (connect / response / 전체 예산) — 값은 F7에서 모의 서버 실측으로 확정(README 「타임아웃과 예산」). 재시도와의 관계는 F9에서 다룬다
 - [x] **4. 어댑터 생성 및 적용** → 목록은 F3(F4 흡수), 재고·요금은 F5 `supplier-availability-adapter` (2026-09-07 병합)
   - [x] 공급사별 어댑터 → 표준 모델 변환 (필드 매핑은 코드 기반)
   - [x] 도메인 포트 경계 정의 — `core.application` 소유 `SupplierCatalogPort`·`SupplierAvailabilityPort`
@@ -24,22 +24,27 @@
 
 ## 조회 작업
 
-- [ ] **1. 조회 설계** (자사 API 스펙 포함) → F7 `stay-search-api` 진행 중
-- [ ] **2. 조회 aggregator** (병렬 fan-out) → F7. 조합기·묶음 분할·포트는 F3a·F5에서 완성, 유스케이스만 남음
-- [ ] **3. 부분 실패 + resilience fallback** → F8 `partial-failure`
-  - [ ] 일부 공급사 실패/타임아웃 시 부분 결과 + 실패 표시 반환 — 실패를 값으로 모으는 골격(`Outcome`·`FailedChunk`·실패 유형 8개)은 F3a·F3·F5에 있고 응답 표기만 남음
+- [x] **1. 조회 설계** (자사 API 스펙 포함) → F7 `stay-search-api` (2026-09-07 병합). `GET /api/v1/stays/search`, 응답 계약은 README 「API」
+- [x] **2. 조회 aggregator** (병렬 fan-out) → F7 (2026-09-07 병합). 조합기·묶음 분할·포트는 F3a·F5, 유스케이스·역매핑 색인은 F7
+- [x] **3. 부분 실패 + resilience fallback** → F8은 F7에 흡수 (2026-09-07 병합)
+  - [x] 일부 공급사 실패/타임아웃 시 부분 결과 + 실패 표시 반환 — 200 + `suppliers[].status`(OK/PARTIAL/FAILED), 전 공급사 실패만 502. 골격(`Outcome`·`FailedChunk`·실패 유형 8개)은 F3a·F3·F5
 - [ ] **4. resilience retry / circuit** (필요시 rate limiter) → F9 `supplier-resilience` 진행 중
   - [ ] 공급사별 인스턴스 분리, 백오프 + 지터
 - [ ] **5. 캐싱** (single-flight + soft TTL) → F10 `search-cache`
 
 ## 마무리
 
-- [ ] README·설계 근거 문서화 (WebFlux 미도입 근거, 결정 요약) — 2026-09-07 중간 점검 판 작성. F7~F10 병합 시마다 갱신
-- [ ] 테스트 정리 (도메인 단위 / 어댑터 통합 / 핵심 플로우) — `docs/test-cases.md`에 기능별 누적 중(188건). 핵심 플로우 커버리지 점검은 F7 이후
+- [ ] README·설계 근거 문서화 (WebFlux 미도입 근거, 결정 요약) — F7 병합으로 루트 README 재작성(빠른 시작·설계 결정·연동 지표·미구현 사유). F9·F10 병합 시마다 갱신
+- [ ] 테스트 정리 (도메인 단위 / 어댑터 통합 / 핵심 플로우) — `docs/test-cases.md`에 기능별 누적 중(210건). 핵심 플로우 E2E는 F7의 검색 API 테스트에 있고, 잔여 공백 점검은 F9·F10 뒤
 
 ## 추후 고려사항 (지금은 구현하지 않음 — 2026-09-03)
 
 - **supplier 호출 수 절감** — 현재 구조는 검색마다 공급사 직접 fan-out. 우선 가장 단순한 방식으로 만들고,
   고객 수 기준 예상 supplier 호출량을 설계 문서로 산정한 뒤 적절한 방식(요금·재고 캐싱 / 저장 / 사전 수집)을 결정한다.
+  → 검색 결과 캐시는 F10 `search-cache`에서 다룬다 (2026-09-07).
+- **검색 응답에 나오지 않는 숙소·객실의 정리** (2026-09-07 결정) — 검색 결과에 없는 코드(미매핑·응답 누락)를 검색 경로에서
+  비활성하거나 목록을 재조회해 바로잡는 안(F11 `unmapped-code-recovery`)을 검토했으나 **하지 않는다**. 검색 조건이 날짜·인원뿐이고
+  개별 숙소 상세 조회 경로가 없어 검색 결과가 노출의 전부다. 응답에 없는 항목은 그 검색에서만 빠지면 되고(D11 동기 경로, F7),
+  `property`·`room` 갱신은 하루 1회 배치(F6)의 전체 대조로만 한다.
 - **목록 화면 대표 가격 노출** — 요금은 날짜·인원 없이 존재하지 않는 값이라 저장 모델이 아닌
   요금 캐시(+TTL) 계층에서 해결할 문제. 위 호출량 설계와 같이 판단한다.
