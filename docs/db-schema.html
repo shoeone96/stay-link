@@ -464,7 +464,7 @@
         </tbody>
       </table>
     </div>
-    <div class="note warn"><span class="tag">운영 주의</span><span class="term">schema.sql</span>은 <span class="term">CREATE TABLE IF NOT EXISTS</span> + <span class="term">sql.init.mode: always</span>로 매 기동마다 실행된다. 컬럼 추가처럼 <strong>기존 테이블을 바꾸는 변경은 재실행되지 않으므로</strong> 로컬 컨테이너를 <span class="term">docker compose down</span>으로 지우고 다시 띄워야 validate가 통과한다 (2026-09-04 컬럼 추가 실험 중 실제 재현). 첫 ALTER가 필요해지는 시점에 마이그레이션 도구를 재검토한다 (D-F1-2).</div>
+    <div class="note warn"><span class="tag">운영 주의</span><span class="term">schema.sql</span>은 <span class="term">CREATE TABLE IF NOT EXISTS</span> + <span class="term">sql.init.mode: always</span>로 매 기동마다 실행된다. 컬럼 추가처럼 <strong>기존 테이블을 바꾸는 변경은 재실행되지 않으므로</strong> 로컬 컨테이너를 <span class="term">docker compose down</span>으로 지우고 다시 띄워야 validate가 통과한다 (2026-09-04 컬럼 추가 실험 중 실제 재현). 재생성 대신 변경 이력의 <strong>전진 문장</strong>(2026-09-07 행)을 적용해도 된다. 마이그레이션 도구는 2026-09-07 재검토에서 <strong>도입하지 않기로</strong> 했고, 재검토 조건은 공유되는 영속 DB 가 생길 때다 (D-F1-2).</div>
   </section>
 
   <section id="s4" class="fade">
@@ -550,7 +550,7 @@
           <tr><td>2026-09-04</td><td>room_type → room 으로 개명 (컬럼 supplier_room_code·room_name, 제약 uq_room_property_code·fk_room_property). 의미는 그대로 객실 유형</td><td>D-F1-10</td></tr>
           <tr><td>2026-09-05</td><td><strong>도구용 H2 테이블 4개 등재</strong> — a_property·a_room(9091), b_property·b_room(9092). 모의 공급사 서버의 카탈로그를 메모리에서 파일 DB로 옮기며 생겼다. <strong>서비스 스키마와 분리된 절로 적었고 ER 다이어그램에는 넣지 않았다</strong> — 같은 DB가 아니고 배포에도 들어가지 않는다</td><td>F2 설계 D-F2-9 · 3.6</td></tr>
           <tr><td>2026-09-05</td><td><strong>이 문서의 범위를 명시</strong> — SSOT 규칙은 "우리가 설계한 테이블의 결정 기록"용이다. 프레임워크가 자기 라이브러리의 DDL로 만드는 내부 테이블(Spring Batch 메타데이터 등)은 여기에 넣지 않는다</td><td>사용자 정정 (2026-09-05 대화)</td></tr>
-          <tr><td>2026-09-07</td><td><strong>property·room 에 lifecycle 컬럼 추가</strong> — VARCHAR(16) NOT NULL, enum 문자열(ACTIVE·INACTIVE). 공급사 목록에서 빠진 행을 하드 삭제하지 않고 INACTIVE 로 두고, 다시 나타나면 내부 id 를 유지한 채 ACTIVE 로 되살리기 위한 컬럼이다. 제약에는 참여하지 않으며 <strong>조회 계층에 일괄 필터로 걸지 않는다</strong></td><td>F6 설계 D-F6-1·2·9 · catalog-sync/01-design.md</td></tr>
+          <tr><td>2026-09-07</td><td><strong>property·room 에 lifecycle 컬럼 추가</strong> — VARCHAR(16) NOT NULL, enum 문자열(ACTIVE·INACTIVE). 공급사 목록에서 빠진 행을 하드 삭제하지 않고 INACTIVE 로 두고, 다시 나타나면 내부 id 를 유지한 채 ACTIVE 로 되살리기 위한 컬럼이다. 제약에는 참여하지 않으며 <strong>조회 계층에 일괄 필터로 걸지 않는다</strong>. <strong>기존 DB 전진 문장</strong>(<span class="term">IF NOT EXISTS</span>는 기존 테이블에 컬럼을 더하지 않으므로 테이블마다 두 줄): <span class="term">ALTER TABLE property ADD COLUMN lifecycle VARCHAR(16) NOT NULL DEFAULT 'ACTIVE'</span> → <span class="term">ALTER TABLE property ALTER COLUMN lifecycle DROP DEFAULT</span> (room 동일). 기존 행은 ACTIVE 로 채워지고 중간 상태에 NULL 행이 생기지 않는다. <strong>DEFAULT 는 전진 문장 안에서만 존재하며, 적용이 끝난 스키마는 CREATE TABLE 과 동일하다</strong> — CREATE 에 DEFAULT 를 두지 않는 이유는 엔티티가 항상 값을 채우므로 DB 기본값은 앱이 값을 빠뜨린 결함을 가리는 역할만 하기 때문이다 (PR #10 리뷰 round-1 #4)</td><td>F6 설계 D-F6-1·2·9 · catalog-sync/01-design.md · 03-review.md round-1</td></tr>
           <tr><td>2026-09-07</td><td>schema.sql 을 api-app 에서 persistence 모듈로 옮긴다 — 테이블 정의는 그대로이고 위치만 바뀐다. 배치 앱과 API 앱이 같은 스키마를 공유하기 때문이다</td><td>F6 설계 3장</td></tr>
         </tbody>
       </table>
