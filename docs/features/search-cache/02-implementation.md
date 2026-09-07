@@ -274,3 +274,28 @@ leader 의 원인 객체를 알 수 없다. 대기자는 `IllegalStateException(
   2. `fix: [F10] 저장소 불가 예외에 cause 를 잇고 503 ERROR 에 스택을 남긴다` — `BusinessException` · `SearchCacheUnavailableException` · `GlobalExceptionHandler` · `RedisSearchResultStoreUnreachableTest`(find) · `StaySearchE2ETest`
   3. `fix: [F10] 저장 실패 WARN 에 예외 객체를 싣는다` — `RedisSearchResultStore` · `RedisSearchResultStoreUnreachableTest`(store)
   4. `docs: [F10] 리뷰 round-1 반영 기록` — `docs/test-cases.md` · 이 파일 · `01-design.md` 의 D-F10-16
+
+## D-F10-15 재검토 — F9 병합 후 (2026-09-07 23:29)
+
+status: 완료 (코드 변경 없음)
+
+`origin/main`(F9 `supplier-resilience` 병합, PR #15)을 이 브랜치에 병합했다. 충돌은 설계가 예고한 대로 코드가 아니라
+설정·문서 다섯 파일(api-app yaml 두 벌 · ai-history · features README · test-cases)뿐이었고, 코드는 자동 병합됐다.
+병합 후 전체 테스트 298/298(F9 272 + F10 26).
+
+### 설계 해석 — "재시도 뒤의 FAILED 라 30초 저장이 거짓이 아니다"가 성립하는가
+
+코드 경로로 확인했다. 재시도·서킷은 `SupplierAvailabilityAdapter` 가 묶음 `Mono` 하나에 `resilience.decorate(...)` 로
+거는데(F9 D-F9-12), 그 결과는 `FanOutExecutor` 가 값(`Outcome`)으로 흡수해 `SupplierAvailabilityResult` 로 돌려준다.
+`SearchStaysUseCase.fetch()` 는 그것을 `StaySearchResult` 로 모으고, `StaySearchCache.lead()` 는 loader 가 돌려준
+결과를 **그대로** `store.store()` 한다 — 실패 유형을 보지 않는다. 따라서 캐시에 저장되는 `FAILED` 는 어댑터 층에서
+시도 2회(백오프 포함, 총 소요 < per-call 4s)를 거치거나 서킷이 차단한 **뒤의** 판정이고, 설계 §1.5 의 전제가
+코드에서 성립한다. 유스케이스가 어댑터의 재시도 여부를 모른다는 점이 곧 "F10 은 F9 수치를 건드리지 않는다"의 근거다.
+
+바뀌는 것 하나는 요약 로그의 실패 사유다 — 전원 실패를 기억한 뒤의 `cache=HIT` 줄에는 사유가 없고, 최초 실패 줄에
+`[TIMEOUT]`·`[CIRCUIT_OPEN]` 이 남는다. 서킷이 열린 공급사는 재시도 없이 즉시 `FAILED` 이므로, 그 30초 기억은
+"서킷이 열려 있다"는 사실의 기억이며 이것도 거짓이 아니다(열림 60s > TTL 30s).
+
+**실기동 재확인은 하지 않았다** — 사용자가 시간 문제로 문서 정리 후 바로 병합을 지시했다. 위 경로는 T-07~T-09
+(유스케이스가 fetch 결과를 그대로 캐시에 넘김)와 F9 의 `SupplierResilienceTest`(재시도 뒤 FAILED)가 각각 고정하며,
+둘을 잇는 end-to-end 관측은 §7 실측 항목(k6 + 모의 서버)과 함께 후속이다.
