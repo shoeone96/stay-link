@@ -47,14 +47,17 @@ public class RedisSearchResultStore implements SearchResultStore {
         }
     }
 
-    /** 절대 던지지 않는다 (포트 계약 2). 공급사를 이미 부른 뒤라 결과는 정상 반환되어야 한다. */
+    /**
+     * 절대 던지지 않는다 (포트 계약 2). 공급사를 이미 부른 뒤라 결과는 정상 반환되어야 한다. 삼킨 예외는
+     * WARN 이벤트에 객체째 실어 원인 메시지·스택이 남게 한다 (D-F10-16) — 한 줄 원칙은 메시지 줄 기준이다.
+     */
     @Override
     public void store(StaySearchCommand command, StaySearchResult result) {
         String key = keyOf(command);
         try {
             template.opsForValue().set(key, result, ttl);
         } catch (DataAccessException | SerializationException e) {
-            log.warn("검색 결과를 저장하지 못했다: operation=store key={} cause={}", key, e.getClass().getSimpleName());
+            log.warn("검색 결과를 저장하지 못했다: operation=store key={} cause={}", key, e.getClass().getSimpleName(), e);
         }
     }
 

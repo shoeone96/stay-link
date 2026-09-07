@@ -65,13 +65,14 @@ public class GlobalExceptionHandler {
      * 여기 해당하지 않는다. {@code Retry-After} 는 싣지 않는다 — 복구 시점을 모른다.
      *
      * <p>ERROR 인 이유는 조치가 필요하기 때문이다. 연산·키·원인 클래스는 예외 메시지에만 있고 응답에는
-     * 나가지 않는다 (D-F0-10).
+     * 나가지 않는다 (D-F0-10). 예외 객체를 함께 넘겨 원인(호스트·포트·타임아웃)의 스택이 같은 이벤트에
+     * 남게 한다 (D-F10-16).
      */
     @ExceptionHandler(SearchCacheUnavailableException.class)
     public ResponseEntity<ApiResponse<Void>> handleSearchCacheUnavailable(SearchCacheUnavailableException exception,
             HttpServletRequest request) {
         log.error("Search cache unavailable: method={}, path={}, message={}", request.getMethod(),
-                request.getRequestURI(), exception.getMessage());
+                request.getRequestURI(), exception.getMessage(), exception);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiResponse.error(exception.errorCode()));
     }
 

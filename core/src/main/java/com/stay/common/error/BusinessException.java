@@ -15,6 +15,15 @@ public abstract class BusinessException extends RuntimeException {
         this.errorCode = errorCode;
     }
 
+    /**
+     * 기술 예외를 비즈니스 예외로 옮길 때 원인을 잇는다 (D-F10-16). advice 가 예외 객체를 로거에 넘기면
+     * 원인의 메시지·스택이 같은 로그 이벤트에 남는다.
+     */
+    protected BusinessException(ErrorCode errorCode, String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+    }
+
     public ErrorCode errorCode() {
         return errorCode;
     }

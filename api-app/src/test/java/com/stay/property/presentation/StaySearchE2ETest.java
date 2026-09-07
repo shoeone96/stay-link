@@ -2,6 +2,7 @@ package com.stay.property.presentation;
 
 import static com.epages.restdocs.apispec.ResourceDocumentation.parameterWithName;
 import static com.stay.common.docs.ApiSpecDocumentation.document;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -12,10 +13,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.epages.restdocs.apispec.ResourceSnippetParameters;
 import com.epages.restdocs.apispec.ResourceSnippetParametersBuilder;
 import com.epages.restdocs.apispec.SimpleType;
 import com.stay.common.error.CommonErrorCode;
+import com.stay.common.web.GlobalExceptionHandler;
 import com.stay.property.application.AvailabilityOffer;
 import com.stay.property.application.AvailabilityQuery;
 import com.stay.property.application.FailedChunk;
@@ -37,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Currency;
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +51,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.restdocs.payload.FieldDescriptor;
 import org.springframework.restdocs.payload.JsonFieldType;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -99,11 +107,23 @@ class StaySearchE2ETest {
 
     private MockMvc mockMvc;
 
+    /** advice 의 503 ERROR 줄에 예외 객체(스택)가 실리는지는 로그 이벤트로만 볼 수 있다 (D-F10-16). */
+    private final Logger adviceLogger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private final ListAppender<ILoggingEvent> adviceLogs = new ListAppender<>();
+
     @BeforeEach
     void setUp(RestDocumentationContextProvider restDocumentation) {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
                 .apply(documentationConfiguration(restDocumentation))
                 .build();
+        adviceLogs.start();
+        adviceLogger.addAppender(adviceLogs);
+    }
+
+    @AfterEach
+    void tearDown() {
+        adviceLogger.detachAppender(adviceLogs);
+        adviceLogs.stop();
     }
 
     @Test
@@ -218,13 +238,13 @@ class StaySearchE2ETest {
     }
 
     @Test
-    @DisplayName("검색 결과 저장소에 닿지 못하면 503 과 검색 불가 코드로 응답하고 공급사를 부르지 않는다")
+    @DisplayName("검색 결과 저장소에 닿지 못하면 503 과 검색 불가 코드로 응답하고 공급사를 부르지 않으며 ERROR 로그에 예외 스택이 실린다")
     void search_searchResultStoreUnreachable_returnsServiceUnavailableWithoutData() throws Exception {
         // given
         givenMapping(Supplier.A, "A-3201", "Haeundae Blue Hotel", "OCN-DBL", "Ocean Double");
-        given(searchResultStore.find(any(StaySearchCommand.class)))
-                .willThrow(new SearchCacheUnavailableException(
-                        "find", "stay-search:v1:" + CHECK_IN + ":" + CHECK_OUT + ":2:0", new IllegalStateException()));
+        SearchCacheUnavailableException unavailable = new SearchCacheUnavailableException(
+                "find", "stay-search:v1:" + CHECK_IN + ":" + CHECK_OUT + ":2:0", new IllegalStateException("refused"));
+        given(searchResultStore.find(any(StaySearchCommand.class))).willThrow(unavailable);
 
         // when
         // then
@@ -238,6 +258,16 @@ class StaySearchE2ETest {
                 .andExpect(jsonPath("$.data").doesNotExist())
                 .andDo(document("stays-search-unavailable", searchUnavailableDocumentation()));
         then(supplierAvailabilityPort).shouldHaveNoInteractions();
+        assertThat(adviceLogs.list)
+                .filteredOn(event -> event.getLevel() == Level.ERROR)
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.getFormattedMessage()).contains("operation=find");
+                    assertThat(event.getThrowableProxy()).isNotNull();
+                    assertThat(event.getThrowableProxy().getClassName())
+                            .isEqualTo(SearchCacheUnavailableException.class.getName());
+                    assertThat(event.getThrowableProxy().getCause()).isNotNull();
+                });
     }
 
     private static ResourceSnippetParameters searchUnavailableDocumentation() {
