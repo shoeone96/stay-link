@@ -61,4 +61,24 @@ class PropertyJpaRepositoryTest {
                         tuple("P-001", PropertyLifecycle.INACTIVE),
                         tuple("P-002", PropertyLifecycle.ACTIVE));
     }
+
+    @Test
+    @DisplayName("검색 대상을 조회하면 INACTIVE 인 숙소는 공급사와 무관하게 빠진다")
+    void findAllSearchTargets_returnsOnlyActiveProperties() {
+        // given
+        Property dormant = Property.create(Supplier.A, "P-001", "쉬는 숙소");
+        dormant.deactivate();
+        entityManager.persistAndFlush(dormant);
+        entityManager.persistAndFlush(Property.create(Supplier.A, "P-002", "파는 숙소"));
+        entityManager.persistAndFlush(Property.create(Supplier.B, "P-003", "다른 공급사가 파는 숙소"));
+        entityManager.clear();
+
+        // when
+        List<Property> found = propertyRepository.findAllSearchTargets();
+
+        // then
+        assertThat(found)
+                .extracting(Property::supplier, Property::supplierPropertyCode)
+                .containsExactlyInAnyOrder(tuple(Supplier.A, "P-002"), tuple(Supplier.B, "P-003"));
+    }
 }

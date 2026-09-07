@@ -14,4 +14,10 @@ public interface RoomRepository {
      * {@code uq_room_property_code} 에 걸린다 (D-F6-9).
      */
     List<Room> findAllByPropertyIdIn(List<Long> propertyIds);
+
+    /**
+     * 검색이 물어볼 객실 — 지정한 숙소들의 ACTIVE 만. 필터가 메서드 안에 있는 이유는
+     * {@link PropertyRepository#findAllSearchTargets()} 와 같다 (D-F7-5).
+     */
+    List<Room> findAllSearchTargetsByPropertyIdIn(List<Long> propertyIds);
 }

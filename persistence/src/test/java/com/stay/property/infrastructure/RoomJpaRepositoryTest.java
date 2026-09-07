@@ -85,4 +85,26 @@ class RoomJpaRepositoryTest {
                         tuple(firstPropertyId, "R-001", RoomLifecycle.INACTIVE),
                         tuple(secondPropertyId, "R-001", RoomLifecycle.ACTIVE));
     }
+
+    @Test
+    @DisplayName("검색 대상 객실을 조회하면 지정한 숙소의 ACTIVE 객실만 반환된다")
+    void findAllSearchTargetsByPropertyIdIn_returnsOnlyActiveRoomsOfGivenProperties() {
+        // given
+        Long searchedPropertyId = entityManager.persistAndFlush(Property.create(Supplier.A, "P-001", "찾는 숙소")).getId();
+        Long otherPropertyId = entityManager.persistAndFlush(Property.create(Supplier.A, "P-002", "조회 밖 숙소")).getId();
+        Room dormant = Room.create(searchedPropertyId, "R-001", "쉬는 객실");
+        dormant.deactivate();
+        entityManager.persistAndFlush(dormant);
+        entityManager.persistAndFlush(Room.create(searchedPropertyId, "R-002", "파는 객실"));
+        entityManager.persistAndFlush(Room.create(otherPropertyId, "R-003", "조회 밖 객실"));
+        entityManager.clear();
+
+        // when
+        List<Room> found = roomRepository.findAllSearchTargetsByPropertyIdIn(List.of(searchedPropertyId));
+
+        // then
+        assertThat(found)
+                .extracting(Room::propertyId, Room::supplierRoomCode)
+                .containsExactly(tuple(searchedPropertyId, "R-002"));
+    }
 }
