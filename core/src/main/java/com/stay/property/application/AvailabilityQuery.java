@@ -47,6 +47,16 @@ public record AvailabilityQuery(
     }
 
     /**
+     * 검색 조건과 공급사별 조회 대상을 합쳐 질의를 만든다. 인자 조립을 호출자마다 되풀이하지 않기 위한
+     * 정적 팩토리다 (DDD-3). {@code propertyCodes} 가 비면 불변식에 걸리므로, 조회 대상이 0개인지는
+     * 부르기 전에 {@link StayMappingIndex#isEmpty()} 로 가른다 (D-F7-15).
+     */
+    public static AvailabilityQuery of(StaySearchCommand command, Map<Supplier, List<String>> propertyCodes) {
+        return new AvailabilityQuery(
+                command.checkIn(), command.checkOut(), command.adults(), command.children(), propertyCodes);
+    }
+
+    /**
      * 체크인일부터 체크아웃 <b>전날</b>까지의 숙박일. 계약 §1 이 체크아웃일을 숙박일에서 뺀다.
      * 번역기는 응답 배열이 아니라 이 집합을 돌면서 요금을 합산한다 — 그래야 여분·중복 날짜가
      * 총액에 섞이지 않는다(D-F5-8). 순서는 날짜 오름차순으로 유지해 로그가 읽히게 한다.
