@@ -2,9 +2,15 @@ package com.stay.property.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.stay.property.application.SupplierErrorCode;
 import com.stay.property.domain.Supplier;
 import com.stay.property.infrastructure.supplier.b.SupplierBResultException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import java.net.ConnectException;
 import java.net.URI;
 import java.time.Duration;
@@ -24,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.UnsupportedMediaTypeException;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.slf4j.LoggerFactory;
 
 /** 예외 객체를 직접 만들어 분류만 태운다. 소켓도, 조합기도 없다. */
 class FailureClassifierTest {
@@ -131,6 +138,49 @@ class FailureClassifierTest {
 
         // then
         assertThat(code).isEqualTo(SupplierErrorCode.UNEXPECTED);
+    }
+
+    @Test
+    @DisplayName("서킷이 차단해 나온 CallNotPermittedException 을 분류하면 UNAVAILABLE 이 아니라 CIRCUIT_OPEN 이 된다")
+    void classify_callNotPermitted_mapsToCircuitOpen() {
+        // given — 공급사가 준 실패가 아니라 우리가 부르지 않은 것이다 (D-F9-8)
+        CallNotPermittedException cause =
+                CallNotPermittedException.createCallNotPermittedException(
+                        CircuitBreaker.ofDefaults("A:availability"));
+
+        // when
+        SupplierErrorCode code = FailureClassifier.classify(cause);
+
+        // then
+        assertThat(code).isEqualTo(SupplierErrorCode.CIRCUIT_OPEN);
+    }
+
+    /**
+     * 판정용 진입점은 재시도 predicate·서킷 predicate·어댑터가 각각 부르므로, 여기서 로그를 남기면
+     * 분류표에 없는 예외 하나에 같은 ERROR 가 여러 줄 찍힌다 — 실제 장애 때 가장 시끄러워진다(D-F9-11).
+     */
+    @Test
+    @DisplayName("분류표에 없는 예외를 판정용 진입점으로 분류하면 UNEXPECTED 이지만 ERROR 로그는 남지 않는다")
+    void classifyQuietly_unmappedException_mapsToUnexpectedWithoutErrorLog() {
+        // given
+        IllegalStateException cause = new IllegalStateException("번역기 버그");
+        ListAppender<ILoggingEvent> appender = attachAppender();
+
+        // when
+        SupplierErrorCode code = FailureClassifier.classifyQuietly(cause);
+
+        // then
+        assertThat(appender.list).noneMatch(event -> event.getLevel() == Level.ERROR);
+        assertThat(code).isEqualTo(SupplierErrorCode.UNEXPECTED);
+    }
+
+    /** 분류기가 스스로 남기는 로그를 보는 테스트라 실제 Logback 로거에 수집기를 단다. */
+    private static ListAppender<ILoggingEvent> attachAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(FailureClassifier.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
     }
 
     static WebClientRequestException requestFailure(Throwable transportCause) {

@@ -6,6 +6,10 @@ package com.stay.property.application;
  *
  * <p>{@code INVALID_RESPONSE} 는 응답이 계약과 어긋난 것(공급사 쪽을 볼 일), {@code UNEXPECTED} 는 분류표에
  * 없는 예외가 온 것(우리 쪽을 볼 일)이라 보는 사람이 달라 따로 둔다.
+ *
+ * <p>{@code CIRCUIT_OPEN} 만 성격이 다르다 — 공급사가 준 실패가 아니라 <b>우리가 부르지 않은 것</b>이다.
+ * 요약 로그가 이 값을 그대로 찍어 「공급사별 성공률·타임아웃 비율」의 재료로 쓰므로, 자사 차단을
+ * {@code UNAVAILABLE} 로 적으면 그 줄이 거짓 문장이 된다.
  */
 public enum SupplierErrorCode {
     INVALID_REQUEST,
@@ -15,5 +19,6 @@ public enum SupplierErrorCode {
     UNAVAILABLE,
     TIMEOUT,
     INVALID_RESPONSE,
-    UNEXPECTED
+    UNEXPECTED,
+    CIRCUIT_OPEN
 }
