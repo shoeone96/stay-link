@@ -115,6 +115,7 @@ Red 없이 통과한 6건(T-08·T-11·T-12·T-13·T-17·T-18)은 직전 사이�
 | `stayDates()` 의 순서 | `LinkedHashSet` 으로 날짜 오름차순 유지 | 설계는 `Set` 만 요구한다. 순서를 정해 두면 합산 근거 로그가 날짜순으로 읽히고 테스트도 순서로 단언할 수 있다 |
 | 결과에 들어가는 공급사 범위 | 질의가 지목한 공급사만(`query.propertyCodes().keySet()`), `Supplier` 값 순서 | 설계 §3.4 가 결과를 "supplier 값 순서로" 라고만 한다. 묻지 않은 공급사를 결과에 넣으면 받는 쪽이 "빈 결과"와 "안 물어봄"을 구분할 수 없다 |
 | 실패 묶음 로그 내용 | 코드 목록 대신 **개수**와 사유 | 한 묶음이 코드 50 개라 로그 한 줄이 응답보다 길어진다. 어느 코드가 빠졌는지는 값(`FailedChunk`)으로 이미 올라간다 |
+| 공급사 API 메서드의 인자 수 | `availability`·`search` 를 쿼리 파라미터 5개를 그대로 받는 시그니처로 둔다 — `CLN-2`(인자 3개 이하)를 의식적으로 벗어난 자리다 | 설계 §3.1 이 시그니처를 `availability(...)` 로만 적어 인자 수를 정하지 않았다. HTTP Interface 의 인자는 곧 나가는 쿼리 파라미터의 선언이라, record 로 묶으면 어떤 파라미터가 어떤 이름으로 나가는지가 다른 파일로 숨는다. 묶는다면 `AvailabilityQuery` 가 아니라 **HTTP 계약 전용 record** 여야 한다 — 질의를 그대로 넘기면 프록시가 쓰지 않는 `propertyCodes` 까지 인자에 들어간다. (round-1 위반 #3 지적으로 fix-1 에서 이 행을 추가했다) |
 
 ### 설계 이탈 요청
 
@@ -138,3 +139,92 @@ Red 없이 통과한 6건(T-08·T-11·T-12·T-13·T-17·T-18)은 직전 사이�
 2. `feat: [F5] 공급사 A·B 재고·요금 DTO와 번역기` — `supplier/{a,b}` DTO·번역기 + 번역기 테스트 (T-06~T-13)
 3. `feat: [F5] 재고·요금 Fetcher와 공급사 API 메서드` — Fetcher 인터페이스·구현·API 수정 + Fetcher 테스트 (T-21)
 4. `feat: [F5] 재고·요금 어댑터와 공급사별 코드 한도` — 어댑터·프로퍼티·yaml·배선 + 어댑터·프로퍼티 테스트 (T-14~T-20)
+
+---
+
+## fix-1 (2026-09-07 17:12)
+
+status: 완료
+
+`03-review.md` round-1 에서 **사용자가 반영하기로 한 위반 #2·#3 만** 처리했다. #1(금지어)은 메인 세션이
+이미 처리했고, #4(`01` §2 근거 문장 정정)는 `01-design.md` 가 내 쓰기 범위 밖이라 메인 세션이 고친다.
+
+### 사이클 로그
+
+| T-NN | 테스트 (클래스#메서드) | Red | Green | 비고 |
+|---|---|---|---|---|
+| — | 새 테스트 없음 | — | — | 아래 「새 테스트를 만들지 않은 근거」. 기존 T-14~T-20(`SupplierAvailabilityAdapterTest`) 재실행으로 회귀를 확인했다 |
+
+### 전체 테스트 결과
+
+- 저장소 전체: **총 153 · 통과 153 · 실패 0 · 건너뜀 0** (근거: `./gradlew test --rerun-tasks` 후
+  `*/build/test-results/test/TEST-*.xml` 집계 — api-app 10 · core 36 · persistence 3 · supplier-client 104)
+- implement 시점과 같은 수치다. 테스트를 더하지도 지우지도 않았다.
+
+### 변경 파일
+
+- `supplier-client/src/main/java/com/stay/property/infrastructure/SupplierAvailabilityAdapter.java` (수정)
+- `docs/features/supplier-availability-adapter/02-implementation.md` (수정 — 판단표 1행 추가 + 이 섹션)
+- `docs/test-cases.md` (수정 — F5 섹션 머리말과 「만들지 않은 것」 항목 갱신, 표 행 변화 없음)
+
+### 처리한 위반
+
+| 위반 ID(규칙 ID·파일) | 처리 | 미처리 사유 |
+|---|---|---|
+| #2 `CLN-9` · `SupplierAvailabilityAdapter.java:112` | 실패 묶음 warn 에 **계약 위반일 때만** 원인 메시지를 `detail=` 로 덧붙였다(`contractViolationDetail`). 다른 예외 유형에는 빈 문자열이라 로그 모양이 그대로다 — 조합기가 메시지를 감추는 이유(HTTP 오류 예외 메시지에 든 요청 URL 의 자격 증명)가 그 유형에는 그대로 적용된다 | — |
+| #3 `CLN-2` · `SupplierAApi.java:29` · `SupplierBApi.java:28` | 코드는 그대로 두고 위 「설계가 정하지 않아 구현에서 판단한 것」 표에 행을 추가했다 | — |
+| #1 `publish-checks §1` · `docs/ai-history.md:553` | 손대지 않음 | 메인 세션이 이미 처리했다(사용자 지시). `docs/ai-history.md` 는 내 쓰기 범위 밖이기도 하다 |
+| #4 `01` §2 · `D-F5-1` | 손대지 않음 | 고칠 대상이 `01-design.md` 의 근거 문장이고, `01` 은 수정하지 않는다는 규칙이다. 메인 세션이 직접 고친다 |
+
+**`detail=` 을 붙이는 판정에 cause 사슬을 따라간 이유**: `FailureClassifier` 가 같은 이유로 사슬을
+따라간다(그 클래스 javadoc — "Reactor 와 WebClient 가 원인을 여러 겹으로 감싸므로 맨 바깥 타입만 보면
+대부분 분류표에 없는 것으로 보인다"). 맨 바깥 타입만 보면 분류는 `INVALID_RESPONSE` 인데 `detail` 만
+비는 어긋남이 생긴다. `DecodingException`·`UnsupportedMediaTypeException` 도 같은 유형으로 분류되지만
+그 메시지는 우리가 만든 문자열이 아니므로 **`InvalidSupplierResponseException` 에만** 붙인다.
+
+### 새 테스트를 만들지 않은 근거
+
+1. **행동이 바뀌지 않았다.** 포트가 돌려주는 `SupplierAvailabilityResult`·`FailedChunk` 는 그대로이고,
+   T-16·T-17 이 그 값을 이미 고정한다. 늘어난 것은 로그 문구뿐이다.
+2. **`TDD-1`** — 테스트 리스트는 설계 산출물이고, `01` §5 의 T-01~T-21 어디에도 로그를 대상으로 한 행이
+   없다. 로그 문구 테스트는 리스트 밖 테스트이므로 만들려면 설계 이탈 요청이 필요하다.
+3. **`TDD-8` + `test-standard` 「적용하지 않을 때」** — "유의미함 낮음으로 판정될 테스트는 작성 자체를
+   하지 않는 것이 기본". 문구를 단언하면 로그를 다듬을 때마다 깨지는데 막는 버그가 없다. 같은 저장소의
+   `MaskingExchangeFilterTest` 가 로그를 단언하는 것은 **마스킹 자체가 그 클래스의 유일한 행동**이기
+   때문이고, 어댑터의 계약은 반환값이라 사정이 다르다.
+4. 대신 아래처럼 실제 출력을 한 번 눈으로 확인했다. 이 갈래를 자동 테스트가 덮지 않는다는 사실은
+   `docs/test-cases.md` 의 F5 섹션에 그대로 적었다.
+
+### 실제로 돌려서 확인한 것 (임시 프로브, 확인 후 삭제)
+
+`SupplierAvailabilityAdapterTest.RecordingFetcher` 를 그대로 쓰고 `ListAppender` 로 어댑터 로거를 받는
+임시 테스트를 한 번 태운 뒤 지웠다. A 는 `CompletionException` 으로 한 겹 감싼
+`InvalidSupplierResponseException`(`hotelCode` 누락), B 는 `TimeoutException` 을 냈다.
+
+```
+공급사 재고·요금 묶음 실패 supplier=A codes=1 reason=INVALID_RESPONSE detail=공급사 A 응답이 계약과 다르다: hotelCode is missing
+공급사 재고·요금 묶음 실패 supplier=B codes=1 reason=TIMEOUT
+```
+
+- 감싸인 예외에서도 필드명이 나온다(사슬 추적이 실제로 필요했다).
+- 다른 유형(`TIMEOUT`)의 줄은 implement 시점과 글자 단위로 같다.
+- 프로브 파일은 `supplier-client/src/test/.../infrastructure/TempLogProbeTest.java` 였고 삭제했다
+  (`./gradlew test --rerun-tasks` 재실행 결과 153 건은 프로브 삭제 후의 값이다).
+
+### 설계 이탈 요청
+
+- 없음.
+
+### 남은 이슈·커밋 단위 제안
+
+**남은 이슈 (내 쓰기 범위 밖)**
+
+- 위반 #4 — `01-design.md` §2 의 `Money` 정당화 문장 정정(메인 세션).
+- implement 섹션의 「남은 이슈」에 적은 문서 갱신(`docs/features/README.md` F5 절 ·
+  `docs/availability-api-integration-design.html` 의 D6·D7 값)은 그대로 남아 있다.
+- 같은 모양의 warn 을 쓰는 `SupplierCatalogAdapter:75`(F3) 에는 손대지 않았다. round-1 이 F5 만
+  지적했고, 다른 기능의 코드를 이 fix 범위에서 바꾸지 않는다. 필요하면 별도 항목으로 올려야 한다.
+
+**커밋 단위 제안 (1개)**
+
+1. `fix: [F5] 계약 위반 묶음 실패 로그에 원인 필드 표기 · 판단표 보완` — 어댑터 1 + 문서 2

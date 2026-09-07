@@ -106,15 +106,38 @@ public class SupplierAvailabilityAdapter implements SupplierAvailabilityPort {
                 .toList();
     }
 
-    /** 실패는 묶음 크기와 유형만 warn 한다 — 코드 50 개를 로그에 풀면 한 줄이 응답보다 길어진다. */
+    /**
+     * 실패는 묶음 크기와 유형만 warn 한다 — 코드 50 개를 로그에 풀면 한 줄이 응답보다 길어진다. 어느 코드가
+     * 빠졌는지는 값({@link FailedChunk})으로 올라간다.
+     *
+     * <p>계약 위반일 때만 원인 메시지를 함께 싣는다. 어긋난 필드명이 그 메시지에만 있어서, 없으면 공급사가
+     * 필수 필드를 빼기 시작한 상황과 본문을 디코딩하지 못한 상황이 로그에서 똑같이 {@code INVALID_RESPONSE}
+     * 로 보인다. 조합기가 원인 메시지를 감추는 이유(HTTP 오류 예외의 메시지에 든 요청 URL 의 자격 증명)는
+     * 우리가 만든 이 문자열에는 해당하지 않는다.
+     */
     private static FailedChunk toFailedChunk(Chunk chunk, Outcome.Failed<List<AvailabilityOffer>> failed) {
         SupplierErrorCode reason = FailureClassifier.classify(failed.cause());
         log.warn(
-                "공급사 재고·요금 묶음 실패 supplier={} codes={} reason={}",
+                "공급사 재고·요금 묶음 실패 supplier={} codes={} reason={}{}",
                 chunk.supplier(),
                 chunk.codes().size(),
-                reason);
+                reason,
+                contractViolationDetail(failed.cause()));
         return new FailedChunk(chunk.codes(), reason);
+    }
+
+    /**
+     * 계약 위반 예외의 메시지를 로그 꼬리로 만든다. 분류기와 같은 이유로 cause 사슬을 따라간다 — Reactor 와
+     * WebClient 가 원인을 여러 겹으로 감싸면 맨 바깥 타입만으로는 찾지 못한다. 다른 예외에는 빈 문자열이라
+     * 로그 모양이 그대로다.
+     */
+    private static String contractViolationDetail(Throwable cause) {
+        for (Throwable current = cause; current != null; current = current.getCause()) {
+            if (current instanceof InvalidSupplierResponseException invalid) {
+                return " detail=" + invalid.getMessage();
+            }
+        }
+        return "";
     }
 
     /** 호출 하나가 어느 공급사의 어떤 코드를 들고 나갔는지. 결과를 되짚기 위한 곁 목록이다. */
