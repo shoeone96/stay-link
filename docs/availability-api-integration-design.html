@@ -200,10 +200,10 @@
         <thead><tr><th>#</th><th>결정</th><th>내용</th></tr></thead>
         <tbody>
           <tr><td>D6</td><td>표준 요금</td><td><strong>기간 총액 gross</strong> — <code>totalAmount</code> + <code>currency</code>. A는 <code>Σ(nightlyRate + taxAmount)</code> 합산, B는 <code>totalPrice</code> 그대로. 날짜별 분해·세금 분리 표시는 버리는 선택 (README 명시)</td></tr>
-          <tr><td>D7</td><td>재고 판정</td><td><code>availableRooms</code> = 숙박일 전체 <code>remainingRooms</code>의 <strong>최솟값</strong> — 하루라도 안 되면 그 기간은 안 되니까</td></tr>
-          <tr><td>D8</td><td>품절 노출</td><td>예약 불가 상품도 응답에서 빼지 않고 <strong><code>availableRooms: 0</code> + <code>soldOut: true</code>로 노출</strong> — 정보 보존, 품절 표시는 화면 몫</td></tr>
+          <tr><td>D7</td><td>재고 판정</td><td><code>bookableRooms</code> = 숙박일 전체 <code>remainingRooms</code>의 <strong>최솟값</strong> — 하루라도 안 되면 그 기간은 안 되니까</td></tr>
+          <tr><td>D8</td><td>품절 노출</td><td>예약 불가 상품도 응답에서 빼지 않고 <strong><code>bookableRooms: 0</code> + <code>soldOut: true</code>로 노출</strong> — 정보 보존, 품절 표시는 화면 몫</td></tr>
           <tr><td>D9</td><td>이름 필드</td><td>검색 응답의 숙소명·객실 타입명은 DB 저장값이 아니라 <strong>공급사 응답 값 그대로</strong> — 목록 갱신 주기만큼 낡은 이름 방지</td></tr>
-          <tr><td>D10</td><td>부분 실패 표기</td><td>aggregate 시 응답에 <strong>공급사별 결과 블록</strong>(<code>suppliers[]</code>: supplier + status + reason) — 성공/실패/사유가 응답만으로 해석 가능</td></tr>
+          <tr><td>D10</td><td>부분 실패 표기</td><td>aggregate 시 응답에 <strong>공급사별 결과 블록</strong>(<code>suppliers[]</code>: supplier + status) — 결과가 온전한지 응답만으로 해석 가능. <strong>2026-09-07 개정 (F7 D-F7-4)</strong>: <code>reason</code>을 뺐다 — ① 호출자가 사유로 행동을 바꾸지 않는다 ② <code>INVALID_RESPONSE</code> 같은 값은 어댑터 계층의 어휘라 <strong>공급사 사정이 응답 경계를 넘는다</strong> ③ 원인은 로그·지표의 몫이다. 전 공급사 실패는 <code>502 ALL_SUPPLIERS_FAILED</code> 로 갈린다 (D-F7-3)</td></tr>
           <tr><td>D11</td><td>미매핑 코드</td><td>동기 경로에서는 <strong>해당 항목만 제외 + 로그</strong>. retry 없이 <strong>비동기로 매핑을 바로 수정</strong>(목록 재조회 → 갱신, 없으면 후처리) — 상세는 fallback 로직·갱신 주기 설계와 함께</td></tr>
           <tr><td>D12</td><td>실패 정규화</td><td>A의 HTTP 상태 ↔ B의 <code>resultCode</code>를 내부 실패 유형으로 통일 — <strong>유형 체계는 ErrorResponse 처리 로직 구현 시 확정</strong> (이연)</td></tr>
         </tbody>
@@ -340,7 +340,7 @@
           <tr><td>7</td><td colspan="2"><code>breakfastIncluded</code> (이름 동일)</td><td>상품 조건으로 전달</td></tr>
           <tr><td>8</td><td colspan="2"><code>currency</code> (이름 동일)</td><td>그대로 전달</td></tr>
           <tr><td>9</td><td><code>dailyRates[].nightlyRate</code> + <code>taxAmount</code></td><td><code>totalPrice</code> (+<code>taxIncluded</code>)</td><td><code>totalAmount</code> gross (D6)</td></tr>
-          <tr><td>10</td><td><code>dailyRates[].remainingRooms</code></td><td><code>inventory[].remainingRooms</code></td><td><code>availableRooms</code> = 최솟값 (D7)</td></tr>
+          <tr><td>10</td><td><code>dailyRates[].remainingRooms</code></td><td><code>inventory[].remainingRooms</code></td><td><code>bookableRooms</code> = 최솟값 (D7)</td></tr>
           <tr><td>11</td><td>HTTP 상태 코드</td><td><code>resultCode</code></td><td>내부 실패 유형 (D12 — 이연)</td></tr>
         </tbody>
       </table>
@@ -380,12 +380,12 @@ totalAmount(B) = totalPrice = <span class="st">453,600 KRW</span>
         <span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFB836"></span><span class="dot" style="background:#15C47E"></span>
         <span class="fn">재고 정규화</span>
       </div>
-<pre>availableRooms = min(날짜별 remainingRooms)
+<pre>bookableRooms = min(날짜별 remainingRooms)
 
 <span class="cm">// A OCN-DBL: [3, 1, 1] → 1  (09-11부터 병목)</span>
 <span class="cm">// 어느 날짜든 0이면 → 0 = 품절. 그 날 안 되면 기간 전체가 안 되니까</span>
 
-soldOut = (availableRooms == 0)   <span class="cm">// D8: 빼지 않고 노출 + 명시적 품절 표기</span></pre>
+soldOut = (bookableRooms == 0)   <span class="cm">// D8: 빼지 않고 노출 + 명시적 품절 표기</span></pre>
     </div>
 
     <div class="note"><span class="tag">D8 근거</span>공급사가 필터링해 주는 것은 <strong>인원뿐</strong>(수용 가능 객실 타입만 반환)이고, 재고 0은 응답에 그대로 온다. "예약 불가"는 우리가 min 계산으로 만드는 파생 판정이므로 노출 여부도 우리 결정이다 — <strong>0을 버리면 복구 불가, 노출하면 품절 표시·필터링 모두 상위에서 선택 가능</strong>. 그래서 보존한다.</div>
@@ -418,7 +418,7 @@ soldOut = (availableRooms == 0)   <span class="cm">// D8: 빼지 않고 노출 +
       "roomId": 11,
       "roomName": "Ocean Double",
       "maxOccupancy": 2,
-      "availableRooms": 1,                    <span class="cm">// min(3,1,1) (D7)</span>
+      "bookableRooms": 1,                    <span class="cm">// min(3,1,1) (D7)</span>
       "soldOut": false,                       <span class="cm">// 0이면 true, 빼지 않음 (D8)</span>
       "totalAmount": 435600,                  <span class="cm">// gross 합산 (D6)</span>
       "currency": "KRW",
@@ -429,8 +429,7 @@ soldOut = (availableRooms == 0)   <span class="cm">// D8: 빼지 않고 노출 +
   ],
   "suppliers": [                              <span class="cm">// 공급사별 결과 블록 (D10)</span>
     { "supplier": "A", "status": "OK" },
-    { "supplier": "B", "status": "FAILED",
-      "reason": "TIMEOUT" }                   <span class="cm">// 유형 값 체계는 D12에서 확정</span>
+    { "supplier": "B", "status": "FAILED" }   <span class="cm">// reason 은 응답에 싣지 않는다 (F7 D-F7-4 개정)</span>
   ]
 }</pre>
     </div>

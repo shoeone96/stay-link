@@ -43,7 +43,7 @@
 | F4 | `supplier-catalog-adapter` | 사전작업 4 (목록) | F3에 통합 (2026-09-07) | - | - |
 | F5 | `supplier-availability-adapter` | 사전작업 4 (재고·요금) | 완료(병합) | 2026-09-07 | 2026-09-07 |
 | F6 | `catalog-sync` | 사전작업 5 | 완료(병합) | 2026-09-07 | 2026-09-07 |
-| F7 | `stay-search-api` | 조회 1 + 2 — F8을 흡수 (2026-09-07) | 구현 대기 | 2026-09-07 | - |
+| F7 | `stay-search-api` | 조회 1 + 2 — F8을 흡수 (2026-09-07) | 구현중 | 2026-09-07 | 2026-09-07 |
 | F8 | `partial-failure` | 조회 3 | F7에 통합 (2026-09-07) | - | - |
 | F9 | `supplier-resilience` | 조회 4 | 대기 | - | - |
 | F10 | `search-cache` | 조회 5 | 대기 | - | - |

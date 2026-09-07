@@ -634,7 +634,10 @@ A에만 고장을 걸어 p95와 실패율이 어떻게 움직이는지 본다. �
 합친 뒤 `copyApiSpec` 태스크가 `api-docs/`로 복사한다.
 
 - `api-docs/index.html`(스펙을 읽어 렌더링하는 로더)만 커밋하고 **생성물 `openapi3.json`은 `.gitignore`** 한다.
-- 서버를 띄우지 않고 브라우저로 `api-docs/index.html`을 열면 문서가 보인다.
+- **앱 서버는 띄우지 않아도 된다** — 문서는 테스트 산출물이라 실행 중인 API가 필요 없다. 다만 로더가
+  `openapi3.json`을 `fetch`하므로 `file://`로 열면 브라우저가 로컬 파일 요청을 막는다. **정적 서버
+  한 줄**(`python3 -m http.server 8000 -d api-docs`)로 연다. 로더는 실패 시 그 원인과 명령을 화면에
+  띄우므로 빈 페이지로 끝나지 않는다.
 
 **미리 확인한 걸림돌.** Spring 7의 `HttpHeaders`가 더 이상 `Map`을 구현하지 않아, 스펙 생성기가 헤더를
 `Map`으로 캐스팅하는 지점에서 깨진다. 우회는 `OperationRequest`를 직접 감싸 헤더 구현을 유지하는 방식이고
