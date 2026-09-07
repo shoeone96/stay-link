@@ -185,3 +185,92 @@ k6 동시 N 과 "저장 실패 시 WARN + 정상 반환"(수용 기준 6)은 모
 1 → 2 순서로는 2 이전 커밋에서 `batch-app`·`api-app` 컨텍스트가 `SearchResultStore` 빈 없이 뜨지 않으므로
 (유스케이스가 `StaySearchCache` 를 요구), **각 커밋이 스스로 통과하려면 1·2·4 의 배선을 한 커밋으로
 묶거나 4 를 2 앞에 두어야 한다.** 3 은 독립이다.
+
+## fix-1 (2026-09-07 22:54)
+
+status: 완료
+
+대상은 `03-review.md` round-1 의 warn #2·#3·#4 다. 반영 방식은 사용자가 결정 카드 **D-F10-16** 으로 정했다
+(① `finally` 에서 미완료 future 닫기 — `catch (Throwable)` 금지 · ② `BusinessException` 에 cause 생성자 추가 ·
+③ `store` WARN 에 예외 객체). #1(error) 은 이미 해소됐고 #5(TDD 사이클 순서)는 기록 사항이라 코드 변경이 없다.
+항목마다 행동을 고정하는 테스트를 먼저 Red 로 두고 Green 으로 갔다. `01-design.md` §5 의 테스트 리스트에는
+행이 늘지 않았으므로 새 메서드·단언은 기존 T-NN 의 갈래로 붙였다(T-05 두 번째 메서드 · T-14 단언 · T-17 단언).
+
+### 사이클 로그
+
+Red 는 `./gradlew :<모듈>:test --tests <클래스>` 실행 결과이고, Green 은 같은 명령의 통과다.
+
+| T-NN | 테스트 (클래스#메서드) | Red | Green | 비고 |
+|---|---|---|---|---|
+| T-05 (#2) | `StaySearchCacheTest#getOrLoad_leaderThrowsError_wakesJoinersAndRethrowsError` (신규) | ✅ 대기자 8건이 5초 안에 끝나지 않아 `join` 헬퍼에서 실패 | ✅ | `lead` 의 `finally` 에 `if (!mine.isDone()) mine.completeExceptionally(new IllegalStateException(...))`. `catch (RuntimeException)` 은 그대로 |
+| T-14 (#3) | `RedisSearchResultStoreUnreachableTest#find_storeUnreachable_throwsSearchCacheUnavailable` 에 `.cause().isInstanceOf(DataAccessException)` 단언 | ✅ cause 가 null | ✅ | `BusinessException(ErrorCode, String, Throwable)` 추가 · `SearchCacheUnavailableException` 이 cause 를 넘김 |
+| T-17 (#3) | `StaySearchE2ETest#search_searchResultStoreUnreachable_returnsServiceUnavailableWithoutData` 에 advice ERROR 이벤트의 throwable 단언(ListAppender) | ✅ ERROR 이벤트에 throwable 없음 | ✅ | 503 핸들러가 `exception` 을 로거 마지막 인자로 넘김 |
+| T-14 (#4) | `RedisSearchResultStoreUnreachableTest#store_storeUnreachable_doesNotThrow` 에 WARN 이벤트의 throwable 단언(ListAppender) | ✅ WARN 이벤트에 throwable 없음 | ✅ | `log.warn(..., key, 클래스명, e)` |
+
+**① 에서 대기자가 받는 것.** `Error` 는 잡지 않으므로(카드가 `catch (Throwable)` 을 탈락시켰다) `finally` 는
+leader 의 원인 객체를 알 수 없다. 대기자는 `IllegalStateException("loader exited without result: <command>")` 을
+받아 advice 의 마지막 그물(500)로 나가고, leader 스레드는 `Error` 를 그대로 받는다. "대기자 전원에게 같은
+예외"(§3.3 ⑤)는 `RuntimeException` 갈래에서만 성립하고, `Error` 갈래의 계약은 "매달리지 않고 깨어난다 · 다음
+요청은 다시 leader" 다. T-05 두 번째 메서드가 이 셋(leader 는 같은 `Error` · 대기자 8건은 `IllegalStateException` ·
+재요청 시 loader 1회)을 고정한다.
+
+**로그 단언을 넣은 이유.** #3·#4 의 수정은 "예외 객체가 로그 이벤트에 실린다"가 전부라, 로그 이벤트를 보지
+않으면 Red 가 없다. `supplier-client` 의 `MaskingExchangeFilterTest` 가 이미 쓰는 Logback `ListAppender` 방식을
+그대로 썼다(추가 의존 없음 — `spring-boot-starter-test` 전이). 단언은 "throwable 이 있다·클래스가 맞다·cause 가
+있다"까지이고 메시지 문구는 `operation=` 조각만 본다.
+
+### 전체 테스트 결과
+
+- 총 **237** · 통과 237 · 실패 0 · 건너뜀 0 (근거: `./gradlew test --rerun-tasks` 뒤 `**/build/test-results/test/TEST-*.xml`, 2026-09-07 22:54)
+- 모듈별: `core` 95 · `supplier-client` 104 · `api-app` 18 · `cache-redis` 10 · `persistence` 7 · `batch-app` 3
+- round-1 의 236 에서 1 이 늘었다(T-05 두 번째 메서드). 나머지 셋은 기존 메서드에 단언을 더한 것이라 수가 같다.
+- Docker 가 있는 환경이라 T-11~T-13 은 실제 컨테이너에 대고 통과했다.
+
+### 변경 파일
+
+**core**
+- `com/stay/common/error/BusinessException.java` (수정 — `(ErrorCode, String, Throwable)` 생성자 추가. **F0 영역(`common.error`)의 추가**이며 기존 생성자·하위 예외는 그대로다)
+- `com/stay/property/application/SearchCacheUnavailableException.java` (수정 — cause 를 상위로 넘김)
+- `com/stay/property/application/StaySearchCache.java` (수정 — `lead` 의 `finally` 가 미완료 future 를 닫음)
+- `test/.../StaySearchCacheTest.java` (수정 — T-05 두 번째 메서드)
+
+**cache-redis**
+- `com/stay/property/infrastructure/RedisSearchResultStore.java` (수정 — `store` WARN 에 예외 객체)
+- `test/.../RedisSearchResultStoreUnreachableTest.java` (수정 — cause 단언 · WARN 이벤트 단언)
+
+**api-app**
+- `com/stay/common/web/GlobalExceptionHandler.java` (수정 — 503 핸들러가 예외 객체를 로거에 넘김. **F0 영역(`common.web`)의 추가 변경**)
+- `test/.../StaySearchE2ETest.java` (수정 — advice 로거에 `ListAppender` 부착·분리, T-17 에 ERROR 이벤트 단언)
+
+**문서**
+- `docs/test-cases.md` (수정 — search-cache 절 요약·T-05·T-14·T-17 행)
+- `docs/features/search-cache/02-implementation.md` (수정 — 이 절)
+
+`01-design.md` 의 D-F10-16 행은 메인 세션이 이미 적어 둔 상태(작업 트리 수정분)이며 이 라운드는 손대지 않았다.
+
+### 설계 이탈 요청
+
+없음. 세 항목 모두 D-F10-16 이 정한 방식 그대로다. `common.error`·`common.web` 은 F0 영역이지만 카드가
+"추가"로 허용했고 기존 생성자·핸들러 시그니처는 바뀌지 않았다.
+
+### 처리한 위반
+
+| 위반 ID(규칙 ID·파일) | 처리 | 미처리 사유 |
+|---|---|---|
+| #1 error · publish-checks §1 · `docs/ai-history.md:738` | — | 이미 해소됨(메인 세션 몫, 이 라운드 범위 밖) |
+| #2 warn · 01 §3.3 ⑤ · OOP-5 · `StaySearchCache.java` | `finally` 에서 `!mine.isDone()` 이면 `completeExceptionally`. T-05 두 번째 메서드 | — |
+| #3 warn · CLN-9 · CLN-6 · `SearchCacheUnavailableException.java` | `BusinessException` cause 생성자 + cause 전달 + 503 핸들러가 예외 객체를 로거에. T-14·T-17 단언 | — |
+| #4 warn · CLN-9 · CLN-6 · `RedisSearchResultStore.java` | WARN 마지막 인자로 `e`. T-14 `store` 단언 | — |
+| #5 warn · TDD-2 · TDD-3 · `02-implementation.md` | — | 기록 사항. 코드 변경 없음(리뷰어도 "이번 round 에서 고칠 것 없음") |
+
+### 남은 이슈 · 커밋 단위 제안
+
+- AI 흔적 grep(publish-checks §2)은 이 라운드 diff 의 `.java` 추가분에서 0건. **금지어 grep(§1)은 체크리스트가
+  작업 디렉터리 밖이라 이 에이전트가 수행하지 못했다** — 커밋 전 검사 단계가 수행해야 한다.
+- 실기동 재확인은 하지 않았다. 바뀐 것은 로그 이벤트의 throwable 유무와 `Error` 갈래뿐이라 T-14·T-17 의
+  단언이 같은 사실을 고정한다.
+- 커밋 단위 제안 (한 커밋으로 묶어도 무방하다 — 셋이 같은 리뷰 round 의 반영이다):
+  1. `fix: [F10] leader 가 Error 로 끝나도 대기자를 깨운다` — `StaySearchCache` + `StaySearchCacheTest`
+  2. `fix: [F10] 저장소 불가 예외에 cause 를 잇고 503 ERROR 에 스택을 남긴다` — `BusinessException` · `SearchCacheUnavailableException` · `GlobalExceptionHandler` · `RedisSearchResultStoreUnreachableTest`(find) · `StaySearchE2ETest`
+  3. `fix: [F10] 저장 실패 WARN 에 예외 객체를 싣는다` — `RedisSearchResultStore` · `RedisSearchResultStoreUnreachableTest`(store)
+  4. `docs: [F10] 리뷰 round-1 반영 기록` — `docs/test-cases.md` · 이 파일 · `01-design.md` 의 D-F10-16

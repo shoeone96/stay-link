@@ -432,6 +432,7 @@ stay:
 | D-F10-13 | 매핑 색인 캐시 | 포함(Redis 1h + 배치 지우기) / 포함(로컬 1h) / **제외** | 제외, 재검토 항목으로도 두지 않는다 (사용자 결정) | 배치 지우기: 배치가 Redis 를 알게 된다, TTL 이 이미 낡음의 상한이라 지우기의 이득은 하루 한 번 최대 1시간 · 로컬 1h: miss 당 SELECT 2건이 측정된 문제가 아니다 | 아니오 |
 | D-F10-14 | rate limiter (F9 이월) | 지금 / **제외** | 제외 | F9 §1.1 의 관측 조건이 여전히 성립하지 않고, 캐시가 먼저 호출 수를 줄인다 | 아니오 |
 | D-F10-15 | 구현 순서 (사용자 결정) | F9 병합 대기 / **지금 시작** | 지금 시작, F9 병합 후 이 브랜치에 병합해 재검토 (§1.5) | 대기: 시간이 없다. 코드 충돌이 없어 순서를 바꿔도 되돌릴 것이 없다 | 아니오 |
+| D-F10-16 | 리뷰 round-1 warn 반영 (2026-09-07, 사용자 확인) | ① `Error` 대응: `catch (Throwable)` / **`finally` 에서 미완료 future 를 `completeExceptionally`** ② cause 체인: 어댑터가 스택을 WARN 으로 따로 찍기 / **`BusinessException` 에 `(ErrorCode, String, Throwable)` 생성자 추가** ③ `store` 실패 WARN 에 예외 객체 | ①②③ 모두 반영. ②는 F0 영역(`common.error`)의 **추가**이며 기존 생성자는 그대로다. 503 핸들러는 예외 객체를 로거에 넘겨 스택이 advice ERROR 한 줄에 남는다 | `catch (Throwable)`: CLN-6 의 catch-all 이고 `Error` 는 그대로 올라가야 한다 · 어댑터 WARN 분리: 같은 장애가 두 줄로 갈려 조사 시작점이 둘이 된다 | 아니오 |
 
 ---
 

@@ -747,3 +747,11 @@
 - **warn 4건**: ② `StaySearchCache` 가 `RuntimeException` 만 잡아 loader 의 `Error` 에서 대기자가 영원히 깨어나지 않는 결함(실제 결함) ③ `SearchCacheUnavailableException` 에 cause 체인 없음 ④ `store` 실패 WARN 이 예외 객체를 로거에 안 넘김 ⑤ TDD-2·3 — 18개 중 8개가 Red 없이 통과(기록 사항). 실행 검증 236/236, T-01~17 전부 구현, 설계 이탈 없음.
 - **게시(사용자 선택)**: 인라인 5 + 요약, 요약 끝에 "#1 은 게시 전 amend 로 해소, #2~#4 는 fix 예정" 한 줄. 인라인 5건 게시 확인.
 - **다음**: `/dev-checkpoint search-cache fix` 로 ②~④ 반영 → 커밋·push → `/feature-pr search-cache review`.
+
+### 94. F10 리뷰 round-1 반영 (fix) (2026-09-07)
+
+- **외부 검증(사용자 전달)**: 보고 내용 일치 확인 + 빠진 것 — F9 병합 시 충돌 파일이 README 외에 ai-history(번호 89 겹침, F10 이 89~93 을 갖고 F9 가 94 로)·test-cases 까지 3개, cause 체인 수정에는 F0 `BusinessException` 생성자 추가가 딸려온다.
+- **정반합**: ① `Error` 대응 — `catch (Throwable)` 은 CLN-6 catch-all 이고 `Error` 는 올라가야 하므로 `finally` 에서 미완료 future 를 `completeExceptionally` ② cause 체인 — 어댑터 WARN 분리안은 같은 장애가 두 줄로 갈려 탈락, `BusinessException(ErrorCode, String, Throwable)` 추가(F0 영역의 추가, 기존 생성자 유지) ③ `store` WARN 에 예외 객체. → D-F10-16 으로 01 에 기록.
+- **fix(`feature-developer`, mode=fix)**: 네 사이클 모두 Red 확인 후 Green. leader 가 `Error` 로 끝나면 대기자는 `IllegalStateException` 으로 깨어난다(같은 원인 전달은 `Error` 갈래에서 구조상 불가, 02 에 명시). 503 핸들러가 예외 객체를 로거에 넘긴다(F0 `common.web` 추가 변경).
+- **커밋 전 검사(메인 세션)**: 237/237 · 금지어 0 · AI 흔적 0 · 자격 증명·이메일 0 · T-01~17 정리표 존재. 변경 11파일.
+- **다음(사용자 선택)**: 커밋·push → `/feature-pr search-cache review` round-2.
