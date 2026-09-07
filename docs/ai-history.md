@@ -738,3 +738,12 @@
 - **커밋 전 검사(메인 세션)**: `./gradlew test` 실패 0 (xml 확인) · 금지어 grep — 처음 3건이 걸렸는데 전부 89번 항목의 일반 낱말 둘이라 다른 표현으로 고쳐 0건 (걸린 낱말은 기록에도 적지 않는다) · AI 흔적 0 · 자격 증명·이메일 0 · 외부 원문 확장자 0 · `docs/test-cases.md` 에 T-01~T-17 전부 존재 · `api-docs/openapi3.json` 은 추적 파일이라 `:api-app:copyApiSpec` 으로 503 응답을 반영.
 - **남은 이슈(02 기록)**: 기동 시 Redis 리포지터리 자동설정 INFO 두 줄 — `spring.data.redis.repositories.enabled=false` 는 설계에 없어 넣지 않음.
 - **다음**: 커밋 지시 → `/feature-pr search-cache`. F9 병합 후 이 브랜치에 병합해 재검토(D-F10-15).
+
+### 93. F10 PR #14 · 리뷰 round-1 (2026-09-07)
+
+- **커밋·PR(사용자 지시)**: 커밋 3건(캐시 컴포넌트·배선·503 / cache-redis 모듈 / 문서) → https://github.com/shoeone96/stay-link/pull/14 `[F10] search-cache: 검색 결과 캐시 — 30초 Redis, 전원 실패 기억, 저장소 불가 503`. 사전 점검 236/236, 본문·제목 grep 0건.
+- **리뷰 round-1(`feature-reviewer`)**: error 1 · warn 4 · 인라인 5. error 는 **메인 세션의 실수** — ai-history 92번에 검사에 걸린 낱말을 따옴표로 다시 인용했고, 그 줄을 추가한 뒤 grep 을 다시 돌리지 않았다. 리뷰어는 체크리스트 파일이 작업 디렉터리 밖이라 공식 grep 을 못 돌렸다고 명시하고 메인 세션 확인을 요구했다.
+- **처리(사용자 지시 "걸리면 기록 지우고 커밋 다시")**: 해당 문장에서 낱말을 지우고 문서 커밋을 amend, `--force-with-lease` 로 다시 push(`4ac49b2` → `d18f50e`). 저장소·HEAD grep 0건. 교훈: **걸린 낱말은 기록에도 적지 않는다.** 기록을 추가할 때마다 grep 을 다시 돌린다.
+- **warn 4건**: ② `StaySearchCache` 가 `RuntimeException` 만 잡아 loader 의 `Error` 에서 대기자가 영원히 깨어나지 않는 결함(실제 결함) ③ `SearchCacheUnavailableException` 에 cause 체인 없음 ④ `store` 실패 WARN 이 예외 객체를 로거에 안 넘김 ⑤ TDD-2·3 — 18개 중 8개가 Red 없이 통과(기록 사항). 실행 검증 236/236, T-01~17 전부 구현, 설계 이탈 없음.
+- **게시(사용자 선택)**: 인라인 5 + 요약, 요약 끝에 "#1 은 게시 전 amend 로 해소, #2~#4 는 fix 예정" 한 줄. 인라인 5건 게시 확인.
+- **다음**: `/dev-checkpoint search-cache fix` 로 ②~④ 반영 → 커밋·push → `/feature-pr search-cache review`.
