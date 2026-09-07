@@ -5,6 +5,7 @@ import static com.stay.common.docs.ApiSpecDocumentation.document;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.documentationConfiguration;
 import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -19,7 +20,10 @@ import com.stay.property.application.AvailabilityOffer;
 import com.stay.property.application.AvailabilityQuery;
 import com.stay.property.application.FailedChunk;
 import com.stay.property.application.Money;
+import com.stay.property.application.SearchCacheUnavailableException;
+import com.stay.property.application.SearchResultStore;
 import com.stay.property.application.StayErrorCode;
+import com.stay.property.application.StaySearchCommand;
 import com.stay.property.application.SupplierAvailabilityPort;
 import com.stay.property.application.SupplierAvailabilityResult;
 import com.stay.property.application.SupplierErrorCode;
@@ -85,6 +89,13 @@ class StaySearchE2ETest {
 
     @MockitoBean
     private SupplierAvailabilityPort supplierAvailabilityPort;
+
+    /**
+     * 외부 저장소 경계의 포트라 mock 이 허용된다 (TST-3). 스텁하지 않은 테스트에서는 {@code find} 가 빈
+     * {@code Optional} 을 돌려주므로 F7 의 다섯 갈래는 캐시 없이 돌던 때와 같은 경로를 지난다.
+     */
+    @MockitoBean
+    private SearchResultStore searchResultStore;
 
     private MockMvc mockMvc;
 
@@ -204,6 +215,38 @@ class StaySearchE2ETest {
                 .andExpect(jsonPath("$.data.results").isEmpty())
                 .andExpect(jsonPath("$.data.suppliers").isEmpty())
                 .andDo(document("stays-search-without-mapping", withoutMappingDocumentation()));
+    }
+
+    @Test
+    @DisplayName("검색 결과 저장소에 닿지 못하면 503 과 검색 불가 코드로 응답하고 공급사를 부르지 않는다")
+    void search_searchResultStoreUnreachable_returnsServiceUnavailableWithoutData() throws Exception {
+        // given
+        givenMapping(Supplier.A, "A-3201", "Haeundae Blue Hotel", "OCN-DBL", "Ocean Double");
+        given(searchResultStore.find(any(StaySearchCommand.class)))
+                .willThrow(new SearchCacheUnavailableException(
+                        "find", "stay-search:v1:" + CHECK_IN + ":" + CHECK_OUT + ":2:0", new IllegalStateException()));
+
+        // when
+        // then
+        mockMvc.perform(get(SEARCH_PATH)
+                        .param("checkIn", CHECK_IN)
+                        .param("checkOut", CHECK_OUT)
+                        .param("adults", "2")
+                        .param("children", "0"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value(StayErrorCode.SEARCH_UNAVAILABLE.code()))
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andDo(document("stays-search-unavailable", searchUnavailableDocumentation()));
+        then(supplierAvailabilityPort).shouldHaveNoInteractions();
+    }
+
+    private static ResourceSnippetParameters searchUnavailableDocumentation() {
+        return searchOperation()
+                .summary("숙박 상품 통합 검색 — 검색 불가")
+                .description("검색 결과 저장소에 닿지 못하면 공급사를 부르지 않고 503 으로 응답한다. 저장소는 공급사 "
+                        + "호출 한도 안에 머무르기 위한 장치라, 그것 없이 호출을 흘리지 않는다. Retry-After 는 싣지 않는다.")
+                .responseFields(errorFields())
+                .build();
     }
 
     private static ResourceSnippetParameters partialFailureDocumentation() {

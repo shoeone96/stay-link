@@ -3,6 +3,8 @@ package com.stay.property.application;
 import com.stay.property.domain.Property;
 import com.stay.property.domain.PropertyRepository;
 import com.stay.property.domain.RoomRepository;
+import com.stay.property.application.StaySearchCache.CacheOutcome;
+import com.stay.property.application.StaySearchCache.CachedSearch;
 import com.stay.property.domain.Supplier;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -45,17 +47,41 @@ public class SearchStaysUseCase {
     private final PropertyRepository propertyRepository;
     private final RoomRepository roomRepository;
     private final SupplierAvailabilityPort supplierAvailabilityPort;
+    private final StaySearchCache cache;
 
     public SearchStaysUseCase(
             PropertyRepository propertyRepository,
             RoomRepository roomRepository,
-            SupplierAvailabilityPort supplierAvailabilityPort) {
+            SupplierAvailabilityPort supplierAvailabilityPort,
+            StaySearchCache cache) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.supplierAvailabilityPort = supplierAvailabilityPort;
+        this.cache = cache;
     }
 
+    /**
+     * 캐시를 거친다 (D-F10-1). 전원 실패 결과는 miss 든 hit 든 같은 한 줄로 판정한다 — 기억된 전원
+     * 실패가 30초 동안 호출 없이 502 로 나가는 것이 D-F10-3 의 목적이다.
+     */
     public StaySearchResult search(StaySearchCommand command) {
+        long startedAt = System.nanoTime();
+        CachedSearch cached = cache.getOrLoad(command, () -> fetch(command));
+        if (cached.outcome() != CacheOutcome.MISS) {
+            logCacheHit(command, cached, elapsedMs(startedAt));
+        }
+        StaySearchResult result = cached.result();
+        if (result.allSuppliersFailed()) {
+            throw new AllSuppliersFailedException(result.suppliers());
+        }
+        return result;
+    }
+
+    /**
+     * 매핑 조회 → 공급사 병렬 호출 → 역매핑 → 결과 조립. <b>던지지 않는다</b> — 전원 FAILED 도 결과다.
+     * 이 결과가 저장된 뒤에 {@link #search} 가 판정한다 (설계 §3.4).
+     */
+    private StaySearchResult fetch(StaySearchCommand command) {
         long startedAt = System.nanoTime();
         StayMappingIndex index = loadIndex();
         if (index.isEmpty()) {
@@ -66,14 +92,24 @@ public class SearchStaysUseCase {
 
         Collected collected =
                 collect(index, supplierAvailabilityPort.searchAll(AvailabilityQuery.of(command, index.codesBySupplier())));
-        String summary = collected.describe(command, targetCountOf(index), elapsedMs(startedAt));
-        if (collected.allFailed()) {
-            // 던지기 전에 남긴다. advice 도 502 를 ERROR 로 남기지만 그 줄에는 targets·excluded·사유가 없다.
-            log.error(summary);
-            throw new AllSuppliersFailedException(collected.suppliers());
+        StaySearchResult result = collected.toResult();
+        logFetched(result, collected, collected.describe(command, targetCountOf(index), elapsedMs(startedAt)));
+        return result;
+    }
+
+    /**
+     * 기억된 전원 실패는 WARN 이다 — 알려진 이상을 다시 만난 것이고, 조치 대상은 최초 실패 때 ERROR 로
+     * 올라갔다 (D-F10-10). 이 줄에는 {@code cache=} 필드가 있어 적중률의 분자가 된다 (§3.8).
+     */
+    private static void logCacheHit(StaySearchCommand command, CachedSearch cached, long elapsedMs) {
+        String summary = Summary.head(command)
+                + " cache=%s results=%d elapsedMs=%d"
+                        .formatted(cached.outcome(), cached.result().items().size(), elapsedMs);
+        if (cached.result().allSuppliersFailed()) {
+            log.warn(summary);
+            return;
         }
-        logAtSeverity(collected, summary);
-        return collected.toResult();
+        log.info(summary);
     }
 
     /**
@@ -98,10 +134,18 @@ public class SearchStaysUseCase {
     }
 
     /**
-     * 레벨 기준은 §3.8 이다 — WARN 은 "요청은 정상 처리됐고 결과만 온전치 않다", INFO 는 결과 0건을
-     * 포함한 그 밖의 전부. 지표 산출용 기본 한 줄이라 정상 요청에도 남긴다.
+     * 레벨 기준은 F7 §3.8 이다 — ERROR 는 전원 실패(advice 도 502 를 ERROR 로 남기지만 그 줄에는
+     * targets·excluded·사유가 없다), WARN 은 "요청은 정상 처리됐고 결과만 온전치 않다", INFO 는 결과
+     * 0건을 포함한 그 밖의 전부. 지표 산출용 기본 한 줄이라 정상 요청에도 남긴다.
+     *
+     * <p>전원 실패 판정은 응답과 같은 {@link StaySearchResult#allSuppliersFailed()} 를 읽는다 — 같은
+     * 사실이 두 벌이 되지 않게 (OOP-3).
      */
-    private static void logAtSeverity(Collected collected, String summary) {
+    private static void logFetched(StaySearchResult result, Collected collected, String summary) {
+        if (result.allSuppliersFailed()) {
+            log.error(summary);
+            return;
+        }
         if (collected.hasFailure() || collected.hasExcluded()) {
             log.warn(summary);
             return;
@@ -184,28 +228,12 @@ public class SearchStaysUseCase {
             return new StaySearchResult(items, outcomes);
         }
 
-        /**
-         * 부분 실패는 200 이고 전원 실패만 502 다 (D-F7-3). 두 공급사는 서로 다른 회사의 서로 다른
-         * 시스템이라 각각 죽는 것은 독립 사건이지만, <b>동시에 죽는 것은 대개 공통 원인</b>이고 그
-         * 후보가 전부 우리 쪽이다.
-         */
-        boolean allFailed() {
-            // 비어 있으면 공허참이 되어 아무도 실패하지 않은 검색이 502 로 나간다. 포트 계약에는 결과가
-            // 비어 있지 않다는 보장이 없고, "부른 곳이 없다"는 "전부 실패했다"가 아니다 (D-F7-15).
-            return !outcomes.isEmpty()
-                    && outcomes.stream().allMatch(outcome -> outcome.status() == SupplierStatus.FAILED);
-        }
-
         boolean hasFailure() {
             return outcomes.stream().anyMatch(outcome -> outcome.status() != SupplierStatus.OK);
         }
 
         boolean hasExcluded() {
             return !excludedCodes.isEmpty();
-        }
-
-        List<Supplier> suppliers() {
-            return outcomes.stream().map(SupplierOutcome::supplier).toList();
         }
 
         String describe(StaySearchCommand command, int targets, long elapsedMs) {
@@ -263,13 +291,13 @@ public class SearchStaysUseCase {
         }
 
         static String of(StaySearchCommand command, int targets) {
-            return "searchStays checkIn=%s checkOut=%s adults=%d children=%d targets=%d"
-                    .formatted(
-                            command.checkIn(),
-                            command.checkOut(),
-                            command.adults(),
-                            command.children(),
-                            targets);
+            return head(command) + " targets=" + targets;
+        }
+
+        /** hit 줄은 공급사를 부르지 않았으므로 {@code targets} 가 없다 — 조건 넷까지가 공통 머리다. */
+        static String head(StaySearchCommand command) {
+            return "searchStays checkIn=%s checkOut=%s adults=%d children=%d"
+                    .formatted(command.checkIn(), command.checkOut(), command.adults(), command.children());
         }
 
         static String withoutTargets(StaySearchCommand command, long elapsedMs) {

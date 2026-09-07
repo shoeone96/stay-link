@@ -15,6 +15,8 @@ dependencies {
     // 찾도록 runtimeOnly로만 올린다. 실수로 import하면 컴파일 에러가 나서 경계가 지켜진다.
     runtimeOnly(project(":persistence"))
     runtimeOnly(project(":supplier-client"))
+    // 검색 결과 캐시(SearchResultStore)의 Redis 구현. 위 둘과 같은 이유로 runtimeOnly 다 (D-MS-5).
+    runtimeOnly(project(":cache-redis"))
 
     // JPA(spring-boot-starter-data-jpa·mysql-connector-j)는 persistence가, WebClient(webflux)는
     // supplier-client가 implementation으로 선언 — 둘 다 runtimeOnly 의존을 통해 런타임 클래스패스로

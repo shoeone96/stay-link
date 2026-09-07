@@ -11,7 +11,9 @@ import com.stay.common.error.ErrorCode;
  */
 public enum StayErrorCode implements ErrorCode {
 
-    ALL_SUPPLIERS_FAILED("All suppliers failed to respond");
+    ALL_SUPPLIERS_FAILED("All suppliers failed to respond"),
+    /** 검색 결과 저장소에 닿지 못했다. 원인(캐시)이 아니라 사용자에게 보이는 사실을 말한다 (D-F0-10). */
+    SEARCH_UNAVAILABLE("Stays cannot be checked right now");
 
     private final String message;
 

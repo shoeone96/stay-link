@@ -10,6 +10,12 @@ spring:
   sql:
     init:
       mode: always
+  # 검색 결과 캐시의 Redis 접속. 접속 정보는 compose 자동 감지가 준다 (spring-boot-docker-compose 가 redis
+  # 이미지를 인식한다). 두 타임아웃이 503 의 상한이다 — 저장소에 못 닿는 검색은 이 안에 503 으로 나간다.
+  data:
+    redis:
+      connect-timeout: 300ms
+      timeout: 300ms             # 명령 타임아웃
   # 공급사마다 그룹을 나눠야 커넥터가 갈리고 타임아웃·기본 헤더를 다르게 줄 수 있다.
   # 아래 값은 모의 서버를 띄우고 실제로 재서 정했다 (근거와 실측표는 README).
   # read-timeout 은 뒷그물이다. 실제 상한은 조합기 per-call 이 지므로 두 용도 중 긴 쪽보다 크게 둔다.
@@ -49,3 +55,10 @@ supplier:
       max-concurrent: 2
       per-call: 30s
       budget: 40s
+
+# 검색 결과 캐시. 같은 조건(날짜·인원)의 검색이 ttl 안에 다시 오면 공급사도 DB 도 부르지 않는다.
+# ttl 은 정확성이 아니라 공급사 호출 절감 배수의 값이다 — 실측 후 재조정. 없거나 0 이하면 기동이 실패한다.
+stay:
+  search-cache:
+    ttl: 30s
+    enabled: true

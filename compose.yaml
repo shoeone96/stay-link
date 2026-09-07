@@ -13,3 +13,14 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  # 검색 결과 캐시. 배치의 bootRun 도 이 파일 전체를 올리므로 함께 뜨지만 배치는 연결하지 않는다 — 낭비일 뿐
+  # 오류는 아니다. 태그는 Docker Hub 의 8.x 안정판 계열이다 (2026-09-07 확인, 최신 8.10).
+  redis:
+    image: redis:8
+    ports:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

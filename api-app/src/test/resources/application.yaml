@@ -38,3 +38,10 @@ supplier:
       max-concurrent: 2
       per-call: 3s
       budget: 7s
+
+# 테스트는 Redis 를 띄우지 않는다. enabled=false 면 저장소 대역(NoOp)이 떠서 F7 의 E2E 가 캐시 없이
+# 돌던 때와 같은 경로를 지난다 — 캐시가 응답 계약을 바꾸지 않는다는 것의 근거다.
+stay:
+  search-cache:
+    ttl: 30s
+    enabled: false
