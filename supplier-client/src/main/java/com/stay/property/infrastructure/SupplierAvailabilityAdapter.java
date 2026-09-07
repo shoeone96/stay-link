@@ -21,6 +21,9 @@ import org.springframework.stereotype.Component;
 /**
  * 재고·요금 포트의 구현. 질의가 지목한 코드를 공급사별 한도에 맞춰 묶음으로 자르고, 묶음마다 호출을
  * 하나씩 만들어 조합기에 한 번에 넣는다. 리액티브 타입은 여기서 끝나며 포트 밖으로 나가지 않는다.
+ *
+ * <p>재시도·서킷은 <b>묶음 하나</b>에 걸린다. 공급사 단위로 걸면 한 묶음의 흔들림이 그 공급사의 모든
+ * 묶음을 물고 늘어지고, 조합기의 호출당 상한이 걸리는 단위와도 어긋난다(D-F5-5·D-F9-12).
  */
 @Component
 public class SupplierAvailabilityAdapter implements SupplierAvailabilityPort {
@@ -30,14 +33,17 @@ public class SupplierAvailabilityAdapter implements SupplierAvailabilityPort {
     private final EnumMap<Supplier, SupplierAvailabilityFetcher> fetchers;
     private final FanOutExecutor fanOutExecutor;
     private final SupplierAvailabilityProperties properties;
+    private final SupplierResilience resilience;
 
     public SupplierAvailabilityAdapter(
             List<SupplierAvailabilityFetcher> fetchers,
             @Qualifier(SupplierHttpClientConfig.FAN_OUT_EXECUTOR) FanOutExecutor fanOutExecutor,
-            SupplierAvailabilityProperties properties) {
+            SupplierAvailabilityProperties properties,
+            @Qualifier(SupplierHttpClientConfig.SUPPLIER_RESILIENCE) SupplierResilience resilience) {
         this.fetchers = indexBySupplier(fetchers);
         this.fanOutExecutor = fanOutExecutor;
         this.properties = properties;
+        this.resilience = resilience;
     }
 
     /**
@@ -68,7 +74,9 @@ public class SupplierAvailabilityAdapter implements SupplierAvailabilityPort {
         for (Map.Entry<Supplier, List<String>> target : query.propertyCodes().entrySet()) {
             SupplierAvailabilityFetcher fetcher = fetchers.get(target.getKey());
             for (List<String> codes : partition(target.getValue(), properties.maxCodes(target.getKey()))) {
-                calls.add(new SupplierCall<>(target.getKey(), fetcher.call(codes, query)));
+                calls.add(
+                        new SupplierCall<>(
+                                target.getKey(), resilience.decorate(target.getKey(), fetcher.call(codes, query))));
                 owners.add(new Chunk(target.getKey(), codes));
             }
         }

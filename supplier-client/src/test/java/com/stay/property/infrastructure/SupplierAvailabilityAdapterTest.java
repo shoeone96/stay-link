@@ -4,6 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.stay.property.application.AvailabilityOffer;
 import com.stay.property.application.AvailabilityQuery;
@@ -27,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Mono;
 
 /**
@@ -35,7 +41,7 @@ import reactor.core.publisher.Mono;
  */
 class SupplierAvailabilityAdapterTest {
 
-    private static final FanOutPolicy POLICY = new FanOutPolicy(2, Duration.ofSeconds(2), Duration.ofSeconds(5));
+    private static final FanOutPolicy POLICY = new FanOutPolicy(Duration.ofSeconds(2), Duration.ofSeconds(5));
 
     private static final int CONTRACT_MAX_CODES = 50;
 
@@ -67,7 +73,7 @@ class SupplierAvailabilityAdapterTest {
         RecordingFetcher fetcherB = new RecordingFetcher(Supplier.B, chunk -> Mono.just(List.of(offer(chunk.getFirst()))));
         SupplierAvailabilityAdapter adapter =
                 new SupplierAvailabilityAdapter(
-                        List.of(fetcherB, fetcherA), new FanOutExecutor(POLICY), limits(1));
+                        List.of(fetcherB, fetcherA), new FanOutExecutor(POLICY), limits(1), passThrough());
 
         // when
         List<SupplierAvailabilityResult> results =
@@ -120,7 +126,7 @@ class SupplierAvailabilityAdapterTest {
                 new RecordingFetcher(Supplier.B, chunk -> Mono.just(List.of(offer(chunk.getFirst()))));
         SupplierAvailabilityAdapter adapter =
                 new SupplierAvailabilityAdapter(
-                        List.of(fetcherA, fetcherB), new FanOutExecutor(POLICY), limits(1));
+                        List.of(fetcherA, fetcherB), new FanOutExecutor(POLICY), limits(1), passThrough());
 
         // when
         List<SupplierAvailabilityResult> results =
@@ -162,7 +168,10 @@ class SupplierAvailabilityAdapterTest {
         assertThatThrownBy(
                         () ->
                                 new SupplierAvailabilityAdapter(
-                                        fetchers, new FanOutExecutor(POLICY), limits(CONTRACT_MAX_CODES)))
+                                        fetchers,
+                                        new FanOutExecutor(POLICY),
+                                        limits(CONTRACT_MAX_CODES),
+                                        passThrough()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(expectedInMessage);
     }
@@ -183,13 +192,51 @@ class SupplierAvailabilityAdapterTest {
                 arguments("한도의 한 배 반인 60개", 60, List.of(50, 10)));
     }
 
+    /**
+     * 재시도·서킷이 <b>묶음 단위</b>로 걸린다는 것이 이 배선의 요점이다. 공급사 단위로 걸면 한 묶음의
+     * 흔들림이 그 공급사 전체를 물고 늘어지고, 실패한 묶음의 코드 목록도 재시도 경계와 어긋난다.
+     * 그래서 호출 횟수만이 아니라 <b>각 호출에 실린 공급사</b>까지 본다.
+     */
+    @Test
+    @DisplayName("묶음마다 데코레이터를 거치고 각 호출에 그 묶음의 공급사가 실린다")
+    void searchAll_withSeveralChunks_decoratesEachChunkWithItsOwnSupplier() {
+        // given — 한도 1 이라 A 코드 2 · B 코드 1 이면 묶음이 셋이다
+        SupplierResilience resilience = mock(SupplierResilience.class);
+        when(resilience.decorate(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+        SupplierAvailabilityAdapter adapter =
+                new SupplierAvailabilityAdapter(
+                        List.of(
+                                new RecordingFetcher(Supplier.A, chunk -> Mono.just(List.of(offer(chunk.getFirst())))),
+                                new RecordingFetcher(Supplier.B, chunk -> Mono.just(List.of(offer(chunk.getFirst()))))),
+                        new FanOutExecutor(POLICY),
+                        limits(1),
+                        resilience);
+
+        // when
+        adapter.searchAll(query(Map.of(Supplier.A, List.of("A-1", "A-2"), Supplier.B, List.of("B-1"))));
+
+        // then — 순서를 걸지 않는 이유는 질의의 공급사별 코드가 순서 없는 맵이라 묶음이 만들어지는
+        // 차례가 정해져 있지 않기 때문이다. 여기서 봐야 하는 것은 공급사마다 자기 묶음 수만큼 실렸는가다
+        ArgumentCaptor<Supplier> decorated = ArgumentCaptor.forClass(Supplier.class);
+        verify(resilience, times(3)).decorate(decorated.capture(), any());
+        assertThat(decorated.getAllValues()).containsExactlyInAnyOrder(Supplier.A, Supplier.A, Supplier.B);
+    }
+
+    /** 데코레이터를 보지 않는 테스트가 쓰는 더블. 준 호출을 그대로 돌려준다. */
+    private static SupplierResilience passThrough() {
+        SupplierResilience resilience = mock(SupplierResilience.class);
+        when(resilience.decorate(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+        return resilience;
+    }
+
     private static SupplierAvailabilityAdapter adapter(
             RecordingFetcher fetcher, SupplierAvailabilityProperties limits) {
         Supplier other = fetcher.supplier() == Supplier.A ? Supplier.B : Supplier.A;
         return new SupplierAvailabilityAdapter(
                 List.of(fetcher, new RecordingFetcher(other, chunk -> Mono.just(List.of()))),
                 new FanOutExecutor(POLICY),
-                limits);
+                limits,
+                passThrough());
     }
 
     private static SupplierAvailabilityProperties limits(int maxCodes) {

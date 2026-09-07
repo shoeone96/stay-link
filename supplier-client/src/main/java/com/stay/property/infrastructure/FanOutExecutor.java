@@ -56,6 +56,11 @@ public class FanOutExecutor {
      * 예산 안에 도착한 것만 모은다. 예산을 {@code block} 이 아니라 {@code take} 로 표현하는 이유는,
      * {@code block} 으로 자르면 취소가 먼저 일어나 이미 도착한 결과까지 사라지기 때문이다.
      *
+     * <p>동시 상한을 요청의 <b>호출 수</b>로 잡아 웨이브를 항상 1 로 둔다. 값을 정하지 않고 없앤 것이라
+     * 근거 없는 상수를 고를 일이 사라지고, 대신 실제 상한은 커넥션 풀로 옮겨 간다(D-F9-5·6).
+     * {@code Math.max(1, ...)} 가드가 필요한 이유는 {@code flatMap} 이 동시성 0 을 거부하기 때문이다 —
+     * 호출 목록이 비면 터진다.
+     *
      * <p>{@code block} 에 거는 것은 순수한 방어망이다. 앞의 상한들이 걸려 있으면 도달하지 않으며,
      * 도달했다면 공급사 장애가 아니라 우리 코드·설정이 고장 난 것이므로 예외를 그대로 내보낸다 —
      * "전 공급사 실패"로 포장해 정상 응답을 내리면 운영자가 엉뚱한 곳을 보게 된다.
@@ -66,7 +71,7 @@ public class FanOutExecutor {
                     .index()
                     .flatMap(
                             indexed -> toArrival(indexed.getT1().intValue(), indexed.getT2()),
-                            policy.maxConcurrent())
+                            Math.max(1, calls.size()))
                     .take(policy.budget())
                     .collectList()
                     .block(policy.hardStop());
@@ -74,10 +79,9 @@ public class FanOutExecutor {
             // 이 타입은 두 가지를 뜻한다 — 방어망 시간을 넘겼거나, 블로킹이 허용되지 않는 스레드에서
             // runAll 을 불렀거나. 어느 쪽인지는 예외 메시지에만 있으므로 원인을 단정하지 않고 함께 싣는다.
             log.error(
-                    "조합 체인이 값을 내지 못했다 calls={} maxConcurrent={} perCall={} budget={} hardStop={} cause=\"{}\""
+                    "조합 체인이 값을 내지 못했다 calls={} perCall={} budget={} hardStop={} cause=\"{}\""
                             + " — 공급사 장애가 아니라 우리 설정·코드의 결함이다",
                     calls.size(),
-                    policy.maxConcurrent(),
                     policy.perCall(),
                     policy.budget(),
                     policy.hardStop(),
@@ -113,8 +117,8 @@ public class FanOutExecutor {
 
     /**
      * 예산에 잘린 자리를 채운다. {@code waited} 는 이 호출 하나의 소요가 아니라 <b>호출자가 기다린
-     * 전체 시간</b>이다 — 동시 호출 상한 때문에 구독조차 되지 않았을 수 있어 이 호출만의 경과는
-     * 존재하지 않는다.
+     * 전체 시간</b>이다 — 예산이 끊는 시점에 아직 응답이 오지 않았을 뿐이라 이 호출만의 경과를
+     * 따로 셀 수 없다.
      */
     private <T> Outcome<T> budgetExceeded(Supplier supplier, int index, Duration waited) {
         log.warn(
