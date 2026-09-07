@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F7 stay-search-api 설계 협의</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOSS DESIGN TOKENS — 이 :root 블록은 수정하지 않는다.
+     ============================================================ */
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF; --blue-bg2:#F4F9FF;
+    --green:#15C47E; --green-deep:#0A8F5B; --green-bg:#E7F9F1;
+    --blue-bg-hover:#D6E9FF; --green-bg-hover:#D3F5E6; --green-line:#BFECD8; --green-line2:#9FDCC0;
+    --red:#F04452; --red-deep:#C9303C; --red-bg:#FEEFEF;
+    --g900:#191F28; --g800:#333D4B; --g700:#4E5968; --g600:#6B7684;
+    --g500:#8B95A1; --g400:#B0B8C1; --g300:#D1D6DB; --g200:#E5E8EB;
+    --g100:#F2F4F6; --g50:#F9FAFB; --white:#fff;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--g100);color:var(--g700);
+    font-family:var(--sans);font-weight:400;font-size:17px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  ::selection{background:var(--blue-bg);color:var(--blue-deep)}
+
+  #bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;background:var(--blue);
+    border-radius:0 3px 3px 0;transition:width .08s linear}
+
+  .sheet{max-width:860px;margin:40px auto;background:var(--white);
+    border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+  .sheet.wide{max-width:1300px}
+
+  header.cover{padding:64px 56px 52px;border-bottom:1px solid var(--g100)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-bg);
+    color:var(--blue-deep);font-size:13px;font-weight:700;padding:8px 14px;border-radius:100px;
+    margin-bottom:26px}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  h1.title{font-size:clamp(34px,5.6vw,52px);font-weight:800;line-height:1.18;
+    letter-spacing:-.035em;color:var(--g900);margin:0 0 22px}
+  h1.title .hl{color:var(--blue)}
+  .lede{font-size:19px;line-height:1.6;color:var(--g600);font-weight:500;max-width:620px;margin:0 0 36px}
+  .lede b{color:var(--g800);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--g50);border:1px solid var(--g200);border-radius:14px;padding:12px 16px;font-size:13px}
+  .chip .k{font-weight:700;color:var(--g500);font-size:11px;letter-spacing:.02em;display:block;margin-bottom:3px}
+  .chip .v{color:var(--g700);font-weight:600}
+
+  nav.toc{padding:36px 56px 40px;background:var(--g50);border-bottom:1px solid var(--g100)}
+  nav.toc h2{font-size:12px;font-weight:700;color:var(--g500);margin:0 0 12px;letter-spacing:.05em}
+  ol.toc-index{margin:0;padding:0;list-style:none;counter-reset:t;max-width:560px}
+  ol.toc-index>li{counter-increment:t;border-bottom:1px solid var(--g100)}
+  ol.toc-index>li:last-child{border-bottom:none}
+  ol.toc-index>li>a{display:flex;align-items:baseline;gap:14px;padding:10px 4px;text-decoration:none;
+    font-size:15px;font-weight:600;color:var(--g800);transition:color .15s}
+  ol.toc-index>li>a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);
+    font-size:12px;font-weight:500;color:var(--g400);flex:none;width:22px}
+  ol.toc-index>li>a:hover{color:var(--blue-deep)}
+  ol.toc-index>li>a:hover::before{color:var(--blue)}
+  ol.toc-index .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--g400);
+    white-space:nowrap;padding-left:16px}
+  ol.toc-index .ts{margin:0;padding:2px 0 10px 40px;list-style:none}
+  ol.toc-index .ts a{display:block;padding:3px 4px;font-size:13.5px;font-weight:500;color:var(--g500);
+    text-decoration:none;line-height:1.55;transition:color .15s}
+  ol.toc-index .ts a:hover{color:var(--blue-deep)}
+  @media(max-width:720px){
+    ol.toc-index .ts{padding-left:24px}
+    ol.toc-index .hint{display:none}
+  }
+
+  main{padding:0 56px}
+  section{padding:56px 0 18px;border-top:1px solid var(--g100)}
+  section:first-child{border-top:none}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--white);
+    background:var(--blue);border-radius:14px;width:46px;height:46px;display:grid;place-items:center;flex:none;
+    box-shadow:0 4px 12px rgba(49,130,246,.3)}
+  .sec-eyebrow{font-size:12.5px;font-weight:700;color:var(--blue);letter-spacing:.04em;margin:0 0 3px}
+  h2.sec{font-size:clamp(25px,3.6vw,32px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.25;color:var(--g900);margin:0}
+  h3{font-size:19px;font-weight:700;color:var(--g900);margin:34px 0 12px;
+    display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:5px;height:18px;border-radius:3px;background:var(--blue);flex:none}
+  p{margin:0 0 18px}
+  .lead{font-size:18.5px;line-height:1.6;color:var(--g800);font-weight:600}
+  strong{font-weight:700;color:var(--g900)}
+  em{font-style:normal;font-weight:600;color:var(--g800)}
+  .term{font-family:var(--mono);font-size:.82em;background:var(--g100);color:var(--blue-deep);
+    padding:3px 7px;border-radius:7px;font-weight:500;white-space:nowrap}
+  .stchip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+    padding:2px 8px;border-radius:20px;vertical-align:2px;margin-left:8px;white-space:nowrap}
+  .stchip.ok{background:var(--green-bg);color:var(--green-deep)}
+  .stchip.mid{background:var(--blue-bg);color:var(--blue-deep)}
+  .stchip.open{background:var(--red-bg);color:var(--red-deep)}
+  a.cite{font-family:var(--mono);font-size:10.5px;color:var(--blue);text-decoration:none;
+    vertical-align:super;line-height:0;font-weight:700;padding:0 1px}
+  a.cite:hover{text-decoration:underline}
+
+  blockquote{margin:32px 0;padding:28px 30px;background:var(--blue-bg2);border-radius:20px;
+    border:1px solid var(--blue-bg)}
+  blockquote p{font-size:20px;font-weight:700;line-height:1.5;color:var(--blue-deep);margin:0 0 12px;letter-spacing:-.02em}
+  blockquote cite{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--g500);
+    display:block;font-weight:500}
+
+  .note{border-radius:18px;padding:22px 24px;margin:26px 0;font-size:15.5px;line-height:1.7;
+    background:var(--g50);border:1px solid var(--g200);color:var(--g700)}
+  .note .tag{font-size:12px;font-weight:700;display:block;margin-bottom:8px;color:var(--g500)}
+  .note strong{color:var(--g900)}
+  .note.key{background:var(--blue-bg);border-color:#cfe4ff}
+  .note.key .tag{color:var(--blue-deep)} .note.key strong{color:var(--blue-deep)}
+  .note.warn{background:var(--red-bg);border-color:#f8d4d4}
+  .note.warn .tag{color:var(--red-deep)} .note.warn strong{color:var(--red-deep)}
+
+  figure{margin:36px 0}
+  .fig-box{position:relative;background:var(--g50);border:1px solid var(--g200);border-radius:22px;
+    padding:32px 26px 22px}
+  .fig-box::after{content:attr(data-fig);position:absolute;top:16px;right:20px;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;color:var(--g400);letter-spacing:.1em}
+  figcaption{font-size:13.5px;color:var(--g500);margin-top:16px;text-align:center;
+    line-height:1.6;font-weight:500}
+  figcaption b{color:var(--g700);font-weight:700}
+  svg{display:block;width:100%;height:auto}
+  .svg-t{font-family:var(--sans);font-weight:700;font-size:14px}
+  .svg-s{font-family:var(--mono);font-size:11px;font-weight:500}
+  .svg-l{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.02em}
+  svg foreignObject>.fo{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:5px 12px;box-sizing:border-box;
+    overflow:hidden;line-height:1.25;word-break:keep-all}
+  svg foreignObject>.fo .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--g900)}
+  svg foreignObject>.fo .s{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--g600);margin-top:2px}
+  svg foreignObject>.fo.blue .t{color:var(--blue-deep)} svg foreignObject>.fo.blue .s{color:var(--blue)}
+  svg foreignObject>.fo.green .t{color:var(--green-deep)} svg foreignObject>.fo.green .s{color:var(--green-deep)}
+  svg foreignObject>.fo.red .t{color:var(--red-deep)} svg foreignObject>.fo.red .s{color:var(--red-deep)}
+  svg foreignObject>.fo.grey .t{color:var(--g800)} svg foreignObject>.fo.grey .s{color:var(--g600)}
+  svg foreignObject>.fo.left{align-items:flex-start;text-align:left;padding:4px 10px}
+  svg foreignObject>.fo.left .d{font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--g700);line-height:1.35}
+
+  .sheet:has(.fig-wide){overflow:visible}
+  figure.fig-wide{width:min(1180px,94vw);position:relative;left:50%;transform:translateX(-50%)}
+  @media(max-width:760px){figure.fig-wide{width:100%;left:auto;transform:none}}
+
+  .code{margin:24px 0;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .code-bar{background:#20242C;display:flex;align-items:center;gap:8px;padding:13px 18px}
+  .code-bar .dot{width:11px;height:11px;border-radius:50%}
+  .code-bar .fn{font-family:var(--mono);font-size:12px;color:#8B95A1;margin-left:8px;font-weight:500}
+  pre{background:#191F28;margin:0;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.75;color:#D1D6DB}
+  pre .kw{color:#6BA4FF} pre .ty{color:#4FD8A8} pre .fn{color:#FFC56B}
+  pre .cm{color:#6B7684;font-style:italic} pre .st{color:#9FE3B8}
+  code{font-family:var(--mono);font-size:.86em}
+
+  details.tg{border:1px solid var(--g200);border-radius:18px;margin:22px 0;background:var(--g50);
+    overflow:hidden;transition:background .2s,box-shadow .2s,border-color .2s}
+  details.tg[open]{background:var(--white);border-color:#cfe4ff;box-shadow:var(--shadow)}
+  details.tg>summary{list-style:none;cursor:pointer;padding:20px 24px;display:flex;align-items:center;
+    gap:13px;font-size:16px;font-weight:700;color:var(--g900);user-select:none}
+  details.tg>summary::-webkit-details-marker{display:none}
+  details.tg>summary .tw{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:8px;padding:4px 9px;flex:none}
+  details.tg>summary .cv{margin-left:auto;flex:none;color:var(--g400);display:grid;place-items:center;
+    transition:transform .25s,color .25s}
+  details.tg>summary .cv svg{width:17px;height:17px}
+  details.tg[open]>summary .cv{transform:rotate(90deg);color:var(--blue)}
+  details.tg .tg-body{padding:2px 24px 24px}
+  details.tg .tg-body>*:first-child{margin-top:6px}
+  details.tg .tg-body>*:last-child{margin-bottom:0}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:26px 0}
+  .col{border-radius:20px;padding:22px 24px;border:1px solid var(--g200);transition:.2s}
+  .col:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .col.x{background:var(--g50)}
+  .col.o{background:var(--blue-bg);border-color:#cfe4ff}
+  .col h4{margin:0 0 10px;font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:9px;color:var(--g900)}
+  .col.o h4{color:var(--blue-deep)}
+  .col h4 .mk{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;
+    background:var(--g200);color:var(--g600);flex:none}
+  .col.o h4 .mk{background:var(--blue);color:#fff}
+  .col p{font-size:14.5px;line-height:1.65;margin:0;color:var(--g700);font-weight:500}
+
+  .tbl-wrap{margin:26px 0;border:1px solid var(--g200);border-radius:20px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  thead{background:var(--g50)}
+  th,td{text-align:left;padding:14px 18px;vertical-align:top}
+  th{font-size:12px;font-weight:700;color:var(--g500);letter-spacing:.01em}
+  th:nth-child(3){color:var(--blue)}
+  td{border-top:1px solid var(--g100);font-weight:500;color:var(--g700)}
+  tbody tr:hover{background:var(--blue-bg2)}
+  td:first-child{font-weight:700;color:var(--g900);white-space:nowrap}
+  td:last-child{color:var(--blue-deep);font-weight:600}
+
+  .fn-card{border:1px solid var(--g200);border-radius:20px;margin:22px 0;overflow:hidden}
+  .fn-card>.fn-sig{background:#191F28;padding:14px 20px;font-family:var(--mono);font-size:13.5px;
+    color:#D1D6DB;font-weight:500;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fn-card>.fn-sig .fn{color:#FFC56B} .fn-card>.fn-sig .pa{color:#6BA4FF}
+  .fn-card>.fn-sig .rt{color:#4FD8A8}
+  .fn-card>.fn-sig .pure{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--green);background:rgba(21,196,126,.14);padding:4px 9px;border-radius:7px}
+  .fn-card>.fn-sig .mut{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:#FF9F6B;background:rgba(240,108,82,.16);padding:4px 9px;border-radius:7px}
+  .fn-card .tbl-wrap{margin:0;border:none;border-radius:0}
+  .fn-card table td:last-child{color:var(--g700);font-weight:500}
+
+  .ref{display:flex;gap:16px;padding:18px 20px;margin-bottom:10px;border-radius:18px;
+    background:var(--g50);border:1px solid var(--g200);font-size:14.5px;line-height:1.6;
+    font-weight:500;transition:.18s;text-decoration:none;color:inherit;cursor:pointer}
+  a.ref:hover,.ref:hover{border-color:var(--blue);transform:translateX(3px);box-shadow:var(--shadow-sm)}
+  .ref .n{font-family:var(--mono);font-size:12px;color:#fff;font-weight:700;flex:none;
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--g400)}
+  .ref.primary .n{background:var(--blue)}
+  .ref .b{color:var(--g600)} .ref .b b{color:var(--g900);font-weight:700}
+  .ref .b .src{font-family:var(--mono);font-size:11px;color:var(--blue);display:block;
+    margin-top:5px;word-break:break-all;font-weight:400}
+  .ref .b .pr{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;margin-top:9px}
+  .ref .b .pr.p1{background:var(--blue);color:#fff}
+  .ref .b .pr.bt{background:var(--green);color:#fff}
+
+  .checklist{list-style:none;margin:24px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .checklist li{display:block;position:relative;padding:14px 18px 14px 51px;background:var(--g50);
+    border:1px solid var(--g200);border-radius:14px;font-size:15px;color:var(--g700);font-weight:500;line-height:1.55}
+  .checklist li .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--g300);
+    position:absolute;left:18px;top:15px;background:var(--white)}
+  .checklist li.done{background:var(--blue-bg2);border-color:#cfe4ff;color:var(--g600)}
+  .checklist li.done .box{background:var(--blue);border-color:var(--blue)}
+  .checklist li.done .box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:9px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .checklist li b{color:var(--g900);font-weight:700}
+  .checklist li .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-deep);
+    background:var(--blue-bg);border-radius:7px;padding:2px 8px;float:right;margin-left:8px}
+
+  footer{padding:48px 56px 56px;color:var(--g500);font-family:var(--mono);font-size:11.5px;
+    text-align:center;line-height:1.9;border-top:1px solid var(--g100);font-weight:500}
+  footer .gl{display:block;font-size:26px;margin-bottom:14px;color:var(--g300)}
+
+  @media(max-width:720px){
+    body{font-size:16px}
+    .sheet{margin:0;border-radius:0}
+    header.cover,nav.toc,main,footer{padding-left:24px;padding-right:24px}
+    .cols{grid-template-columns:1fr}
+    header.cover{padding-top:48px}
+  }
+  @media(prefers-reduced-motion:no-preference){
+    .fade{opacity:0;transform:translateY(18px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+    .fade.in{opacity:1;transform:none}
+    .cov>*{opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+    .cov>*:nth-child(1){animation-delay:.04s} .cov>*:nth-child(2){animation-delay:.12s}
+    .cov>*:nth-child(3){animation-delay:.22s} .cov>*:nth-child(4){animation-delay:.34s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<div class="sheet">
+
+  <header class="cover">
+    <div class="cov">
+      <span class="badge"><span class="d"></span>F7 · 확정 — 결정의 원본은 01-design.md</span>
+      <h1 class="title">통합 검색 API<br><span class="hl">그리고 부분 실패</span></h1>
+      <p class="lede">요청 1건이 <b>매핑 조회 → 공급사 병렬 호출 → 역매핑 → 응답</b>을 지나는 첫 end-to-end 경로. F8(부분 실패)을 흡수해 <b>결과가 잘렸다는 사실</b>까지 이번에 닫는다.</p>
+      <div class="chips">
+        <div class="chip"><span class="k">RANGE</span><span class="v">F7 + F8</span></div>
+        <div class="chip"><span class="k">DEPENDS</span><span class="v">F0 · F1 · F3a · F3 · F5 · F6</span></div>
+        <div class="chip"><span class="k">DECISIONS</span><span class="v">확정 15 · 이연 해소 1</span></div>
+        <div class="chip"><span class="k">FIGURES</span><span class="v">12</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>목차</h2>
+    <ol class="toc-index">
+      <li><a href="#s1">범위와 전제<span class="hint">F8 흡수</span></a></li>
+      <li><a href="#s2">API 계약<span class="hint">요청 4 · 응답 필드 7</span></a></li>
+      <li><a href="#s3">클래스 배치<span class="hint">FIG 01·02</span></a></li>
+      <li><a href="#s4">정상 경로<span class="hint">FIG 03</span></a></li>
+      <li><a href="#s5">결정 A — 결과 순서<span class="hint">확정 · 식별 순서</span></a></li>
+      <li><a href="#s6">결정 B — 매핑 조회와 역매핑<span class="hint">확정 · 포트 확장</span></a></li>
+      <li><a href="#s7">제외 규칙 — INACTIVE · 미매핑</a></li>
+      <li><a href="#s8">결정 C — 부분 실패와 전원 실패<span class="hint">확정 · 502</span></a></li>
+      <li><a href="#s9">트랜잭션과 인덱스<span class="hint">인덱스는 관측 중</span></a></li>
+      <li><a href="#s10">검증 실패 경로</a></li>
+      <li><a href="#s11">문서화와 실측</a></li>
+      <li><a href="#s12">결정 카드 요약</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- ========== 1 ========== -->
+  <section id="s1" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <div><p class="sec-eyebrow">SCOPE</p><h2 class="sec">범위와 전제</h2></div>
+    </div>
+
+    <p class="lead">이번 범위는 F7 + F8이다. 두 기능을 합치는 이유는 편의가 아니라, <strong>나눠 두면 F7 구현이 전원 실패 경로에서 무엇을 해야 할지 모르는 채 코드를 쓰게 되기 때문</strong>이다.</p>
+
+    <h3>F8을 흡수하는 근거</h3>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>F8 원래 항목</th><th>지금 상태</th><th>이번 처리</th></tr></thead>
+        <tbody>
+          <tr><td>실패를 값으로 취급하는 aggregate</td><td>F5가 <span class="term">SupplierAvailabilityResult(offers, failures)</span>로 이미 값으로 준다</td><td>F7이 쓰기만 함</td></tr>
+          <tr><td><span class="term">suppliers[]</span> status</td><td>F7이 응답 계약을 만드는 자리</td><td>F7에서 판정</td></tr>
+          <tr><td>실패 유형별 status 표</td><td><span class="term">reason</span>을 응답에서 빼기로 해 판정이 단순해짐</td><td>F7 판정 규칙 하나로 흡수</td></tr>
+          <tr><td>묶음 일부 실패 → PARTIAL</td><td>F5의 <span class="term">failures</span>가 묶음 단위로 온다</td><td>F7이 판정</td></tr>
+          <tr><td><b>전 공급사 실패 시 응답</b></td><td><b>미결</b></td><td>결정 C에서 닫는다</td></tr>
+          <tr><td><b>로그·지표에 남길 최소 정보</b></td><td><b>미결</b></td><td>§8에서 닫는다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note key"><span class="tag">따라오는 것</span>전원 실패를 5xx로 주기로 하면 F0의 <span class="term">ApiResponse.error(ErrorCode)</span>가 필요하고, 그러면 <strong><span class="term">ErrorCode</span>의 두 번째 구현체</strong>가 처음 생긴다 — D-F3-4가 "컨텍스트 전용 응답 코드가 처음 필요한 feature(F7 후보)에서 재검토"로 남겨 둔 그 자리다. 같이 닫는다.</div>
+
+    <h3>제외 — 그대로 밖에 둔다</h3>
+    <p>재시도·서킷(F9) · 캐시(F10) · 미매핑 코드 비동기 수정(F11) · 두 공급사 동일 숙소 병합(D5, 선택) · 페이지네이션·지역·키워드 검색.</p>
+
+    <h3>DDD 전술 패턴은 적용하지 않는다</h3>
+    <p>이 범위에 불변식을 지키는 Aggregate가 없다. 조회 조립이 전부이므로 <strong>Transaction Script</strong>(유스케이스 + 값 객체)로 간다. F3·F5와 같은 판단이다.</p>
+
+    <div class="note warn"><span class="tag">시드 값 불일치 — 먼저 정리하고 간다</span>
+      전달받은 검증 기대값(<span class="term">A-10023</span> 429,000 / <span class="term">B77120</span> 452,000 / <span class="term">A-10044</span> Namsan Garden Stay)은 <strong>원본 명세의 예시 데이터</strong>이고, 우리 모의 서버(F2)는 자체 시드를 쓴다. <strong>시나리오의 의도는 전부 같고 식별자와 금액만 다르다.</strong> 아래 대응표를 기준으로 삼는다.
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>명세 예시</th><th>우리 모의 서버 시드</th><th>확인하려는 것</th></tr></thead>
+        <tbody>
+          <tr><td>A-10023 3박 429,000</td><td><span class="term">A-3201</span> Haeundae Blue Hotel / <span class="term">OCN-DBL</span> → <b>435,600</b></td><td>A 날짜별 합산</td></tr>
+          <tr><td>B77120 452,000 (조식·gross)</td><td><span class="term">P-88410</span> Haeundae Blue Hotel / <span class="term">R-201</span> → <b>453,600</b></td><td>B 총액 그대로</td></tr>
+          <tr><td>A-10023 예약 가능 1 (3/1/5의 최솟값)</td><td><span class="term">OCN-DBL</span> [3, 1, 1] → <b>1</b></td><td>N박 최솟값</td></tr>
+          <tr><td>A-10044 9/2 재고 0</td><td><span class="term">A-3305</span> Gangnam City Stay / <span class="term">STD-DBL</span> — <b>매월 2일 품절</b></td><td>0 노출, 항목 유지</td></tr>
+          <tr><td>A-10023과 B77120은 같은 호텔, 다른 내부 ID</td><td><span class="term">A-3201</span> · <span class="term">P-88410</span> 둘 다 "Haeundae Blue Hotel"</td><td>병합 없이 각각 노출</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>435,600은 F5가 이미 테스트로 재현해 둔 값이다 — 평일 <span class="term">110,000 + 11,000</span>, 주말 <span class="term">143,000 + 14,300</span> 두 번. 시드를 명세 예시 값으로 바꾸면 F2·F3·F5의 기존 테스트가 함께 깨지고, 외부 명세 원문을 저장소에 두지 않는다는 절대 규칙 2와도 어긋난다.</p>
+  </section>
+
+  <!-- ========== 2 ========== -->
+  <section id="s2" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">2</div>
+      <div><p class="sec-eyebrow">CONTRACT</p><h2 class="sec">API 계약</h2></div>
+    </div>
+
+    <p class="lead">요청 파라미터는 넷뿐이다. 지역·키워드·페이징·정렬 파라미터는 두지 않는다.</p>
+
+    <div class="code">
+      <div class="code-bar"><span class="dot" style="background:#F04452"></span><span class="dot" style="background:#FFC56B"></span><span class="dot" style="background:#15C47E"></span><span class="fn">GET /api/v1/stays/search</span></div>
+<pre><span class="cm"># 요청 — 이 넷 외에는 받지 않는다</span>
+GET /api/v1/stays/search?checkIn=2026-09-10&amp;checkOut=2026-09-13&amp;adults=2&amp;children=0
+
+<span class="cm"># 응답 (200) — 필수 정보 7개가 모두 담긴다</span>
+{
+  <span class="st">"code"</span>: <span class="st">"SUCCESS"</span>, <span class="st">"message"</span>: <span class="st">"Success"</span>, <span class="st">"time"</span>: <span class="st">"2026-09-07T…Z"</span>,
+  <span class="st">"data"</span>: {
+    <span class="st">"results"</span>: [
+      {
+        <span class="st">"propertyId"</span>: 1,              <span class="cm">// ① 내부 숙소 ID</span>
+        <span class="st">"propertyName"</span>: <span class="st">"Haeundae Blue Hotel"</span>,  <span class="cm">// ② 숙소명 (공급사 응답 값, D9)</span>
+        <span class="st">"roomId"</span>: 11,                 <span class="cm">// ③ 내부 객실 타입 ID</span>
+        <span class="st">"roomName"</span>: <span class="st">"Ocean Double"</span>,   <span class="cm">// ④ 객실 타입명</span>
+        <span class="st">"maxOccupancy"</span>: 2,            <span class="cm">// ⑤ 최대 수용 인원</span>
+        <span class="st">"bookableRooms"</span>: 1,           <span class="cm">// ⑥ 예약 가능 객실 수 = 날짜별 최솟값 (D7)</span>
+        <span class="st">"soldOut"</span>: false,             <span class="cm">//    bookableRooms == 0 파생 (D8)</span>
+        <span class="st">"totalAmount"</span>: 435600,        <span class="cm">// ⑦ 요금 — 정수, KRW 원 단위</span>
+        <span class="st">"currency"</span>: <span class="st">"KRW"</span>,
+        <span class="st">"breakfastIncluded"</span>: true,
+        <span class="st">"supplier"</span>: <span class="st">"A"</span>               <span class="cm">// ⑧ 출처 공급사</span>
+      }
+    ],
+    <span class="st">"suppliers"</span>: [                    <span class="cm">// ⑨ 부분 실패 사실 (D10 개정 — reason 없음)</span>
+      { <span class="st">"supplier"</span>: <span class="st">"A"</span>, <span class="st">"status"</span>: <span class="st">"OK"</span> },
+      { <span class="st">"supplier"</span>: <span class="st">"B"</span>, <span class="st">"status"</span>: <span class="st">"FAILED"</span> }
+    ]
+  }
+}</pre>
+    </div>
+
+    <h3>요청 검증</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>규칙</th><th>수단</th></tr></thead>
+        <tbody>
+          <tr><td>checkIn</td><td>필수 · <b>오늘 이후</b></td><td><span class="term">@NotNull @FutureOrPresent</span></td></tr>
+          <tr><td>checkOut</td><td>필수 · <b>checkIn보다 뒤</b> (체크아웃일은 숙박일 아님)</td><td><span class="term">@NotNull</span> + 클래스 레벨 <span class="term">@AssertTrue</span></td></tr>
+          <tr><td>adults</td><td>1 이상</td><td><span class="term">@Min(1)</span></td></tr>
+          <tr><td>children</td><td>0 이상</td><td><span class="term">@Min(0)</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note"><span class="tag">Clock을 넣지 않는 이유</span>
+      "오늘"의 기준을 테스트가 고정하려면 주입이 필요하지만, <strong>테스트는 기준을 알 필요가 없다</strong> — 확인할 것은 "기준보다 이전이면 거부"이고 입력을 <span class="term">오늘-1</span>로 상대적으로 주면 된다. 유일하게 흔들리는 「오늘은 통과」 경계는 테스트 리스트에서 뺀다. 대신 기준 시간대가 JVM 기본이 되므로 실행 설정의 <span class="term">TZ=Asia/Seoul</span>로 못박는다.
+    </div>
+
+    <div class="note warn"><span class="tag">구현 첫 사이클에서 실측할 것</span>
+      쿼리 파라미터를 DTO로 묶어 <span class="term">@Valid</span>를 걸 때 Spring이 던지는 예외가 <span class="term">MethodArgumentNotValidException</span>인지 <span class="term">BindException</span>인지에 따라 F0 핸들러가 잡느냐가 갈린다. <strong>문서로 단정하지 않고 실제로 태워 확인</strong>하고, 후자면 핸들러를 하나 늘린다.
+    </div>
+  </section>
+
+  <!-- ========== 3 ========== -->
+  <section id="s3" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <div><p class="sec-eyebrow">STRUCTURE</p><h2 class="sec">클래스 배치</h2></div>
+    </div>
+
+    <p class="lead">컨트롤러는 <span class="term">api-app</span>, 조립은 <span class="term">core</span>의 <strong>application 패키지</strong>다 — domain 패키지가 아니다. domain은 Spring 의존이 0이어야 하고(LAY-2) <span class="term">@Transactional</span>·<span class="term">@Service</span>는 application에만 온다(LAY-3).</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 01">
+        <svg viewBox="0 0 1120 600" role="img" aria-label="F7 구성도. api-app의 presentation, core의 application, core의 포트, 그리고 persistence와 supplier-client의 구현이 위에서 아래로 놓이고 의존은 안쪽으로만 향한다.">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <text class="svg-l" x="30" y="22" fill="#8B95A1">api-app · presentation</text>
+          <rect x="24" y="34" width="1072" height="104" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.5"/>
+          <rect x="44" y="54" width="248" height="64" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="44" y="54" width="248" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchController</div><div class="s">GET /api/v1/stays/search</div></div></foreignObject>
+          <rect x="312" y="54" width="248" height="64" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="312" y="54" width="248" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchRequest</div><div class="s">@Valid · 파라미터 4개</div></div></foreignObject>
+          <rect x="580" y="54" width="496" height="64" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="580" y="54" width="496" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchResponse · StayResultResponse · SupplierStatusResponse</div><div class="s">도메인 타입을 그대로 노출하지 않는다 (LAY-4)</div></div></foreignObject>
+
+          <line x1="560" y1="140" x2="560" y2="172" stroke="#3182F6" stroke-width="2.2" marker-end="url(#a1)"/>
+
+          <text class="svg-l" x="30" y="192" fill="#8B95A1">core · application</text>
+          <rect x="24" y="204" width="1072" height="140" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.5"/>
+          <rect x="44" y="224" width="300" height="100" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="44" y="224" width="300" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">SearchStaysUseCase</div><div class="s">매핑 조회 → 질의 조립 → 포트 호출</div><div class="s">→ 역매핑 → 결과 조립</div></div></foreignObject>
+          <rect x="364" y="224" width="300" height="100" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="364" y="224" width="300" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StayMappingIndex</div><div class="s">공급사별 코드 목록 + 역매핑 색인</div><div class="s">static from(properties, rooms)</div></div></foreignObject>
+          <rect x="684" y="224" width="392" height="100" rx="13" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="684" y="224" width="392" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StaySearchCommand · StaySearchResult</div><div class="s">StayItem · SupplierOutcome · SupplierStatus</div><div class="s">레이어 간 DTO는 Command/Result (LAY-7)</div></div></foreignObject>
+
+          <line x1="200" y1="346" x2="200" y2="382" stroke="#3182F6" stroke-width="2.2" marker-end="url(#a1)"/>
+          <line x1="880" y1="346" x2="880" y2="382" stroke="#3182F6" stroke-width="2.2" marker-end="url(#a1)"/>
+
+          <text class="svg-l" x="30" y="402" fill="#8B95A1">포트 — 사용하는 안쪽 레이어가 소유 (LAY-5)</text>
+          <rect x="24" y="414" width="640" height="80" rx="16" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="24" y="414" width="640" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">core.domain — PropertyRepository · RoomRepository</div><div class="s">+ findAllSearchTargets() · findAllSearchTargetsByPropertyIdIn(ids)</div></div></foreignObject>
+          <rect x="684" y="414" width="392" height="80" rx="16" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.3"/>
+          <foreignObject x="684" y="414" width="392" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">core.application — SupplierAvailabilityPort</div><div class="s">F5, 무변경 · searchAll(AvailabilityQuery)</div></div></foreignObject>
+
+          <line x1="344" y1="530" x2="344" y2="498" stroke="#8B95A1" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#a1)"/>
+          <line x1="880" y1="530" x2="880" y2="498" stroke="#8B95A1" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#a1)"/>
+
+          <rect x="24" y="532" width="640" height="56" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="24" y="532" width="640" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">persistence — PropertyJpaRepository · RoomJpaRepository</div></div></foreignObject>
+          <rect x="684" y="532" width="392" height="56" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="684" y="532" width="392" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">supplier-client — SupplierAvailabilityAdapter (F5)</div></div></foreignObject>
+
+          <text class="svg-l" x="1090" y="192" text-anchor="end" fill="#6B7684">의존은 안쪽으로만 (LAY-1)</text>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 파랑이 이번에 새로 생기는 것이고, 회색은 F5가 만들어 둔 것을 그대로 쓰는 자리다. 아래 두 줄의 점선은 구현이 포트를 향하는 <b>역방향</b> 화살표다.</figcaption>
+    </figure>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 02">
+        <svg viewBox="0 0 1120 720" role="img" aria-label="F7 클래스 다이어그램. presentation의 요청·응답 DTO, application의 유스케이스와 색인·결과 타입, domain의 리포지토리 포트가 주요 시그니처와 함께 놓인다.">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <!-- StaySearchRequest -->
+          <rect x="20" y="20" width="300" height="128" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-t" x="36" y="44" fill="#1B64DA">StaySearchRequest</text>
+          <line x1="20" y1="54" x2="320" y2="54" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="36" y="72" fill="#4E5968">+ checkIn : LocalDate</text>
+          <text class="svg-s" x="36" y="90" fill="#4E5968">+ checkOut : LocalDate</text>
+          <text class="svg-s" x="36" y="108" fill="#4E5968">+ adults : int</text>
+          <text class="svg-s" x="36" y="126" fill="#4E5968">+ children : int</text>
+          <text class="svg-s" x="36" y="142" fill="#8B95A1">+ toCommand() : StaySearchCommand</text>
+
+          <!-- Controller -->
+          <rect x="360" y="20" width="330" height="110" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <text class="svg-t" x="376" y="44" fill="#1B64DA">StaySearchController</text>
+          <line x1="360" y1="54" x2="690" y2="54" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="376" y="72" fill="#4E5968">- useCase : SearchStaysUseCase</text>
+          <text class="svg-s" x="376" y="94" fill="#4E5968">+ search(@Valid StaySearchRequest)</text>
+          <text class="svg-s" x="376" y="112" fill="#4E5968">&#160;&#160;: ApiResponse&lt;StaySearchResponse&gt;</text>
+
+          <!-- Response DTO -->
+          <rect x="730" y="20" width="370" height="128" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-t" x="746" y="44" fill="#1B64DA">StaySearchResponse</text>
+          <line x1="730" y1="54" x2="1100" y2="54" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="746" y="72" fill="#4E5968">+ results : List&lt;StayResultResponse&gt;</text>
+          <text class="svg-s" x="746" y="90" fill="#4E5968">+ suppliers : List&lt;SupplierStatusResponse&gt;</text>
+          <text class="svg-s" x="746" y="114" fill="#8B95A1">StayResultResponse — 필드 11 (§2)</text>
+          <text class="svg-s" x="746" y="132" fill="#8B95A1">SupplierStatusResponse(String, String)</text>
+
+          <line x1="322" y1="76" x2="356" y2="76" stroke="#8B95A1" stroke-width="1.6" marker-end="url(#a2)"/>
+          <line x1="692" y1="76" x2="726" y2="76" stroke="#8B95A1" stroke-width="1.6" marker-end="url(#a2)"/>
+          <line x1="525" y1="132" x2="525" y2="196" stroke="#3182F6" stroke-width="2" marker-end="url(#a2)"/>
+
+          <!-- UseCase -->
+          <rect x="330" y="198" width="400" height="152" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="346" y="222" fill="#1B64DA">SearchStaysUseCase &#171;@Service&#187;</text>
+          <line x1="330" y1="232" x2="730" y2="232" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="346" y="250" fill="#4E5968">- properties : PropertyRepository</text>
+          <text class="svg-s" x="346" y="268" fill="#4E5968">- rooms : RoomRepository</text>
+          <text class="svg-s" x="346" y="286" fill="#4E5968">- suppliers : SupplierAvailabilityPort</text>
+          <line x1="330" y1="298" x2="730" y2="298" stroke="#E5E8EB" stroke-width="1"/>
+          <text class="svg-s" x="346" y="318" fill="#1B64DA">+ search(StaySearchCommand) : StaySearchResult</text>
+          <text class="svg-s" x="346" y="340" fill="#C9303C">@Transactional 없음 — §9</text>
+
+          <!-- MappingIndex -->
+          <rect x="20" y="198" width="290" height="176" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-t" x="36" y="222" fill="#1B64DA">StayMappingIndex</text>
+          <line x1="20" y1="232" x2="310" y2="232" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="36" y="252" fill="#8B95A1">static from(List&lt;Property&gt;,</text>
+          <text class="svg-s" x="36" y="268" fill="#8B95A1">&#160;&#160;&#160;&#160;List&lt;Room&gt;) : StayMappingIndex</text>
+          <line x1="20" y1="280" x2="310" y2="280" stroke="#E5E8EB" stroke-width="1"/>
+          <text class="svg-s" x="36" y="300" fill="#4E5968">+ codesBySupplier()</text>
+          <text class="svg-s" x="36" y="316" fill="#4E5968">&#160;&#160;: Map&lt;Supplier, List&lt;String&gt;&gt;</text>
+          <text class="svg-s" x="36" y="336" fill="#4E5968">+ propertyIdOf(Supplier, code)</text>
+          <text class="svg-s" x="36" y="352" fill="#4E5968">+ roomIdOf(propertyId, code)</text>
+          <text class="svg-s" x="36" y="368" fill="#8B95A1">&#160;&#160;둘 다 Optional&lt;Long&gt;</text>
+
+          <!-- Result -->
+          <rect x="750" y="198" width="350" height="176" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-t" x="766" y="222" fill="#1B64DA">StaySearchResult</text>
+          <line x1="750" y1="232" x2="1100" y2="232" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="766" y="252" fill="#4E5968">+ items : List&lt;StayItem&gt;</text>
+          <text class="svg-s" x="766" y="270" fill="#4E5968">+ outcomes : List&lt;SupplierOutcome&gt;</text>
+          <line x1="750" y1="282" x2="1100" y2="282" stroke="#E5E8EB" stroke-width="1"/>
+          <text class="svg-s" x="766" y="302" fill="#8B95A1">StayItem — propertyId · roomId ·</text>
+          <text class="svg-s" x="766" y="318" fill="#8B95A1">&#160;&#160;Money totalAmount · bookableRooms</text>
+          <text class="svg-s" x="766" y="338" fill="#8B95A1">SupplierOutcome(Supplier, SupplierStatus)</text>
+          <text class="svg-s" x="766" y="358" fill="#8B95A1">SupplierStatus { OK, PARTIAL, FAILED }</text>
+
+          <line x1="312" y1="270" x2="326" y2="270" stroke="#8B95A1" stroke-width="1.6" marker-end="url(#a2)"/>
+          <line x1="732" y1="270" x2="746" y2="270" stroke="#8B95A1" stroke-width="1.6" marker-end="url(#a2)"/>
+
+          <!-- Ports -->
+          <line x1="180" y1="376" x2="180" y2="428" stroke="#3182F6" stroke-width="2" marker-end="url(#a2)"/>
+          <line x1="525" y1="352" x2="525" y2="428" stroke="#3182F6" stroke-width="2" marker-end="url(#a2)"/>
+          <line x1="900" y1="376" x2="900" y2="428" stroke="#3182F6" stroke-width="2" marker-end="url(#a2)"/>
+
+          <rect x="20" y="430" width="330" height="120" rx="14" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-t" x="36" y="454" fill="#1B64DA">PropertyRepository &#171;port&#187;</text>
+          <line x1="20" y1="464" x2="350" y2="464" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="36" y="484" fill="#8B95A1">+ save(Property)&#160;&#160;(F1)</text>
+          <text class="svg-s" x="36" y="502" fill="#8B95A1">+ saveAll · findAllBySupplier&#160;&#160;(F6)</text>
+          <text class="svg-s" x="36" y="524" fill="#1B64DA">+ findAllSearchTargets()</text>
+          <text class="svg-s" x="36" y="542" fill="#4E5968">&#160;&#160;: List&lt;Property&gt; — ACTIVE만</text>
+
+          <rect x="376" y="430" width="330" height="120" rx="14" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.4"/>
+          <text class="svg-t" x="392" y="454" fill="#1B64DA">RoomRepository &#171;port&#187;</text>
+          <line x1="376" y1="464" x2="706" y2="464" stroke="#3182F6" stroke-width="1"/>
+          <text class="svg-s" x="392" y="484" fill="#8B95A1">+ save(Room)&#160;&#160;(F1)</text>
+          <text class="svg-s" x="392" y="502" fill="#8B95A1">+ saveAll · findAllByPropertyIdIn&#160;&#160;(F6)</text>
+          <text class="svg-s" x="392" y="524" fill="#1B64DA">+ findAllSearchTargetsByPropertyIdIn(ids)</text>
+          <text class="svg-s" x="392" y="542" fill="#4E5968">&#160;&#160;: List&lt;Room&gt; — ACTIVE만</text>
+
+          <rect x="732" y="430" width="368" height="120" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.4"/>
+          <text class="svg-t" x="748" y="454" fill="#333D4B">SupplierAvailabilityPort &#171;port, F5&#187;</text>
+          <line x1="732" y1="464" x2="1100" y2="464" stroke="#B0B8C1" stroke-width="1"/>
+          <text class="svg-s" x="748" y="484" fill="#4E5968">+ searchAll(AvailabilityQuery)</text>
+          <text class="svg-s" x="748" y="502" fill="#4E5968">&#160;&#160;: List&lt;SupplierAvailabilityResult&gt;</text>
+          <text class="svg-s" x="748" y="524" fill="#8B95A1">결과 하나가 offers 와 failures 를</text>
+          <text class="svg-s" x="748" y="542" fill="#8B95A1">동시에 들 수 있다 (D-F5-7)</text>
+
+          <!-- AvailabilityQuery -->
+          <rect x="330" y="586" width="440" height="112" rx="14" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.4"/>
+          <text class="svg-t" x="346" y="610" fill="#333D4B">AvailabilityQuery &#171;F5, 무변경&#187;</text>
+          <line x1="330" y1="620" x2="770" y2="620" stroke="#B0B8C1" stroke-width="1"/>
+          <text class="svg-s" x="346" y="640" fill="#4E5968">+ propertyCodes : Map&lt;Supplier, List&lt;String&gt;&gt;</text>
+          <text class="svg-s" x="346" y="660" fill="#1B64DA">+ static of(StaySearchCommand, Map&lt;…&gt;) &#8592; F7이 추가</text>
+          <text class="svg-s" x="346" y="682" fill="#8B95A1">URL·묶음 분할·날짜 표기는 전부 어댑터 몫이다</text>
+          <line x1="550" y1="552" x2="550" y2="584" stroke="#3182F6" stroke-width="2" marker-end="url(#a2)"/>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 리포지토리 포트에 붙는 새 메서드는 <b>이름이 곧 의도</b>다(<span style="font-family:var(--mono)">findAllSearchTargets</span>). ACTIVE 필터가 그 메서드 <b>안에</b> 있으므로 호출자는 lifecycle을 모른다.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 4 ========== -->
+  <section id="s4" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <div><p class="sec-eyebrow">HAPPY PATH</p><h2 class="sec">정상 경로</h2></div>
+    </div>
+
+    <p class="lead">유스케이스는 Reactor 연산자를 직접 쓰지 않는다. 병렬·타임아웃·예산은 전부 포트 안쪽(F3a 조합기)에서 처리되고, 유스케이스는 돌아온 공급사별 결과를 합치기만 한다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="SEQUENCE · FIG. 03">
+        <svg viewBox="0 0 1120 700" role="img" aria-label="검색 요청 1건의 시퀀스. 컨트롤러가 유스케이스를 부르고, 유스케이스가 매핑을 읽어 질의를 만들고 포트를 호출한 뒤 돌아온 결과를 역매핑해 응답을 조립한다.">
+          <defs>
+            <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="14" y="14" width="150" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="14" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">클라이언트</div></div></foreignObject>
+          <rect x="192" y="14" width="150" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.3"/>
+          <foreignObject x="192" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">Controller</div><div class="s">검증·DTO 변환</div></div></foreignObject>
+          <rect x="370" y="14" width="150" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="370" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">UseCase</div><div class="s">조립</div></div></foreignObject>
+          <rect x="548" y="14" width="150" height="52" rx="13" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="548" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">Repository</div><div class="s">property · room</div></div></foreignObject>
+          <rect x="726" y="14" width="150" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="726" y="14" width="150" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">MappingIndex</div><div class="s">이번에 생김</div></div></foreignObject>
+          <rect x="926" y="14" width="170" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="926" y="14" width="170" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">AvailabilityPort</div><div class="s">F5 — 병렬·예산</div></div></foreignObject>
+
+          <line x1="89" y1="70" x2="89" y2="672" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="267" y1="70" x2="267" y2="672" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="445" y1="70" x2="445" y2="672" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="623" y1="70" x2="623" y2="672" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="801" y1="70" x2="801" y2="672" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="1011" y1="70" x2="1011" y2="672" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+
+          <line x1="89" y1="100" x2="263" y2="100" stroke="#3182F6" stroke-width="2" marker-end="url(#a3)"/>
+          <text class="svg-l" x="176" y="92" text-anchor="middle" fill="#1B64DA">GET …/search?4개</text>
+
+          <rect x="277" y="116" width="156" height="42" rx="11" fill="#F4F9FF" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="277" y="116" width="156" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">@Valid → toCommand()</div></div></foreignObject>
+
+          <line x1="267" y1="180" x2="441" y2="180" stroke="#3182F6" stroke-width="2" marker-end="url(#a3)"/>
+          <text class="svg-l" x="354" y="172" text-anchor="middle" fill="#1B64DA">search(command)</text>
+
+          <line x1="445" y1="214" x2="619" y2="214" stroke="#3182F6" stroke-width="2" marker-end="url(#a3)"/>
+          <text class="svg-l" x="532" y="206" text-anchor="middle" fill="#1B64DA">findAllSearchTargets()</text>
+          <line x1="619" y1="246" x2="449" y2="246" stroke="#8B95A1" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+          <text class="svg-l" x="534" y="238" text-anchor="middle" fill="#6B7684">ACTIVE 숙소 3건</text>
+
+          <line x1="445" y1="280" x2="619" y2="280" stroke="#3182F6" stroke-width="2" marker-end="url(#a3)"/>
+          <text class="svg-l" x="532" y="272" text-anchor="middle" fill="#1B64DA">…ByPropertyIdIn(ids)</text>
+          <line x1="619" y1="312" x2="449" y2="312" stroke="#8B95A1" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+          <text class="svg-l" x="534" y="304" text-anchor="middle" fill="#6B7684">ACTIVE 객실 5건</text>
+
+          <line x1="445" y1="348" x2="797" y2="348" stroke="#3182F6" stroke-width="2" marker-end="url(#a3)"/>
+          <text class="svg-l" x="621" y="340" text-anchor="middle" fill="#1B64DA">StayMappingIndex.from(properties, rooms)</text>
+          <rect x="700" y="360" width="200" height="42" rx="11" fill="#F4F9FF" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="700" y="360" width="200" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="s">codesBySupplier() = {A:[2], B:[1]}</div></div></foreignObject>
+
+          <line x1="445" y1="430" x2="1007" y2="430" stroke="#3182F6" stroke-width="2.4" marker-end="url(#a3)"/>
+          <text class="svg-l" x="726" y="422" text-anchor="middle" fill="#1B64DA">searchAll(AvailabilityQuery.of(command, codes))</text>
+          <rect x="866" y="442" width="240" height="58" rx="11" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1"/>
+          <foreignObject x="866" y="442" width="240" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="s">묶음 분할 · 병렬 fan-out</div><div class="s">per-call 4s · budget 5s</div></div></foreignObject>
+          <line x1="1007" y1="524" x2="449" y2="524" stroke="#15C47E" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#a3)"/>
+          <text class="svg-l" x="728" y="516" text-anchor="middle" fill="#0A8F5B">List&lt;SupplierAvailabilityResult&gt; — 공급사별 offers + failures</text>
+
+          <rect x="290" y="546" width="480" height="72" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="290" y="546" width="480" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="s">offer 마다 — propertyIdOf / roomIdOf 로 내부 ID 부여</div><div class="s">없으면 그 항목만 제외 (§7) · soldOut = bookableRooms == 0</div><div class="s">failures 로 SupplierStatus 판정 (§8) · 결과 순서 고정 (§5)</div></div></foreignObject>
+
+          <line x1="441" y1="646" x2="271" y2="646" stroke="#15C47E" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a3)"/>
+          <text class="svg-l" x="356" y="638" text-anchor="middle" fill="#0A8F5B">StaySearchResult</text>
+          <line x1="263" y1="672" x2="93" y2="672" stroke="#15C47E" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a3)"/>
+          <text class="svg-l" x="178" y="664" text-anchor="middle" fill="#0A8F5B">200 ApiResponse.ok</text>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — DB 읽기 두 번은 <b>포트 호출 앞</b>에 몰려 있고, 포트 호출 구간에는 DB가 없다. §9의 트랜잭션 결정이 여기서 나온다.</figcaption>
+    </figure>
+
+    <div class="note warn"><span class="tag">이 갈래가 없으면 500이 나간다 (D-F7-15)</span>
+      색인이 비어 있으면(ACTIVE 매핑 0건) <strong>포트를 부르지 않고 빈 결과로 조기 반환</strong>한다. 그대로 부르면 F5의 <span class="term">AvailabilityQuery</span>가 "propertyCodes는 비어 있을 수 없다"는 불변식으로 <span class="term">IllegalArgumentException</span>을 던지고, 그것이 advice의 마지막 그물에 걸려 <strong>500으로 나간다.</strong> 그런데 매핑이 비어 있는 것은 <strong>앱을 처음 띄운 정상 상태</strong>다.
+      <br><br>이때 <span class="term">suppliers</span>도 빈 배열이다 — 아무도 부르지 않았으므로, 안 부른 곳을 <span class="term">OK</span>로 쓰면 "물어봤는데 결과가 없다"는 거짓이 된다.
+    </div>
+  </section>
+
+  <!-- ========== 5 ========== -->
+  <section id="s5" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">5</div>
+      <div><p class="sec-eyebrow">DECISION A</p><h2 class="sec">결과 순서 <span class="stchip ok">확정 · 안 A</span></h2></div>
+    </div>
+
+    <p class="lead">요청에 정렬 파라미터를 두지 않는 것은 확정이다. 그래도 <strong>응답의 순서는 정해야 한다</strong> — 조합기의 <span class="term">flatMap</span>은 완료 순서대로 결과를 내보내므로, 아무것도 안 하면 같은 요청이 매번 다른 순서로 나간다. 테스트도 그 위에 못 선다.</p>
+
+    <div class="note warn"><span class="tag">이게 취향 문제가 아닌 이유</span>
+      F5 설계 §3.5가 못박아 둔 것이 있다 — <strong>조식 조건이 다른 두 항목의 <span class="term">totalAmount</span>는 같은 축에서 비교되지 않는다.</strong> 업계 모델에서 판매 단위는 (객실 타입 × 요금제)이고 조식 포함 여부는 요금제의 조건이다. 우리 모델에는 요금제 축이 없다.
+    </div>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 04">
+        <svg viewBox="0 0 1120 560" role="img" aria-label="정렬 두 안의 비교. 같은 5개 상품을 식별 순서로 정렬한 결과와 가격 오름차순으로 정렬한 결과를 나란히 놓아, 가격순에서 조식 미포함 상품이 상단을 차지하는 것을 보인다.">
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">모의 서버 기본 데이터 · 2026-09-10 ~ 09-13 (3박) · adults 2</text>
+
+          <!-- 안 A -->
+          <rect x="14" y="36" width="540" height="500" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="34" y="64" fill="#1B64DA">안 A — 식별 순서 고정</text>
+          <text class="svg-s" x="34" y="84" fill="#3182F6">propertyName ASC → roomName ASC → supplier ASC</text>
+
+          <rect x="30" y="100" width="508" height="52" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="30" y="100" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>Gangnam City Stay</b> · Standard Double &#160;&#160;514,800 &#160;조식 ✗ &#160;(A)</div></div></foreignObject>
+          <rect x="30" y="160" width="508" height="52" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="30" y="160" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>Haeundae Blue Hotel</b> · Family Suite &#160;&#160;756,000 &#160;조식 ✓ &#160;(B)</div></div></foreignObject>
+          <rect x="30" y="220" width="508" height="52" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="30" y="220" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>Haeundae Blue Hotel</b> · Ocean Double &#160;&#160;435,600 &#160;조식 ✓ &#160;(A)</div></div></foreignObject>
+          <rect x="30" y="280" width="508" height="52" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="30" y="280" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>Haeundae Blue Hotel</b> · Ocean Double Room &#160;&#160;453,600 &#160;조식 ✓ &#160;(B)</div></div></foreignObject>
+          <rect x="30" y="340" width="508" height="52" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="30" y="340" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>Haeundae Blue Hotel</b> · Standard Twin &#160;&#160;356,400 &#160;조식 ✗ &#160;(A)</div></div></foreignObject>
+
+          <rect x="30" y="404" width="508" height="116" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="30" y="404" width="508" height="116"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>얻는 것</b> — 순서가 결정적이라 테스트가 선다. 그리고 <b>A·B가 같은 호텔을 팔면 나란히 모인다</b>(3·4행) — 병합(D5)을 안 해도 화면에서 비교된다.</div><div class="d" style="margin-top:6px"><b>잃는 것</b> — 상업적으로 유용한 순서가 아니다. 정렬은 화면 몫으로 넘어간다.</div></div></foreignObject>
+
+          <!-- 안 B -->
+          <rect x="566" y="36" width="540" height="500" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="586" y="64" fill="#333D4B">안 B — 가격 오름차순</text>
+          <text class="svg-s" x="586" y="84" fill="#8B95A1">totalAmount ASC → propertyName → roomName</text>
+
+          <rect x="582" y="100" width="508" height="52" rx="11" fill="#FEEFEF" stroke="#F04452" stroke-width="1.6"/>
+          <foreignObject x="582" y="100" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>356,400</b> &#160;Haeundae Blue Hotel · Standard Twin &#160;<b>조식 ✗</b></div></div></foreignObject>
+          <rect x="582" y="160" width="508" height="52" rx="11" fill="#fff" stroke="#D1D6DB" stroke-width="1"/>
+          <foreignObject x="582" y="160" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>435,600</b> &#160;Haeundae Blue Hotel · Ocean Double &#160;조식 ✓</div></div></foreignObject>
+          <rect x="582" y="220" width="508" height="52" rx="11" fill="#fff" stroke="#D1D6DB" stroke-width="1"/>
+          <foreignObject x="582" y="220" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>453,600</b> &#160;Haeundae Blue Hotel · Ocean Double Room &#160;조식 ✓</div></div></foreignObject>
+          <rect x="582" y="280" width="508" height="52" rx="11" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <foreignObject x="582" y="280" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>514,800</b> &#160;Gangnam City Stay · Standard Double &#160;<b>조식 ✗</b></div></div></foreignObject>
+          <rect x="582" y="340" width="508" height="52" rx="11" fill="#fff" stroke="#D1D6DB" stroke-width="1"/>
+          <foreignObject x="582" y="340" width="508" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>756,000</b> &#160;Haeundae Blue Hotel · Family Suite &#160;조식 ✓</div></div></foreignObject>
+
+          <rect x="582" y="404" width="508" height="116" rx="12" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <foreignObject x="582" y="404" width="508" height="116"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>1위와 2위는 같은 호텔의 두 방이다.</b> 79,200원 차이 중 얼마가 조식값인지 응답만 보고는 알 수 없다. 조식 없는 방이 구조적으로 위로 올라간다.</div><div class="d" style="margin-top:6px"><b>또</b> — 통화가 섞이면 숫자 비교 자체가 뜻을 잃는다(D-F5-2의 KRW 단일 전제).</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 오른쪽 1위 <span style="font-family:var(--mono)">Standard Twin</span>과 2위 <span style="font-family:var(--mono)">Ocean Double</span>은 <b>같은 호텔</b>이고 조식만 다르다. 가격순은 이 둘을 같은 자로 잰다.</figcaption>
+    </figure>
+
+    <div class="cols">
+      <div class="col o"><h4><span class="mk">확정</span>안 A — 식별 순서</h4><p>결정적이고, 비교 불가능한 두 값을 같은 축에 세우지 않는다. 가격 비교가 성립하려면 요금제 축이 필요한데 우리 모델에 없다. <strong>축을 만들기 전에는 가격을 기본 순서로 두지 않는다.</strong></p></div>
+      <div class="col x"><h4><span class="mk">탈락</span>안 B — 가격순</h4><p>화면이 그대로 쓰기 좋다. 다만 위 편향을 응답 계약에 새겨 넣는 것이고, 나중에 요금제 축이 생겨도 순서가 이미 굳는다.</p></div>
+    </div>
+
+    <div class="note"><span class="tag">탈락시킨 세 번째 안</span><span class="term">sort</span> 요청 파라미터 — <strong>요구가 파라미터를 넷으로 못박고 있어</strong> 선택지가 아니다. 필요해지면 안 A 위에 얹는다.</div>
+  </section>
+
+  <!-- ========== 6 ========== -->
+  <section id="s6" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">6</div>
+      <div><p class="sec-eyebrow">DECISION B</p><h2 class="sec">매핑 조회와 역매핑 <span class="stchip ok">확정 · 안 1</span></h2></div>
+    </div>
+
+    <p class="lead">검색은 매핑 테이블을 두 번 쓴다 — <strong>나갈 때</strong>(어떤 코드를 물어볼지)와 <strong>들어올 때</strong>(공급사 코드를 내부 ID로 되돌릴 때). 이 둘을 어디에 두느냐가 F6과의 충돌 지점이기도 하다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 05">
+        <svg viewBox="0 0 1120 460" role="img" aria-label="매핑 조회 세 안의 클래스 비교. 도메인 리포지토리 확장, 전용 조회 포트 신설, 유스케이스가 Map을 직접 다루는 안을 나란히 놓았다.">
+          <defs>
+            <marker id="a5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">같은 자리의 박스가 어떻게 달라지는지 세로로 비교</text>
+
+          <!-- 안 1 -->
+          <rect x="14" y="34" width="356" height="410" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="32" y="62" fill="#1B64DA">안 1 — 리포지토리 확장</text>
+          <rect x="30" y="78" width="324" height="82" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="30" y="78" width="324" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">PropertyRepository</div><div class="s">+ findAllSearchTargets()</div><div class="s">RoomRepository</div><div class="s">+ …ByPropertyIdIn(ids)</div></div></foreignObject>
+          <line x1="192" y1="162" x2="192" y2="188" stroke="#3182F6" stroke-width="2" marker-end="url(#a5)"/>
+          <rect x="30" y="190" width="324" height="72" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="30" y="190" width="324" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">StayMappingIndex</div><div class="s">엔티티 → 색인 (정적 팩토리)</div></div></foreignObject>
+          <rect x="30" y="278" width="324" height="150" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="30" y="278" width="324" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 포트가 하나뿐이라 같은 테이블에 인터페이스가 둘 생기지 않는다.</div><div class="d" style="margin-top:5px"><b>+</b> ACTIVE 필터가 메서드 <b>안</b>이라 호출자가 lifecycle을 모른다.</div><div class="d" style="margin-top:5px"><b>−</b> F6이 고친 같은 파일 2개를 또 고친다 → 병합 충돌.</div></div></foreignObject>
+
+          <!-- 안 2 -->
+          <rect x="382" y="34" width="356" height="410" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="400" y="62" fill="#333D4B">안 2 — 전용 조회 포트</text>
+          <rect x="398" y="78" width="324" height="82" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="78" width="324" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">StayMappingQueryPort</div><div class="s">core.application 신설</div><div class="s">+ loadSearchTargets() : StayMappingIndex</div></div></foreignObject>
+          <line x1="560" y1="162" x2="560" y2="188" stroke="#8B95A1" stroke-width="2" marker-end="url(#a5)"/>
+          <rect x="398" y="190" width="324" height="72" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="190" width="324" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">persistence 구현 (신규 클래스)</div><div class="s">JPA 리포지토리를 안에서 호출</div></div></foreignObject>
+          <rect x="398" y="278" width="324" height="150" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="398" y="278" width="324" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> F6이 건드린 파일을 하나도 안 건드린다 — 충돌 0.</div><div class="d" style="margin-top:5px"><b>−</b> <b>같은 테이블에 포트가 둘</b>이 된다. "이 테이블은 어디로 읽나"의 답이 둘이 되고, 다음 사람이 어느 쪽에 메서드를 더할지 매번 고민한다.</div><div class="d" style="margin-top:5px"><b>−</b> 충돌 회피는 한 번뿐인 이득인데 구조는 영구히 남는다.</div></div></foreignObject>
+
+          <!-- 안 3 -->
+          <rect x="750" y="34" width="356" height="410" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="768" y="62" fill="#333D4B">안 3 — 색인 없이 Map 직접</text>
+          <rect x="766" y="78" width="324" height="82" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="78" width="324" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">PropertyRepository · RoomRepository</div><div class="s">안 1과 같음</div></div></foreignObject>
+          <line x1="928" y1="162" x2="928" y2="188" stroke="#8B95A1" stroke-width="2" marker-end="url(#a5)"/>
+          <rect x="766" y="190" width="324" height="72" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="190" width="324" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">SearchStaysUseCase</div><div class="s">Map 3개를 메서드 안에서 굴린다</div></div></foreignObject>
+          <rect x="766" y="278" width="324" height="150" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="278" width="324" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 클래스가 하나 안 늘어난다.</div><div class="d" style="margin-top:5px"><b>−</b> 유스케이스가 <b>조립 + 색인 + 미매핑 판정</b> 셋을 한다 (OOP-3 위반). 미매핑 규칙이 붙을 자리가 없어 <span style="font-family:var(--mono)">if (id == null)</span>가 흩어진다.</div></div></foreignObject>
+
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 안 2가 얻는 것은 <b>일회성 병합 충돌 회피</b>이고, 치르는 값은 <b>영구적인 포트 이중화</b>다. 값이 이득보다 오래 남는다.</figcaption>
+    </figure>
+
+    <p><strong>안 1로 확정한다.</strong> 병합 충돌은 F6이 먼저 들어오면 그 위에서 다시 잡으면 되는 일회성 비용이고, 두 메서드가 같은 인터페이스에 나란히 있는 편이 "이 테이블은 여기로 읽는다"를 지킨다. <span class="term">StayMappingIndex</span>를 값 객체로 두는 근거는 클래스 수가 아니라 <strong>미매핑 판정이라는 규칙이 붙기 때문</strong>이다(OOP-8).</p>
+  </section>
+
+  <!-- ========== 7 ========== -->
+  <section id="s7" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">7</div>
+      <div><p class="sec-eyebrow">EXCLUSION</p><h2 class="sec">제외 규칙 — INACTIVE와 미매핑</h2></div>
+    </div>
+
+    <p class="lead">항목이 결과에서 빠지는 경로는 셋이다. <strong>셋 다 검색 전체를 실패시키지 않는다.</strong></p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 06">
+        <svg viewBox="0 0 1120 480" role="img" aria-label="제외 규칙 플로우차트. 매핑 조회에서 INACTIVE가 걸러지고, 돌아온 offer가 역매핑에서 숙소 또는 객실을 못 찾으면 그 항목만 제외되며, 재고 0은 제외되지 않는다.">
+          <defs>
+            <marker id="a6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="20" y="30" width="230" height="72" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="20" y="30" width="230" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">① 매핑 조회</div><div class="s">findAllSearchTargets()</div></div></foreignObject>
+          <rect x="20" y="128" width="230" height="82" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <foreignObject x="20" y="128" width="230" height="82"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">INACTIVE 제외</div><div class="s">SQL의 WHERE 절에서 — 공급사에</div><div class="s">물어보지도 않는다</div></div></foreignObject>
+          <line x1="135" y1="104" x2="135" y2="126" stroke="#F04452" stroke-width="2" marker-end="url(#a6)"/>
+
+          <line x1="252" y1="66" x2="306" y2="66" stroke="#3182F6" stroke-width="2" marker-end="url(#a6)"/>
+          <rect x="308" y="30" width="230" height="72" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="308" y="30" width="230" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">② 공급사 호출</div><div class="s">ACTIVE 코드만 나간다</div></div></foreignObject>
+
+          <line x1="540" y1="66" x2="594" y2="66" stroke="#3182F6" stroke-width="2" marker-end="url(#a6)"/>
+          <rect x="596" y="30" width="230" height="72" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.4"/>
+          <foreignObject x="596" y="30" width="230" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">③ offer 하나마다</div><div class="s">propertyCode · roomCode</div></div></foreignObject>
+
+          <!-- 분기 -->
+          <line x1="711" y1="104" x2="711" y2="140" stroke="#3182F6" stroke-width="2"/>
+          <line x1="420" y1="140" x2="1000" y2="140" stroke="#3182F6" stroke-width="2"/>
+
+          <line x1="420" y1="140" x2="420" y2="176" stroke="#F04452" stroke-width="2" marker-end="url(#a6)"/>
+          <rect x="300" y="178" width="240" height="92" rx="13" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <foreignObject x="300" y="178" width="240" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">숙소 코드가 색인에 없다</div><div class="s">미매핑 — 목록 갱신 주기 사이에</div><div class="s">공급사가 추가한 것</div><div class="s">→ 이 항목만 제외</div></div></foreignObject>
+
+          <line x1="711" y1="140" x2="711" y2="176" stroke="#F04452" stroke-width="2" marker-end="url(#a6)"/>
+          <rect x="591" y="178" width="240" height="92" rx="13" fill="#FEEFEF" stroke="#F04452" stroke-width="1.3"/>
+          <foreignObject x="591" y="178" width="240" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">객실 코드가 색인에 없다</div><div class="s">미매핑이거나 그 객실이 INACTIVE</div><div class="s">둘 다 "팔 수 없다"로 같다</div><div class="s">→ 이 항목만 제외</div></div></foreignObject>
+
+          <line x1="1000" y1="140" x2="1000" y2="176" stroke="#15C47E" stroke-width="2" marker-end="url(#a6)"/>
+          <rect x="880" y="178" width="220" height="92" rx="13" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.3"/>
+          <foreignObject x="880" y="178" width="220" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">둘 다 찾음</div><div class="s">내부 ID 부여</div><div class="s">soldOut = bookableRooms == 0</div></div></foreignObject>
+
+          <rect x="300" y="300" width="531" height="76" rx="13" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="300" y="300" width="531" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>로그는 항목마다 찍지 않는다</b> — 요청 1건당 <b>집계 한 줄</b>로 공급사·코드 목록·개수를 남긴다. 항목마다 찍으면 공급사가 대량으로 상품을 추가한 날 로그가 폭발한다 (CLN-9).</div></div></foreignObject>
+
+          <rect x="880" y="300" width="220" height="76" rx="13" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="880" y="300" width="220" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="s">재고 0은 제외가 아니다</div><div class="s">soldOut: true 로 남긴다 (D8)</div></div></foreignObject>
+
+          <rect x="20" y="402" width="1080" height="62" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="20" y="402" width="1080" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>제외된 항목이 있어도 그 공급사는 실패가 아니다.</b> 제외는 우리 매핑 상태의 문제이지 공급사 호출의 결과가 아니므로 <span style="font-family:var(--mono)">SupplierStatus</span> 판정에 넣지 않는다. 제외 때문에 offers가 0이 되어도 status는 OK다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — INACTIVE는 <b>①에서</b> 걸리고 미매핑은 <b>③에서</b> 걸린다. 자리가 다른 이유는 하나는 우리가 아는 사실이고 하나는 응답을 받아 봐야 아는 사실이기 때문이다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">ACTIVE만 거르는 자리</span>
+      <span class="term">db-schema.html</span>이 "판매 목록 질의에서만 명시적으로 거른다"고 정해 두었다. <strong>이번 범위에서 그 질의는 <span class="term">findAllSearchTargets()</span>와 <span class="term">findAllSearchTargetsByPropertyIdIn()</span> 둘뿐</strong>이다. F6의 동기화 경로는 lifecycle 필터 없이 전부 읽는다(D-F6-9) — 되살아날 INACTIVE 행이 "DB에 없음"으로 판정되면 insert로 가서 UNIQUE에 걸리기 때문이며, 그 판단과 검색의 판단은 별개다.
+    </div>
+  </section>
+
+  <!-- ========== 8 ========== -->
+  <section id="s8" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">8</div>
+      <div><p class="sec-eyebrow">DECISION C</p><h2 class="sec">부분 실패와 전원 실패 <span class="stchip ok">확정 · 502</span></h2></div>
+    </div>
+
+    <p class="lead">부분 실패는 200이다 — A가 무응답이어도 B 결과만으로 응답이 나가야 한다. 남은 것은 <strong>전원이 실패했을 때</strong> 하나다.</p>
+
+    <h3>status 판정</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>F5가 준 결과</th><th>status</th><th>왜</th></tr></thead>
+        <tbody>
+          <tr><td>failures 비어 있음</td><td>OK</td><td>offers가 비어 있어도 OK — 공급사는 아는 코드만 돌려준다(계약 §8)</td></tr>
+          <tr><td>failures 있음 + offers 있음</td><td>PARTIAL</td><td>묶음 여러 개 중 일부만 실패</td></tr>
+          <tr><td>failures 있음 + offers 없음</td><td>FAILED</td><td>그 공급사 몫이 통째로 빠짐</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>B의 <span class="term">HTTP 200 + resultCode != "0000"</span>은 F3의 <span class="term">SupplierBResultException</span>과 <span class="term">FailureClassifier</span>를 거쳐 A의 4xx/5xx와 <strong>같은 자리</strong>로 온다. 그래서 위 표 하나로 두 공급사가 동일하게 판정된다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 07">
+        <svg viewBox="0 0 1120 440" role="img" aria-label="전원 실패 시 응답 세 안의 비교. 200으로 빈 결과를 주는 안, 502로 오류 본문을 주는 안, 503과 Retry-After를 주는 안을 나란히 놓았다.">
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">A·B 둘 다 실패했을 때 무엇을 돌려주나</text>
+
+          <rect x="14" y="34" width="356" height="392" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="32" y="62" fill="#333D4B">안 1 — 200 유지</text>
+          <rect x="30" y="78" width="324" height="98" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="78" width="324" height="98"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d" style="font-family:var(--mono);font-size:11.5px">200 OK<br/>data.results: []<br/>data.suppliers: [A FAILED, B FAILED]</div></div></foreignObject>
+          <rect x="30" y="192" width="324" height="220" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="30" y="192" width="324" height="220"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 응답 봉투가 하나라 클라이언트 파싱이 단순하다.</div><div class="d" style="margin-top:6px"><b>−</b> <b>"조건에 맞는 상품이 없음"과 구분되지 않는다.</b> 둘 다 200 + 빈 배열이고, 차이는 <span style="font-family:var(--mono)">suppliers</span>를 읽어야만 보인다.</div><div class="d" style="margin-top:6px"><b>−</b> 프록시·CDN·클라이언트가 <b>빈 결과를 캐시</b>할 수 있다. 장애가 TTL 동안 굳는다.</div><div class="d" style="margin-top:6px"><b>−</b> 상태 코드로 거는 알람에 안 걸린다.</div></div></foreignObject>
+
+          <rect x="382" y="34" width="356" height="392" rx="18" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.8"/>
+          <text class="svg-t" x="400" y="62" fill="#1B64DA">안 2 — 502 Bad Gateway &#160;&#8226; 확정</text>
+          <rect x="398" y="78" width="324" height="98" rx="11" fill="#fff" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="398" y="78" width="324" height="98"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d" style="font-family:var(--mono);font-size:11.5px">502 Bad Gateway<br/>code: "ALL_SUPPLIERS_FAILED"<br/>data: null</div></div></foreignObject>
+          <rect x="398" y="192" width="324" height="220" rx="12" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.2"/>
+          <foreignObject x="398" y="192" width="324" height="220"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 우리 서버는 멀쩡하고 <b>상류가 죽은 것</b>이다 — 502의 뜻과 정확히 맞는다. 이 서버의 역할이 곧 통합 게이트웨이다.</div><div class="d" style="margin-top:6px"><b>+</b> 5xx는 캐시되지 않고 알람에 걸린다.</div><div class="d" style="margin-top:6px"><b>+</b> F0의 <span style="font-family:var(--mono)">ApiResponse.error</span>를 쓰게 되어 <b>ErrorCode 두 번째 구현체</b>가 생긴다 (D-F3-4 재검토 종료).</div><div class="d" style="margin-top:6px"><b>−</b> <span style="font-family:var(--mono)">data: null</span>이라 어느 공급사가 실패인지 응답에 못 싣는다. 다만 <b>전원</b>이라 정보량이 0이다.</div></div></foreignObject>
+
+          <rect x="750" y="34" width="356" height="392" rx="18" fill="#F9FAFB" stroke="#D1D6DB" stroke-width="1.4"/>
+          <text class="svg-t" x="768" y="62" fill="#333D4B">안 3 — 503 + Retry-After</text>
+          <rect x="766" y="78" width="324" height="98" rx="11" fill="#fff" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="78" width="324" height="98"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d" style="font-family:var(--mono);font-size:11.5px">503 Service Unavailable<br/>Retry-After: 5<br/>data: null</div></div></foreignObject>
+          <rect x="766" y="192" width="324" height="220" rx="12" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="766" y="192" width="324" height="220"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>+</b> 재시도 시점을 헤더로 알려 줄 수 있다.</div><div class="d" style="margin-top:6px"><b>−</b> 503은 "<b>이 서버가</b> 지금 처리 못 함(과부하·점검)"이다. 우리 서버는 정상이므로 뜻이 어긋난다.</div><div class="d" style="margin-top:6px"><b>−</b> <span style="font-family:var(--mono)">Retry-After</span> 값의 근거가 없다. 공급사 복구 시점을 우리가 모른다 — 숫자를 지어내게 된다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 안 1의 결정적 약점은 <b>"결과 없음"과 "다 실패"가 같은 응답</b>이 된다는 것이다. 클라이언트가 <span style="font-family:var(--mono)">suppliers</span>를 읽는다는 보장은 없지만 상태 코드는 안 읽을 수 없다.</figcaption>
+    </figure>
+
+    <div class="note key"><span class="tag">502를 고른 결정적 근거 — 동시 실패는 독립 사건이 아니다</span>
+      A와 B는 서로 다른 회사의 서로 다른 시스템이다. <strong>각각 죽는 것은 독립 사건이지만 동시에 죽는 것은 대개 공통 원인</strong>이고, 그 후보가 전부 우리 쪽이다 — 우리 네트워크·DNS, 설정 배포 사고, 조합기 예산이 짧게 잡힘, 커넥션 풀·스레드 고갈, 방금 나간 코드. 그러므로 이 사건은 <strong>우리 지표에 잡히는 것이 맞다.</strong> 다만 우리가 <em>아는 사실</em>은 "상류 호출이 전부 실패했다"까지이고 원인이 우리라는 것은 추론이므로, 관측된 사실에 맞는 502를 쓴다. 502는 상류 실패로 분류되어 우리 코드 예외(500)와 섞이지 않아 조사 시작점도 갈린다.
+    </div>
+
+    <p><strong>502를 만드는 자리는 유스케이스다.</strong> 전 공급사 FAILED이면 <span class="term">AllSuppliersFailedException</span>을 던지고 F0의 advice가 상태로 옮긴다. 컨트롤러가 <span class="term">outcomes</span>를 보고 분기하면 presentation에 판단이 생기고(LAY-4), F0이 세운 구조(예외 타입 = 오류 유형, advice가 상태 매핑)와도 어긋난다.</p>
+
+    <h3>원인은 응답이 아니라 로그·지표로 간다</h3>
+    <p><span class="term">reason</span>(<span class="term">SupplierErrorCode</span> 8개 값)을 응답에서 빼는 대신, <strong>검색 1건마다 요약 로그 한 줄</strong>을 남긴다. 갈래마다 흩뿌리지 않는 이유는 지표를 뽑을 때 파싱 대상이 하나여야 하기 때문이다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 11">
+        <svg viewBox="0 0 1120 400" role="img" aria-label="로그 레벨 승격 규칙. 검색 한 건마다 요약 한 줄을 남기고, 전원 실패는 ERROR, 부분 실패와 제외와 조회 대상 0개는 WARN, 나머지는 INFO로 남긴다.">
+          <rect x="16" y="24" width="1088" height="66" rx="13" fill="#191F28"/>
+          <foreignObject x="16" y="24" width="1088" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d" style="font-family:var(--mono);font-size:12px;color:#D1D6DB;line-height:1.5">searchStays checkIn=2026-09-10 checkOut=2026-09-13 adults=2 children=0<br/>&#160;&#160;targets=3 supplierA=OK(3) supplierB=OK(2) excluded=0 results=5 elapsedMs=812</div></div></foreignObject>
+          <text class="svg-l" x="16" y="112" fill="#8B95A1">같은 한 줄, 레벨만 상황에 따라 올린다</text>
+
+          <rect x="16" y="126" width="352" height="150" rx="14" fill="#FEEFEF" stroke="#F04452" stroke-width="1.6"/>
+          <foreignObject x="16" y="126" width="352" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="t">ERROR</div><div class="s">전 공급사 실패</div></div></foreignObject>
+          <rect x="32" y="196" width="320" height="66" rx="10" fill="#fff" stroke="#F04452" stroke-width="1"/>
+          <foreignObject x="32" y="196" width="320" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">조치가 필요하다 — 공통 원인이 우리 쪽일 가능성. <b>알람을 건다면 여기 하나에</b></div></div></foreignObject>
+
+          <rect x="384" y="126" width="352" height="150" rx="14" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.6"/>
+          <foreignObject x="384" y="126" width="352" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">WARN</div><div class="s">부분 실패 · 제외 항목 있음 · 조회 대상 0개</div></div></foreignObject>
+          <rect x="400" y="204" width="320" height="58" rx="10" fill="#fff" stroke="#B0B8C1" stroke-width="1"/>
+          <foreignObject x="400" y="204" width="320" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">요청은 정상 처리됐고 결과만 온전치 않다</div></div></foreignObject>
+
+          <rect x="752" y="126" width="352" height="150" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="752" y="126" width="352" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">INFO</div><div class="s">그 외 전부 — 결과 0건 포함</div></div></foreignObject>
+          <rect x="768" y="204" width="320" height="58" rx="10" fill="#fff" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="768" y="204" width="320" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">지표 산출용 기본 한 줄. 요청 단위 요약은 액세스 로그의 표준 밀도다</div></div></foreignObject>
+
+          <rect x="16" y="294" width="1088" height="90" rx="13" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="16" y="294" width="1088" height="90"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>조회 대상 0개를 ERROR로 올리지 않는 이유</b> — 앱을 처음 띄우고 F6 배치가 돌기 전까지 매핑이 비어 있는 것은 <b>정상 라이프사이클의 상태</b>다. 새 환경마다 겪는 상태를 ERROR로 올리면 ERROR의 뜻이 닳는다. 배치가 실제로 실패한 경우라면 F6 쪽에 이미 알림 장치가 있고, 검색은 "실패했나 아직 안 돌았나"를 구분하지 못한다 — <b>조치 대상을 특정하지 못하는 로그를 ERROR로 올릴 수 없다</b> (CLN-9).</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — ERROR가 <b>전원 실패 하나</b>로 좁혀졌다. 알람을 건다면 그 하나에 건다.</figcaption>
+    </figure>
+
+    <div class="note"><span class="tag">지표 수집기는 이번에 넣지 않는다</span>Micrometer·수집 백엔드를 붙이는 것은 <strong>sink와 소비자가 실재할 때</strong> 한다(DDD-8). F3a도 같은 판단으로 메트릭을 미뤘다. 이번에는 <strong>산출 가능한 형태의 로그</strong>까지가 범위이고, 지표 설계는 README에 문서로 남긴다.</div>
+  </section>
+
+  <!-- ========== 9 ========== -->
+  <section id="s9" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">9</div>
+      <div><p class="sec-eyebrow">RUNTIME</p><h2 class="sec">트랜잭션과 인덱스</h2></div>
+    </div>
+
+    <p class="lead">유스케이스에 <span class="term">@Transactional</span>을 붙이지 않는다. LAY-3이 "트랜잭션 경계는 application"이라고 한 것은 <strong>트랜잭션이 필요할 때</strong>의 자리를 말한 것이지, 조회 전용 유스케이스에도 붙이라는 뜻이 아니다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 08">
+        <svg viewBox="0 0 1120 320" role="img" aria-label="트랜잭션 경계 비교. 유스케이스 전체에 트랜잭션을 걸면 공급사 호출 대기 동안 DB 커넥션을 잡고 있고, 걸지 않으면 조회 두 번만 짧게 커넥션을 쓴다.">
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">시간 →&#160;&#160;&#160;검색 1건이 지나는 구간 (최악 기준 예산 5s)</text>
+
+          <text class="svg-l" x="20" y="60" fill="#C9303C">@Transactional(readOnly) 를 붙이면</text>
+          <rect x="20" y="72" width="1080" height="40" rx="10" fill="#FEEFEF" stroke="#F04452" stroke-width="1.4"/>
+          <foreignObject x="20" y="72" width="1080" height="40"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="s">DB 커넥션 점유 — 공급사 응답을 기다리는 내내 붙잡고 있다</div></div></foreignObject>
+          <rect x="30" y="80" width="90" height="24" rx="6" fill="#3182F6" opacity="0.85"/>
+          <rect x="132" y="80" width="70" height="24" rx="6" fill="#3182F6" opacity="0.85"/>
+          <rect x="214" y="80" width="700" height="24" rx="6" fill="#B0B8C1" opacity="0.55"/>
+          <text class="svg-s" x="540" y="97" text-anchor="middle" fill="#333D4B">공급사 병렬 호출 — DB는 아무 일도 안 한다</text>
+
+          <text class="svg-l" x="20" y="160" fill="#0A8F5B">붙이지 않으면 (채택)</text>
+          <rect x="20" y="172" width="1080" height="40" rx="10" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.4"/>
+          <rect x="30" y="180" width="90" height="24" rx="6" fill="#15C47E"/>
+          <text class="svg-s" x="75" y="197" text-anchor="middle" fill="#fff">property</text>
+          <rect x="132" y="180" width="70" height="24" rx="6" fill="#15C47E"/>
+          <text class="svg-s" x="167" y="197" text-anchor="middle" fill="#fff">room</text>
+          <text class="svg-s" x="560" y="197" text-anchor="middle" fill="#0A8F5B">커넥션 반납됨 — 다른 요청이 쓸 수 있다</text>
+
+          <rect x="20" y="240" width="1080" height="66" rx="13" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="20" y="240" width="1080" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>일관성은 문제가 되지 않는다</b> — 두 조회 사이에 매핑이 바뀌어도 결과는 "그 순간의 매핑"이며 그게 맞는 답이다. 매핑을 바꾸는 것은 하루 한 번 도는 F6 배치뿐이고, 검색은 쓰기가 0이라 롤백할 것도 없다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 위 줄의 회색 구간이 <b>커넥션을 잡은 채 아무 일도 안 하는 시간</b>이다. 동시 요청이 늘면 이 구간이 커넥션 풀을 먼저 고갈시킨다.</figcaption>
+    </figure>
+
+    <h3>인덱스 — 추가하지 않는다</h3>
+    <p>검색이 새로 만드는 질의는 둘뿐이고, <strong>둘 다 이미 있는 인덱스로 처리된다.</strong></p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>질의</th><th>타는 인덱스</th><th>판단</th></tr></thead>
+        <tbody>
+          <tr><td><span class="term">property WHERE lifecycle = 'ACTIVE'</span></td><td>없음 (풀스캔)</td><td>카디널리티 2이고 대부분 ACTIVE라 <b>인덱스를 만들어도 옵티마이저가 안 쓴다</b></td></tr>
+          <tr><td><span class="term">room WHERE property_id IN (…) AND lifecycle = 'ACTIVE'</span></td><td><span class="term">uq_room_property_code</span></td><td>그 UNIQUE의 <b>선두 컬럼이 property_id</b>라 IN 조건이 그대로 탄다. 추가 불필요</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>이번 범위는 테이블·컬럼·제약을 바꾸지 않으므로 <span class="term">docs/db-schema.html</span>은 갱신하지 않는다.</p>
+
+    <h3 id="s9-idx">지속 탐구 항목 — <span class="term">lifecycle</span> 인덱스 <span class="stchip mid">관측 중</span></h3>
+
+    <div class="note warn"><span class="tag">"지금은 불필요"가 "영원히 불필요"가 아니다</span>
+      F6은 목록에서 사라진 상품을 <strong>하드 삭제하지 않고 INACTIVE로만</strong> 바꾼다. 그러므로 <strong>INACTIVE 행은 단조 증가</strong>하고, 공급사 이탈·판매 중단이 잦아질수록 ACTIVE 비율은 계속 떨어진다. 인덱스가 안 쓰이는 이유는 카디널리티가 2여서가 아니라 <strong>지금 ACTIVE가 거의 전부이기 때문</strong>이며, <strong>그 전제는 시간이 지나면 깨진다.</strong>
+    </div>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 12">
+        <svg viewBox="0 0 1120 420" role="img" aria-label="lifecycle 인덱스의 전환 지점. INACTIVE 비율이 낮을 때는 풀스캔이 유리하고, 비율이 올라가면 인덱스가 유리해진다. 커버링 인덱스는 별개의 조건에서 성립한다.">
+          <text class="svg-l" x="20" y="20" fill="#8B95A1">ACTIVE 비율 →&#160;&#160;낮을수록 인덱스가 유리해진다</text>
+
+          <rect x="16" y="34" width="352" height="176" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.6"/>
+          <foreignObject x="16" y="34" width="352" height="176"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">지금 — ACTIVE 거의 100%</div><div class="s">EXPLAIN type=ALL (풀스캔)</div></div></foreignObject>
+          <rect x="32" y="112" width="320" height="86" rx="10" fill="#fff" stroke="#15C47E" stroke-width="1"/>
+          <foreignObject x="32" y="112" width="320" height="86"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">거의 모든 행을 읽어야 하므로 인덱스를 타고 PK 로 되짚는 것보다 <b>순차 스캔이 싸다.</b> 인덱스를 넣으면 배치의 대량 upsert 에 <b>쓰기 비용만</b> 붙는다.</div></div></foreignObject>
+
+          <rect x="384" y="34" width="352" height="176" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.6"/>
+          <foreignObject x="384" y="34" width="352" height="176"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">전환 — ACTIVE 가 소수가 되면</div><div class="s">(lifecycle) 단일 인덱스</div></div></foreignObject>
+          <rect x="400" y="112" width="320" height="86" rx="10" fill="#fff" stroke="#3182F6" stroke-width="1"/>
+          <foreignObject x="400" y="112" width="320" height="86"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d">선택도가 생겨 옵티마이저가 인덱스를 고르기 시작한다. 대략 <b>ACTIVE 30% 아래</b>가 경계지만 정확한 값은 판단 대상이므로 <b>EXPLAIN 으로 확인하고 정한다.</b></div></div></foreignObject>
+
+          <rect x="752" y="34" width="352" height="176" rx="14" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.6"/>
+          <foreignObject x="752" y="34" width="352" height="176"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">별개 갈래 — 커버링 인덱스</div><div class="s">(lifecycle, supplier, supplier_property_code)</div></div></foreignObject>
+          <rect x="768" y="118" width="320" height="80" rx="10" fill="#fff" stroke="#B0B8C1" stroke-width="1"/>
+          <foreignObject x="768" y="118" width="320" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>선택도와 무관하게 이길 수 있다</b> — 읽는 페이지가 풀스캔보다 적으면 된다. 다만 지금 구조로는 성립하지 않는다(아래).</div></div></foreignObject>
+
+          <rect x="16" y="232" width="1088" height="76" rx="13" fill="#F9FAFB" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="16" y="232" width="1088" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>커버링이 지금 성립하지 않는 이유</b> — 검색이 <span style="font-family:var(--mono)">property</span> 에서 실제로 쓰는 컬럼은 <span style="font-family:var(--mono)">id · supplier · supplier_property_code</span> 셋뿐이고(숙소명은 공급사 응답 값을 쓴다, D9), InnoDB 는 세컨더리 인덱스에 PK 를 붙이므로 저 인덱스가 셋을 다 담는다. <b>그런데 리포지토리가 엔티티를 통째로 로드해 <span style="font-family:var(--mono)">property_name</span> 이 SELECT 에 들어가는 순간 커버링이 깨진다.</b> 성립시키려면 조회를 DTO 프로젝션으로 바꿔야 하고 그러면 <span style="font-family:var(--mono)">StayMappingIndex.from()</span> 의 입력 타입도 바뀐다 — 인덱스 추가가 아니라 <b>조회 경로를 바꾸는 별도 결정</b>이다.</div></div></foreignObject>
+
+          <rect x="16" y="330" width="536" height="76" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="16" y="330" width="536" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>관측할 것</b><br/>① ACTIVE/INACTIVE 비율 (GROUP BY 집계)<br/>② 검색 질의의 EXPLAIN — type=ALL 인가 ref 인가<br/>③ 검색 지연 중 DB 구간 비중 (§8 요약 로그의 elapsedMs)</div></div></foreignObject>
+
+          <rect x="568" y="330" width="536" height="76" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="568" y="330" width="536" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>카드를 다시 여는 신호</b><br/>① ACTIVE 비율이 30% 아래로 내려간다<br/>② 행 수가 커져 풀스캔이 검색 지연에 보인다<br/>③ lifecycle 로 거르는 질의가 늘어 인덱스 하나가 여럿을 덮는다</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 왼쪽에서 가운데로 넘어가는 것은 <b>시간이 정하는 일</b>이다. 하드 삭제를 하지 않는 한 INACTIVE 는 쌓이기만 한다. 오른쪽 커버링은 비율과 무관한 <b>다른 축</b>이다.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 10 ========== -->
+  <section id="s10" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">10</div>
+      <div><p class="sec-eyebrow">FAILURE PATH</p><h2 class="sec">검증 실패 경로</h2></div>
+    </div>
+
+    <p class="lead">잘못된 요청은 공급사에 나가기 전에 경계에서 잘린다. 변환은 F0이 이미 만들어 둔 <span class="term">@RestControllerAdvice</span>가 한다 — F7이 새로 만드는 핸들러는 없다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="SEQUENCE · FIG. 09">
+        <svg viewBox="0 0 1120 380" role="img" aria-label="검증 실패 시퀀스. 컨트롤러 진입 전에 Bean Validation이 실패하면 전역 예외 핸들러가 400과 공통 오류 본문을 만들고, 유스케이스는 호출되지 않는다.">
+          <defs>
+            <marker id="a9" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="20" y="14" width="180" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="20" y="14" width="180" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">클라이언트</div></div></foreignObject>
+          <rect x="290" y="14" width="200" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="290" y="14" width="200" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">Bean Validation</div><div class="s">@Valid</div></div></foreignObject>
+          <rect x="580" y="14" width="220" height="52" rx="13" fill="#F2F4F6" stroke="#B0B8C1" stroke-width="1.2"/>
+          <foreignObject x="580" y="14" width="220" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo grey"><div class="t">GlobalExceptionHandler</div><div class="s">F0 — 무변경</div></div></foreignObject>
+          <rect x="890" y="14" width="210" height="52" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="890" y="14" width="210" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">UseCase</div><div class="s">호출되지 않는다</div></div></foreignObject>
+
+          <line x1="110" y1="70" x2="110" y2="350" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="390" y1="70" x2="390" y2="350" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="690" y1="70" x2="690" y2="350" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+          <line x1="995" y1="70" x2="995" y2="350" stroke="#D1D6DB" stroke-width="1.4" stroke-dasharray="5 5"/>
+
+          <line x1="110" y1="106" x2="386" y2="106" stroke="#3182F6" stroke-width="2" marker-end="url(#a9)"/>
+          <text class="svg-l" x="248" y="98" text-anchor="middle" fill="#1B64DA">checkIn=2026-09-01 (과거)</text>
+
+          <line x1="390" y1="150" x2="686" y2="150" stroke="#F04452" stroke-width="2" marker-end="url(#a9)"/>
+          <text class="svg-l" x="538" y="142" text-anchor="middle" fill="#C9303C">검증 실패 예외</text>
+
+          <rect x="560" y="168" width="380" height="66" rx="12" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <foreignObject x="560" y="168" width="380" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="fo red"><div class="s">위반 필드명을 message 에 싣고 data 는 null (D-F0-8)</div><div class="s">예외 원본 메시지는 로그로만 (D-F0-10)</div></div></foreignObject>
+
+          <line x1="686" y1="262" x2="114" y2="262" stroke="#F04452" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#a9)"/>
+          <text class="svg-l" x="400" y="254" text-anchor="middle" fill="#C9303C">400 &#160;{ code: "INVALID_INPUT", message: "… : checkIn", data: null }</text>
+
+          <rect x="20" y="292" width="1080" height="58" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="20" y="292" width="1080" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>공급사 호출은 일어나지 않는다.</b> 이것이 경계에서 거르는 값어치다 — 과거 날짜 하나 때문에 나가는 fan-out 2건과 그 대기 시간이 통째로 사라진다 (Fail Fast).</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 오른쪽 <span style="font-family:var(--mono)">UseCase</span> 라이프라인에 <b>화살표가 하나도 닿지 않는다</b>. F7이 만드는 코드가 이 경로에는 없다는 뜻이다.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 11 ========== -->
+  <section id="s11" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">11</div>
+      <div><p class="sec-eyebrow">DOCS &amp; MEASUREMENT</p><h2 class="sec">문서화와 실측</h2></div>
+    </div>
+
+    <p class="lead">API 문서는 손으로 쓰지 않고 <strong>테스트가 만든다.</strong> 그리고 목으로 대체된 자동 테스트가 못 잡는 것은 실제 소켓을 여는 실측으로 잡는다.</p>
+
+    <figure class="fig-wide">
+      <div class="fig-box" data-fig="FIG. 10">
+        <svg viewBox="0 0 1120 300" role="img" aria-label="문서화 파이프라인. 컨트롤러 테스트가 스니펫과 OpenAPI 조각을 만들고, openapi3 태스크가 하나로 합쳐 api-docs 폴더로 복사되면 서버 없이 브라우저로 열린다.">
+          <defs>
+            <marker id="a10" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <rect x="16" y="40" width="228" height="86" rx="14" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.5"/>
+          <foreignObject x="16" y="40" width="228" height="86"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">컨트롤러 문서 테스트</div><div class="s">실제 요청·응답으로</div><div class="s">필드를 하나씩 기술한다</div></div></foreignObject>
+          <line x1="246" y1="83" x2="292" y2="83" stroke="#3182F6" stroke-width="2" marker-end="url(#a10)"/>
+
+          <rect x="294" y="40" width="212" height="86" rx="14" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="294" y="40" width="212" height="86"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">스니펫 + 스펙 조각</div><div class="s">build/generated-snippets</div></div></foreignObject>
+          <line x1="508" y1="83" x2="554" y2="83" stroke="#3182F6" stroke-width="2" marker-end="url(#a10)"/>
+
+          <rect x="556" y="40" width="212" height="86" rx="14" fill="#F4F9FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="556" y="40" width="212" height="86"><div xmlns="http://www.w3.org/1999/xhtml" class="fo blue"><div class="t">openapi3 태스크</div><div class="s">build/api-spec/openapi3.json</div></div></foreignObject>
+          <line x1="770" y1="83" x2="816" y2="83" stroke="#3182F6" stroke-width="2" marker-end="url(#a10)"/>
+
+          <rect x="818" y="40" width="282" height="86" rx="14" fill="#E7F9F1" stroke="#15C47E" stroke-width="1.5"/>
+          <foreignObject x="818" y="40" width="282" height="86"><div xmlns="http://www.w3.org/1999/xhtml" class="fo green"><div class="t">api-docs/</div><div class="s">index.html 은 커밋 · json 은 gitignore</div><div class="s">서버 없이 브라우저로 연다</div></div></foreignObject>
+
+          <rect x="16" y="156" width="1084" height="60" rx="13" fill="#E8F3FF" stroke="#3182F6" stroke-width="1.2"/>
+          <foreignObject x="16" y="156" width="1084" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>애노테이션 방식과 갈리는 지점</b> — 애노테이션은 문서가 틀려도 빌드가 통과한다. 이 방식은 <b>문서에 적은 필드가 응답에 없으면 테스트가 깨진다.</b> 문서와 코드의 불일치가 사람 대조가 아니라 빌드로 막힌다.</div></div></foreignObject>
+
+          <rect x="16" y="228" width="1084" height="60" rx="13" fill="#FEEFEF" stroke="#F04452" stroke-width="1.2"/>
+          <foreignObject x="16" y="228" width="1084" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left"><div class="d"><b>미리 확인한 걸림돌</b> — Spring 7의 <span style="font-family:var(--mono)">HttpHeaders</span>가 <span style="font-family:var(--mono)">Map</span>을 구현하지 않아, 스펙 생성기가 헤더를 Map으로 캐스팅하는 지점에서 깨진다. 우회는 <span style="font-family:var(--mono)">OperationRequest</span>를 직접 감싸 헤더 구현을 유지하는 방식이고 클래스 2개 수준이다. <b>문서로 단정하지 않고 첫 사이클에서 실제로 태워 확인</b>한다.</div></div></foreignObject>
+        </svg>
+      </div>
+      <figcaption><b>이 그림에서 읽어야 할 것</b> — 문서는 파이프라인의 <b>산출물</b>이지 손으로 유지하는 파일이 아니다. 커밋되는 것은 <span style="font-family:var(--mono)">index.html</span> 하나다.</figcaption>
+    </figure>
+
+    <h3>실측 — 자동 테스트가 못 잡는 것</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>확인할 것</th><th>왜 실측인가</th><th>수단</th></tr></thead>
+        <tbody>
+          <tr><td>날짜가 <span class="term">YYYY-MM-DD</span>로 나가는가</td><td>F5에서 JVM 로케일 표기로 나가 모의 서버가 400으로 거절한 전례가 있다. 프록시를 목으로 대체하는 테스트는 이 경로를 타지 않는다</td><td><span class="term">k6/app-search.js</span></td></tr>
+          <tr><td>타임아웃 값의 근거</td><td>현재 <span class="term">application.yaml</span>이 "실측 전 자리표시자"라고 스스로 밝히고 있다</td><td>모의 서버 지연 모드로 측정</td></tr>
+          <tr><td>A 무응답 시 B만으로 200, 예산 이내</td><td>조합기의 예산이 실제로 지켜지는지는 소켓을 열어야 보인다</td><td>모의 서버 무응답 모드</td></tr>
+          <tr><td>B의 <span class="term">E4xx/E5xx</span>가 A의 5xx와 같은 status로 떨어지는가</td><td>두 공급사의 실패 표현이 하나로 모이는 것이 F8의 핵심</td><td>모의 서버 장애 모드</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>F6이 배치 쪽 실측을 하면서 <strong>재고·요금 호출의 실측을 이쪽으로 넘겼다</strong> — 배치는 HTTP 엔드포인트가 없어 부하 도구로 태울 수 없기 때문이다. 그 몫을 여기서 받는다.</p>
+
+    <h3>루트 README (신설)</h3>
+    <ul class="checklist">
+      <li><span class="box"></span>빌드·실행 방법 — 모의 서버 두 프로세스 기동 포함<span class="tag">10-1</span></li>
+      <li><span class="box"></span><b>API 문서 여는 법</b>과 이 방식을 택한 근거<span class="tag">11-2</span></li>
+      <li><span class="box"></span>요금 필드 기준 · N박 판정 · 예약 불가 노출 방식 · 50개 초과 대응 · 타임아웃 값 근거 · 신규 공급사 추가 절차<span class="tag">10-2</span></li>
+      <li><span class="box"></span>WebFlux를 전면 도입하지 않은 이유<span class="tag">1-6</span></li>
+      <li><span class="box"></span>지표 설계 — 공급사별 성공률·응답 지연·타임아웃 비율을 무엇으로 산출하는가<span class="tag">11-3</span></li>
+    </ul>
+  </section>
+
+  <!-- ========== 12 ========== -->
+  <section id="s12" class="fade">
+    <div class="sec-head">
+      <div class="sec-num">12</div>
+      <div><p class="sec-eyebrow">CARDS</p><h2 class="sec">결정 카드 요약</h2></div>
+    </div>
+
+    <p class="lead">전문(탈락 안의 사유 포함)은 <span class="term">01-design.md</span>에 있다. 여기는 한눈에 보는 표다.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>질문</th><th>상태</th></tr></thead>
+        <tbody>
+          <tr><td>D-F7-1</td><td>결과 순서</td><td>숙소명 → 객실명 → 공급사 (§5)</td></tr>
+          <tr><td>D-F7-2</td><td>매핑 조회·역매핑을 어디에 두나</td><td>기존 포트 확장 + <span class="term">StayMappingIndex</span> (§6)</td></tr>
+          <tr><td>D-F7-3</td><td>전 공급사 실패 시 응답</td><td>502 <span class="term">ALL_SUPPLIERS_FAILED</span> · 부분 실패는 200 (§8)</td></tr>
+          <tr><td>D-F7-4</td><td><span class="term">suppliers[]</span>에서 reason 제외 (D10 개정)</td><td>공급사 어휘가 응답 경계를 넘지 않게</td></tr>
+          <tr><td>D-F7-5</td><td>검색 대상은 ACTIVE만</td><td>거르는 자리는 조회 메서드 2개 안 (§7)</td></tr>
+          <tr><td>D-F7-6</td><td>트랜잭션 경계</td><td>유스케이스에 걸지 않는다 (§9)</td></tr>
+          <tr><td>D-F7-7</td><td>인덱스 추가</td><td>지금은 안 한다 — <b>닫지 않고 관측</b>, 전환 신호 3개 (§9)</td></tr>
+          <tr><td>D-F7-8</td><td>과거 날짜 거부 수단</td><td><span class="term">@FutureOrPresent</span> · Clock 없음 (§2)</td></tr>
+          <tr><td>D-F7-9</td><td>응답 필드명</td><td><span class="term">bookableRooms</span> — D10 예시를 D-F5-3에 맞춰 정정</td></tr>
+          <tr><td>D-F7-10</td><td>API 문서화 수단</td><td>테스트가 문서를 만든다 (§11)</td></tr>
+          <tr><td>D-F7-11</td><td>미매핑 로그 형태</td><td>요청 1건당 집계 한 줄 (§7·§8)</td></tr>
+          <tr><td>D-F7-12</td><td>모의 서버 시드를 명세 예시 값으로 바꾸나</td><td>바꾸지 않는다 + 대응표 (§1)</td></tr>
+          <tr><td>D-F7-13</td><td>인원 상한을 두나</td><td>하한만 — 계약에 근거가 없어 임의 숫자가 된다 (§2)</td></tr>
+          <tr><td>D-F7-14</td><td>로그 단위와 레벨</td><td>검색 1건 = 요약 1줄 · ERROR는 전원 실패 하나 (§8)</td></tr>
+          <tr><td>D-F7-15</td><td>조회 대상이 0개일 때</td><td>포트를 부르지 않고 조기 반환 — 500 방지 (§4)</td></tr>
+          <tr><td>D-F3-4</td><td><span class="term">ErrorCode</span> 두 번째 구현체 (이연 항목)</td><td><b>해소</b> — <span class="term">StayErrorCode</span>가 실제로 필요해졌다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>F6과의 병합 조정</h3>
+    <ul class="checklist">
+      <li><span class="box"></span><b>구현은 F6 병합 뒤에 시작한다.</b> <span class="term">PropertyLifecycle</span>이 없으면 ACTIVE 필터가 컴파일되지 않는다</li>
+      <li><span class="box"></span>충돌 파일 4개 — <span class="term">PropertyRepository</span> · <span class="term">RoomRepository</span>와 각 JPA 구현. 나중에 병합하는 쪽(F7)이 푼다</li>
+      <li><span class="box"></span>상태표는 F6도 같은 hunk를 고쳤다. 병합 후 F6 행을 <b>완료(병합)</b>으로 바꾸는 커밋을 F7이 낸다</li>
+      <li><span class="box"></span>상태표 F8 행은 <b>F7에 통합</b>으로 적는다 (F4→F3 선례와 같은 표기)</li>
+    </ul>
+  </section>
+
+  </main>
+
+  <footer>
+    <span class="gl">⁂</span>
+    F7 stay-search-api + F8 partial-failure — 설계 확정본 시각화<br>
+    결정의 원본은 docs/features/stay-search-api/01-design.md
+  </footer>
+
+</div>
+
+<script>
+  const bar=document.getElementById('bar');
+  const onScroll=()=>{const h=document.documentElement;const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);bar.style.width=(sc*100)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.fade').forEach(s=>obs.observe(s));
+</script>
+
+</body>
+</html>

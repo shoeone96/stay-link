@@ -1,0 +1,228 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "stay-link API",
+    "description" : "여러 공급사의 숙박 상품을 자사 표준 모델로 통합해 조회하는 API",
+    "version" : "0.0.1"
+  },
+  "servers" : [ {
+    "url" : "http://localhost:8080"
+  } ],
+  "tags" : [ ],
+  "paths" : {
+    "/api/v1/stays/search" : {
+      "get" : {
+        "tags" : [ "stays" ],
+        "summary" : "숙박 상품 통합 검색 — 매핑 없음",
+        "description" : "조회할 매핑이 하나도 없으면 공급사를 부르지 않고 빈 결과로 응답한다. 아무도 부르지 않았으므로 suppliers 도 비어 있다.",
+        "operationId" : "stays-search",
+        "parameters" : [ {
+          "name" : "checkIn",
+          "in" : "query",
+          "description" : "체크인일 (YYYY-MM-DD). 오늘 이후여야 한다",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "checkOut",
+          "in" : "query",
+          "description" : "체크아웃일 (YYYY-MM-DD). 체크인일보다 뒤여야 하며 숙박일에 포함되지 않는다",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "adults",
+          "in" : "query",
+          "description" : "성인 인원. 1 이상",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "children",
+          "in" : "query",
+          "description" : "아동 인원. 0 이상",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "200",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/api-v1-stays-search604748955"
+                },
+                "examples" : {
+                  "stays-search-without-mapping" : {
+                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T11:30:15.551418Z\",\"data\":{\"results\":[],\"suppliers\":[]}}"
+                  },
+                  "stays-search-partial-failure" : {
+                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T11:30:14.691367Z\",\"data\":{\"results\":[{\"propertyId\":1,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":1,\"roomName\":\"Ocean Double\",\"maxOccupancy\":2,\"bookableRooms\":1,\"soldOut\":false,\"totalAmount\":435600,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"A\"}],\"suppliers\":[{\"supplier\":\"A\",\"status\":\"OK\"},{\"supplier\":\"B\",\"status\":\"FAILED\"}]}}"
+                  },
+                  "stays-search" : {
+                    "value" : "{\"code\":\"SUCCESS\",\"message\":\"Success\",\"time\":\"2026-09-07T11:30:15.658192Z\",\"data\":{\"results\":[{\"propertyId\":6,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":6,\"roomName\":\"Family Suite\",\"maxOccupancy\":2,\"bookableRooms\":2,\"soldOut\":false,\"totalAmount\":756000,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"B\"},{\"propertyId\":5,\"propertyName\":\"Haeundae Blue Hotel\",\"roomId\":5,\"roomName\":\"Ocean Double\",\"maxOccupancy\":2,\"bookableRooms\":1,\"soldOut\":false,\"totalAmount\":435600,\"currency\":\"KRW\",\"breakfastIncluded\":true,\"supplier\":\"A\"}],\"suppliers\":[{\"supplier\":\"A\",\"status\":\"OK\"},{\"supplier\":\"B\",\"status\":\"OK\"}]}}"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "400",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/api-v1-stays-search521721641"
+                },
+                "examples" : {
+                  "stays-search-invalid-request" : {
+                    "value" : "{\"code\":\"INVALID_INPUT\",\"message\":\"Request is not valid: adults\",\"time\":\"2026-09-07T11:30:15.623768Z\",\"data\":null}"
+                  }
+                }
+              }
+            }
+          },
+          "502" : {
+            "description" : "502",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/api-v1-stays-search521721641"
+                },
+                "examples" : {
+                  "stays-search-all-suppliers-failed" : {
+                    "value" : "{\"code\":\"ALL_SUPPLIERS_FAILED\",\"message\":\"All suppliers failed to respond\",\"time\":\"2026-09-07T11:30:15.520029Z\",\"data\":null}"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "api-v1-stays-search604748955" : {
+        "required" : [ "code", "message", "time" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "성공은 SUCCESS, 실패는 오류 코드"
+          },
+          "data" : {
+            "required" : [ "results", "suppliers" ],
+            "type" : "object",
+            "properties" : {
+              "suppliers" : {
+                "type" : "array",
+                "description" : "이 검색에서 각 공급사가 어떻게 끝났는지",
+                "items" : {
+                  "required" : [ "status", "supplier" ],
+                  "type" : "object",
+                  "properties" : {
+                    "supplier" : {
+                      "type" : "string",
+                      "description" : "공급사"
+                    },
+                    "status" : {
+                      "type" : "string",
+                      "description" : "OK · PARTIAL(일부 묶음 실패) · FAILED(그 공급사 몫이 통째로 빠짐)"
+                    }
+                  }
+                }
+              },
+              "results" : {
+                "type" : "array",
+                "description" : "검색 결과",
+                "items" : {
+                  "required" : [ "bookableRooms", "breakfastIncluded", "currency", "maxOccupancy", "propertyId", "propertyName", "roomId", "roomName", "soldOut", "supplier", "totalAmount" ],
+                  "type" : "object",
+                  "properties" : {
+                    "totalAmount" : {
+                      "type" : "number",
+                      "description" : "숙박 기간 전체의 세금 포함 총액. 통화의 최소 단위 정수다"
+                    },
+                    "breakfastIncluded" : {
+                      "type" : "boolean",
+                      "description" : "조식 포함 여부. 총액을 같은 축에서 비교할 수 있는지를 정한다"
+                    },
+                    "propertyName" : {
+                      "type" : "string",
+                      "description" : "공급사가 지금 팔고 있는 숙소명. 매핑 테이블의 저장값이 아니다"
+                    },
+                    "supplier" : {
+                      "type" : "string",
+                      "description" : "이 결과를 준 공급사"
+                    },
+                    "currency" : {
+                      "type" : "string",
+                      "description" : "통화 (ISO 4217)"
+                    },
+                    "bookableRooms" : {
+                      "type" : "number",
+                      "description" : "요청 기간 전체를 연속으로 잡을 수 있는 객실 수. 날짜별 잔여의 최솟값이다"
+                    },
+                    "maxOccupancy" : {
+                      "type" : "number",
+                      "description" : "최대 수용 인원"
+                    },
+                    "soldOut" : {
+                      "type" : "boolean",
+                      "description" : "예약 가능 객실 수가 0인지. 품절이어도 항목은 빠지지 않는다"
+                    },
+                    "propertyId" : {
+                      "type" : "number",
+                      "description" : "자사 숙소 식별자"
+                    },
+                    "roomName" : {
+                      "type" : "string",
+                      "description" : "공급사가 준 객실 타입명"
+                    },
+                    "roomId" : {
+                      "type" : "number",
+                      "description" : "자사 객실 타입 식별자"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "time" : {
+            "type" : "string",
+            "description" : "응답을 만든 시각 (ISO-8601)"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "오류 코드에 대응하는 고정 문구. 예외 원문은 실리지 않는다"
+          }
+        }
+      },
+      "api-v1-stays-search521721641" : {
+        "required" : [ "code", "data", "message", "time" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "성공은 SUCCESS, 실패는 오류 코드"
+          },
+          "time" : {
+            "type" : "string",
+            "description" : "응답을 만든 시각 (ISO-8601)"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "오류 코드에 대응하는 고정 문구. 예외 원문은 실리지 않는다"
+          }
+        }
+      }
+    }
+  }
+}

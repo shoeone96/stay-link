@@ -3,6 +3,7 @@ package com.stay.common.web;
 import com.stay.common.error.BadRequestException;
 import com.stay.common.error.CommonErrorCode;
 import com.stay.common.error.ErrorCode;
+import com.stay.property.application.AllSuppliersFailedException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -40,6 +41,21 @@ public class GlobalExceptionHandler {
         log.warn("Bad request: code={}, method={}, path={}, message={}", exception.errorCode().code(),
                 request.getMethod(), request.getRequestURI(), exception.getMessage());
         return ResponseEntity.badRequest().body(ApiResponse.error(exception.errorCode()));
+    }
+
+    /**
+     * 상류 호출이 전부 실패했다. 우리가 <b>아는 사실</b>은 거기까지이고 원인이 우리 쪽이라는 것은
+     * 추론이므로, 관측된 사실에 맞는 502 를 쓴다 (D-F7-3). 실용적으로도 502 는 상류 실패로 분류되어
+     * 우리 코드 예외(500)와 섞이지 않아 조사 시작점이 갈린다.
+     *
+     * <p>어느 공급사가 실패했는지는 예외 메시지에만 있고 응답에는 나가지 않는다 (D-F0-10).
+     */
+    @ExceptionHandler(AllSuppliersFailedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAllSuppliersFailed(AllSuppliersFailedException exception,
+            HttpServletRequest request) {
+        log.error("All suppliers failed: method={}, path={}, message={}", request.getMethod(),
+                request.getRequestURI(), exception.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponse.error(exception.errorCode()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

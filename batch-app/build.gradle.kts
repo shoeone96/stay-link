@@ -22,3 +22,9 @@ dependencies {
     testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
+
+// api-app 과 같은 이유 — spring-boot-docker-compose 가 작업 디렉터리에서 compose.yaml 을 찾는다.
+// 기본값(모듈 폴더)이면 루트의 compose.yaml 을 못 찾아 기동이 실패한다.
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    workingDir = rootProject.projectDir
+}

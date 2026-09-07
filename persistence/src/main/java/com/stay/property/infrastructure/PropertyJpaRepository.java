@@ -1,6 +1,7 @@
 package com.stay.property.infrastructure;
 
 import com.stay.property.domain.Property;
+import com.stay.property.domain.PropertyLifecycle;
 import com.stay.property.domain.PropertyRepository;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,4 +16,15 @@ public interface PropertyJpaRepository extends JpaRepository<Property, Long>, Pr
     default List<Property> saveAll(List<Property> properties) {
         return saveAll((Iterable<Property>) properties);
     }
+
+    /**
+     * 포트가 lifecycle 을 노출하지 않으므로 ACTIVE 를 이 다리에서 채운다 (D-F7-5). 파생 쿼리로 풀리는
+     * 조건이라 {@code @Query} 를 쓰지 않는다.
+     */
+    @Override
+    default List<Property> findAllSearchTargets() {
+        return findAllByLifecycle(PropertyLifecycle.ACTIVE);
+    }
+
+    List<Property> findAllByLifecycle(PropertyLifecycle lifecycle);
 }

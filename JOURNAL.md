@@ -160,13 +160,14 @@
 ### Day 6 (2026-09-07, 월)
 
 #### 수행 내용
-- F3a `webclient-config` 설계 확정·구현·PR #7. F3 `supplier-client`(F4 흡수) 설계·구현·PR #8. F5 `supplier-availability-adapter` 설계·구현·PR #9. F6 `catalog-sync` 설계 재개·구현·PR #10. 전부 병합. 연동 시스템 구조도 [docs/architecture.html](docs/architecture.html) 작성. F7·F9 설계 착수(별도 브랜치).
+- F3a `webclient-config` 설계 확정·구현·PR #7. F3 `supplier-client`(F4 흡수) 설계·구현·PR #8. F5 `supplier-availability-adapter` 설계·구현·PR #9. F6 `catalog-sync` 설계 재개·구현·PR #10. 전부 병합. 연동 시스템 구조도 [docs/architecture.html](docs/architecture.html) 작성. **F7 `stay-search-api`(F8 흡수) 설계·구현·실측·PR #12 — 첫 end-to-end 가 실제로 돌았다.** 루트 [README.md](README.md) 신설, API 문서 자동 생성 배선. F9 설계 착수(별도 브랜치).
 
 #### 의사결정
 - **F3a**: 예산을 `block(budget)` 이 아니라 `take(budget)` 으로 — `block` 은 초과 시 `dispose()` 가 먼저 불려 도착분까지 사라진다(D-F3A-3). 실패는 `Throwable` 그대로 들고 분류하지 않는다 — 분류 체계가 둘이 되면 F8 이 어느 쪽을 쓸지 애매해진다(D-F3A-5). 재시도는 F9 로(수단 비교를 선점하지 않으려고).
 - **F3 과 F4 를 합쳤다** — HTTP Interface 만으로는 A 의 실패 본문을 어떻게 받을지, B 의 `resultCode` 를 누가 해석할지를 소비자 없이 정할 수 없었다. 실패 유형은 8개(500 과 503 이 한 값이면 재시도 대상을 못 가른다), 분류는 조합기 뒤 한 곳에서만, `Fetched | Failed` sealed 값. 실제 소켓을 여는 자동 테스트는 두지 않고 k6 + 모의 서버로(D-F3-5).
 - **F5**: 묶음 분할은 Fetcher 가 아니라 어댑터가(D-F5-5), 한도는 `Supplier` enum 이 아니라 yaml(D-F3A-14 — 사용자의 enum 제안에 반대해 yaml 로 정정), 부분 실패는 `offers` + `failures` 두 목록(D-F5-7), 날짜 검증은 응답이 아니라 **요청 숙박일을 순회**해 누락만 검사(D-F5-8), 금액은 `Money(long, Currency)` 값 객체(D-F5-1), 체류 날짜는 `LocalDate` 유지 — UTC 왕복은 하루가 밀리는 연산(D-F5-14).
 - **F6**: 배치는 "계약 종료"가 아니라 "오늘 목록에 있었는가"라는 관측 사실을 기록한다 → 사라진 상품은 INACTIVE, 하드 삭제 없음. Tasklet(3-way diff 는 집합 연산이라 Chunk 와 안 맞음), 공급사별 `REQUIRES_NEW` + 스텝 트랜잭션은 Resourceless, 0건 응답은 건너뜀, 건너뛴 공급사가 있으면 잡 실패(같은 날짜 재실행 경로 확보), 트리거는 외부 스케줄러 one-shot. 배치 메타 DDL 은 Boot 의 `initialize-schema` 대신 `IF NOT EXISTS` 를 더한 자체 스크립트 — 기본값이 SQL 실패를 삼키기 때문(D-F6-16).
+- **F7(F8 흡수)**: F8 에 실제로 남은 것은 「전원 실패 응답」과 「로그·지표」 둘뿐이라 합쳤다 — 나누면 구현이 전원 실패 경로에서 무엇을 할지 모르는 채 코드를 쓴다. 결과 순서는 숙소명 → 객실명 → 공급사 (가격순은 조식 조건이 다른 항목을 같은 축에 세운다, D-F7-1). `suppliers[]` 에서 사유를 뺐다 — 어댑터 계층의 어휘가 응답 경계를 넘고 호출자는 사유로 행동을 바꾸지 않는다(D-F7-4, D10 개정). **부분 실패 200 / 전원 실패 502** — 서로 다른 두 시스템의 동시 실패는 대개 공통 원인이고 후보가 전부 우리 쪽이다(D-F7-3). 유스케이스에 트랜잭션을 걸지 않는다 — 쓰기가 0인데 걸면 공급사 응답 대기 내내 커넥션을 점유한다(D-F7-6). `lifecycle` 인덱스는 **닫지 않고 관측** — 하드 삭제를 하지 않아 INACTIVE 가 단조 증가하므로 "지금 안 쓰인다"의 전제가 시간이 지나면 깨진다(D-F7-7).
 - Flyway 는 재검토 조건(스키마 변경 2회 이상)이 충족됐지만 **도입하지 않는다** — 공유되는 영속 DB 가 없어 손으로 적용하는 ALTER 로 충분하고, 그 ALTER 가 드리프트의 시작이 되는 시점이 도입 시점이다.
 
 #### 막힌 지점·해결
@@ -174,6 +175,7 @@
 - **`LocalDate` 쿼리 파라미터가 JVM 로케일 표기(`26. 9. 10.`)로 나가 모의 서버가 400** — 프록시가 URL 을 만드는 경로는 단위 테스트 어디에서도 실행되지 않아 실측에서만 드러났다. `@DateTimeFormat(iso = DATE)` 로 고치고, 이 갈래의 회귀 장치가 k6 뿐임을 문서에 명시.
 - F6 E2E 에서 `QueryCreationException: No property 'saveAll'` — 포트에 `List saveAll(List)` 만 두면 Spring Data 가 쿼리 파생 대상으로 잡는다. 어댑터에 `default` 다리를 두어 해결(D-F6-11 D안 실측).
 - 기존 MySQL 컨테이너에 `lifecycle` 컬럼이 없어 validate 기동 실패 — `IF NOT EXISTS` 는 컬럼을 더하지 않는다. 테이블 SSOT 에 전진 ALTER 두 줄(ADD DEFAULT → DROP DEFAULT, 적용 후 CREATE 와 같은 모양)을 기록.
+- **`bootRun` 이 루트 `compose.yaml` 을 못 찾아 `api-app`·`batch-app` 이 둘 다 기동 실패** — 작업 디렉터리가 모듈 폴더이기 때문. F6 구현 때 발견해 두고 택일을 미뤄 둔 항목이라 F7 에서 `workingDir = rootProject.projectDir` 로 정했다. yaml 에 상대 경로를 박으면 jar 실행 위치에 따라 틀린다.
 - F6 리뷰의 "삼항으로 리스트를 고르는" 정리안은 명확함 > 영리함에 걸려 철회하고 `if/else` 두 줄로.
 
 #### 참고
@@ -212,7 +214,7 @@
 ## 4. 테스트
 
 ### 단위/통합 테스트
-- 2026-09-07 `main` 기준 **188건, 실패 0**. 레이어별 방식과 정리표 형식은 [README §6](README.md#6-테스트) 과 [docs/test-cases.md](docs/test-cases.md).
+- 2026-09-07 F7 기준 **210건, 실패 0**(`main` 병합 전 188건 + F7 신규 22건). 레이어별 방식과 정리표 형식은 [README §6](README.md#6-테스트) 과 [docs/test-cases.md](docs/test-cases.md).
 - 테스트 리스트는 설계 단계에서 블랙박스 기법(ECP·BVA·Decision Table·State Transition·Error Guessing)으로 MECE 하게 뽑고, 구현은 그 순서로 Red → Green 을 돈다. Red 없이 통과한 사이클은 **변이 검사**(가드 제거 → 해당 테스트만 실패 → 복원)로 보강한다.
 - 만들지 않은 테스트도 근거와 함께 적는다 — 단순 record 접근자, 프레임워크 동작, 위임뿐인 코드.
 
@@ -221,7 +223,7 @@
 - 분류기: A 400·401·429·500·503 과 B `E400`~`E503` 이 같은 5개 유형, `ConnectException` 은 cause 사슬을 따라 `UNAVAILABLE`, 미지 코드는 `INVALID_RESPONSE`, 분류표에 없는 예외는 `UNEXPECTED`.
 - 재고·요금: A 첫 묶음만 실패 → 둘째 묶음 항목 유지 + `FailedChunk` / A 전 묶음 실패 → B 그대로.
 - 배치: A 의 UNIQUE 위반 롤백 → **B 커밋 유지**(E2E, 변이 4조합 실측), 한 공급사 건너뜀 → 잡 실패 + 종료 코드.
-- 실제 HTTP 로 정상·장애·무응답을 재현하는 것은 모의 서버 + k6 몫이며 자동 테스트에 두지 않았다(D-F3-5). 검색 API 가 생기면 `k6/app-search.js` 로 정상·장애·무응답 3모드 전환 후 재검색을 태운다.
+- 실제 HTTP 로 정상·장애·무응답을 재현하는 것은 모의 서버 + k6 몫이며 자동 테스트에 두지 않았다(D-F3-5). **F7 에서 실제로 태웠다** — 모의 서버 2 프로세스 + 배치 + 앱을 띄우고 `k6/app-search.js` 로 확인: 정상 21~44ms · B 만 장애 → 200 + A 결과만 + B `FAILED` · A 지연 6s → 4,024ms 로 A 만 잘리고 B 보존 · A 무응답 → 4,048ms 동일 · 전원 장애 → **502 `ALL_SUPPLIERS_FAILED`**. 검산값 5개가 전부 맞았고, 그것 자체가 공급사로 나가는 날짜가 `YYYY-MM-DD` 로 직렬화된다는 증거다.
 
 ### 엣지 케이스 테스트
 - 요청 숙박일 하나가 응답에 없으면 그 항목만 제외, 모든 항목이 그러면 공급사 실패 승격. 응답에 여분 날짜가 붙어도 총액 불변. 어느 날짜든 재고 0 이면 `bookableRooms` 0 이되 항목은 남는다.
@@ -231,7 +233,8 @@
 
 ### 부하/동시성 테스트
 - `k6/load.js`(정상 모드 기준선), `k6/tail-latency.js`(A 에만 10회 중 1회 5초 지연 → p95 만 튀는 것을 관찰). 임계값은 두지 않았다 — 지금 나오는 숫자는 모의 서버의 성능이지 자사 앱의 성능이 아니다.
-- Virtual Thread 서빙 모델의 동시 요청 거동 실측과 fan-out 세 값(`max-concurrent`·`per-call`·`budget`)의 보정은 검색 API 가 생긴 뒤(F7~F9) 자사 앱을 대상으로 한다.
+- `k6/app-search.js` — F7 에서 자사 검색 API 를 대상으로 처음 실행. 10 VU · 20s 에 7,700+ 요청, **p95 82ms**, 실패율 0%, 체크 38,830 건 전부 통과. 부하 측정만이 목적이 아니라 **공급사로 나가는 날짜 표기의 회귀 장치**이기도 하다 — 그 경로는 프록시를 대체하는 단위 테스트 어디에서도 실행되지 않는다.
+- fan-out 세 값(`max-concurrent`·`per-call`·`budget`)의 **재산정**은 여전히 F9 몫이다. 지금 값은 공급사당 묶음 1개까지 최악 기준을 만족하며, 재시도가 붙으면 부등식이 커져 세 값을 함께 다시 잡아야 한다.
 
 ## 5. 회고
 

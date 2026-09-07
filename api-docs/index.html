@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>stay-link API</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+  :root{
+    --blue:#3182F6; --blue-deep:#1B64DA; --blue-bg:#E8F3FF;
+    --red-bg:#FEEFEF; --red-deep:#C9303C;
+    --g900:#191F28; --g600:#6B7684; --g200:#E5E8EB; --g100:#F2F4F6;
+    --sans:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  body{margin:0;background:#fff;font-family:var(--sans)}
+  header.bar{padding:22px 28px;border-bottom:1px solid var(--g100);background:#fff}
+  header.bar h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--g900)}
+  header.bar p{margin:6px 0 0;font-size:13.5px;color:var(--g600);font-weight:500}
+  header.bar code{font-family:var(--mono);font-size:12px;background:var(--g100);padding:2px 6px;border-radius:6px}
+  #hint{display:none;margin:24px 28px;padding:20px 22px;border-radius:16px;
+    background:var(--red-bg);border:1px solid #f8d4d4;color:var(--red-deep);
+    font-size:14.5px;line-height:1.7}
+  #hint b{font-weight:700}
+  #hint pre{margin:12px 0 0;padding:14px 16px;background:#191F28;color:#D1D6DB;border-radius:12px;
+    font-family:var(--mono);font-size:12.5px;overflow-x:auto}
+  .swagger-ui .topbar{display:none}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>stay-link API</h1>
+  <p>이 문서는 손으로 쓰지 않는다 — 컨트롤러 테스트가 실제 요청·응답으로 만든 <code>openapi3.json</code>을 읽어 그린다.</p>
+</header>
+
+<div id="hint">
+  <b>openapi3.json 을 읽지 못했다.</b> 둘 중 하나다.
+  <br><br>
+  ① 아직 만들지 않았다 — 스펙은 테스트가 만드는 생성물이라 저장소에 커밋되지 않는다. 먼저 만든다.
+  <pre>./gradlew :api-app:copyApiSpec</pre>
+  ② <code>file://</code> 로 열었다 — 브라우저가 로컬 파일 fetch 를 막는다. 정적 서버로 연다.
+  <pre>python3 -m http.server 8000 -d api-docs
+# http://localhost:8000 접속</pre>
+</div>
+
+<div id="swagger-ui"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js" crossorigin></script>
+<script>
+  // 스펙을 먼저 직접 읽어 본다. 실패 원인(미생성 / file:// 차단)을 사용자에게 그대로 알려주기 위해서다 —
+  // Swagger UI 에 맡기면 원인이 콘솔로만 가고 화면에는 빈 페이지가 남는다.
+  fetch('./openapi3.json')
+    .then(function (response) {
+      if (!response.ok) { throw new Error('HTTP ' + response.status); }
+      return response.json();
+    })
+    .then(function (spec) {
+      SwaggerUIBundle({ spec: spec, dom_id: '#swagger-ui', deepLinking: true, docExpansion: 'list' });
+    })
+    .catch(function (error) {
+      document.getElementById('hint').style.display = 'block';
+      console.error('openapi3.json 로딩 실패:', error);
+    });
+</script>
+</body>
+</html>

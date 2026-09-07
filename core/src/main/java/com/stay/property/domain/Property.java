@@ -78,6 +78,10 @@ public class Property {
         return id;
     }
 
+    public Supplier supplier() {
+        return supplier;
+    }
+
     public String supplierPropertyCode() {
         return supplierPropertyCode;
     }

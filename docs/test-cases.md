@@ -215,3 +215,42 @@ E2E 는 실제 Job·Step·트랜잭션 프록시·H2 위에서 Boot 러너에 �
 - application 픽스처(`PropertyFixture`·`RoomFixture`)는 리플렉션으로 private `id` 를 채운다. 리포지터리가 mock 이라 JPA 가 id 를 발급하지 않는데 T-10(id 유지)·T-11(객실을 propertyId 로 묶기)·T-13(발급 id 전달)이 id 를 필요로 하기 때문이며, 프로덕션에 id setter 를 두지 않기 위한 우회다.
 - E2E 세 테스트는 한 컨텍스트의 H2 를 공유하고 잡이 커밋하므로 롤백으로 격리되지 않는다. 각 테스트가 자기 코드(`A-001`·`B-002`·`A-DUP` 등)만 `contains` 로 단언하고 `syncDate` 를 달리 준다. 컨텍스트 기동 시 러너가 인자 없이 한 번 돌지만(`spring.batch.job.enabled` 기본값 — 러너와 종료 코드 생성기 빈이 같은 속성으로 켜져 끌 수 없다) mock 포트가 빈 목록을 돌려줘 아무것도 건드리지 않는다.
 - 테스트가 태우지 않는 갈래: `Fetched` 의 `properties` 에 같은 코드가 둘인 경우의 *의도된* 동작(지금은 UNIQUE 위반으로 그 공급사가 롤백된다 — T-23 이 이 성질을 이용할 뿐 규칙으로 고정하지는 않았다), 스텝 Resourceless TM 과 REQUIRES_NEW 의 병용이 커넥션 수에 주는 효과(설계 D-F6-10 의 대가 — 실측 항목).
+
+## stay-search-api (2026-09-07)
+
+요약: 총 23 · 통과 23 · 실패 0 · 건너뜀 0 (기능 테스트만. 저장소 전체는 총 211 · 통과 211 · 실패 0 · 건너뜀 0)
+
+집계 근거는 `./gradlew test --rerun-tasks` 뒤의 `**/build/test-results/test/TEST-*.xml` 이다. 클래스별로
+`SearchStaysUseCaseTest` 11 · `StayMappingIndexTest` 3 · `StaySearchE2ETest` 7 · `PropertyJpaRepositoryTest`
+와 `RoomJpaRepositoryTest` 에서 각 1(두 클래스의 나머지는 F1 몫). T-01~T-20 의 20 개 메서드 중
+Parameterized 2건(T-12 가 2 케이스, T-16 이 3 케이스)이 펼쳐져 20 − 2 + 5 = 23 이다.
+
+| # | 테스트 (클래스#메서드) | 레이어 | 상세 내용 | 통과여부 | 유의미함 |
+|---|---|---|---|---|---|
+| T-01 | `SearchStaysUseCaseTest#search_offersFromBothSuppliers_mergesItemsWithInternalIds` | application | A·B 매핑 각 1건 + 두 공급사 결과 → 항목 2건에 내부 `propertyId`·`roomId` 부여 | ✅ | 높음 — 이 기능의 존재 이유(코드 → 내부 식별자 역매핑)를 고정한다. 포트 스텁을 `AvailabilityQuery.of(command, 색인의 코드)` 정확 일치로 걸어, 질의가 색인에서 만들어지는 배선까지 함께 잡는다. Red 는 컴파일 실패 |
+| T-02 | `SearchStaysUseCaseTest#search_itemsFromSeveralSuppliers_ordersByPropertyThenRoomThenSupplier` | application | 숙소 3(A2·B1)·객실 4, 뒤섞인 순서의 offer 4건 → 숙소명 → 객실명 → 공급사 순 | ✅ | 높음 — D-F7-1. 정렬이 없으면 조합기가 완료 순서대로 내보내 같은 요청이 매번 다른 순서가 된다. 세 키가 모두 갈리는 데이터라 하나만 빼도 실패한다. Red 는 정렬 부재 |
+| T-03 | `SearchStaysUseCaseTest#search_offerWithoutBookableRooms_keepsItemMarkedSoldOut` | application | `bookableRooms=0` offer 1건 → 항목 유지 + `soldOut()` true | ✅ | 높음 — D8. Red 없이 통과했고 **변이 검사 A**(재고 0 항목을 제외하도록 고침)에서 이 테스트만 실패해 규칙을 지키는 것을 확인했다 |
+| T-04 | `SearchStaysUseCaseTest#search_offerWithUnmappedPropertyCode_excludesOnlyThatItem` | application | 색인에 없는 `A-9999` + 아는 코드 각 1건 → 아는 것만 남고 검색은 성공 | ✅ | 높음 — 수용 기준 5. Red 없이 통과했고 **변이 검사 B**(미매핑 시 대체 id 로 채우도록 고침)에서 T-05 와 함께 실패했다 |
+| T-05 | `SearchStaysUseCaseTest#search_offerWithUnmappedRoomCode_excludesOnlyThatItem` | application | 아는 숙소 + 색인에 없는 객실 코드 → 그 항목만 제외 | ✅ | 높음 — 객실이 색인에 없는 두 사유(미매핑·INACTIVE)를 구분하지 않는다는 §3.6 의 판단이 여기 걸린다. 근거는 T-04 와 같은 변이 검사 B |
+| T-06 | `SearchStaysUseCaseTest#search_oneSupplierOnlyFailed_marksItFailedAndKeepsOtherItems` | application | A 는 실패 묶음만·B 는 정상 → `outcomes` 가 `[A=FAILED, B=OK]` | ✅ | 높음 — 수용 기준 3(부분 실패). Red 는 전부 OK 로 나가던 상태 |
+| T-07 | `SearchStaysUseCaseTest#search_supplierWithOffersAndFailures_marksItPartial` | application | 항목 1 + 실패 묶음 1 → PARTIAL | ✅ | 높음 — §3.7 세 갈래 중 가운데. 묶음 분할이 있는 한 성공과 실패가 한 공급사 안에 같이 온다. Red 는 OK |
+| T-08 | `SearchStaysUseCaseTest#search_supplierWithoutOffersAndFailures_marksItOk` | application | `offers`·`failures` 둘 다 빈 결과 → OK | ✅ | 높음 — 계약 §8("아는 코드만 돌려준다")을 실패로 오판하지 않는다. Red 없이 통과했고 **변이 검사 C**(빈 offers 를 FAILED 로)에서 이 테스트만 실패했다 |
+| T-09 | `SearchStaysUseCaseTest#search_withoutSearchTargets_returnsEmptyResultWithoutCallingSuppliers` | application | 매핑 0건 → 포트 무호출, `items`·`outcomes` 둘 다 빈 결과 | ✅ | 높음 — D-F7-15. Red 가 정확히 설계가 예측한 `IllegalArgumentException`(`AvailabilityQuery` 불변식)이었고, 그대로 두면 정상 상태가 500 으로 나간다 |
+| T-10 | `SearchStaysUseCaseTest#search_allSuppliersFailed_throwsAllSuppliersFailedException` | application | A·B 모두 실패 묶음만 → `AllSuppliersFailedException`, 메시지에 A·B, `errorCode=ALL_SUPPLIERS_FAILED` | ✅ | 높음 — D-F7-3. 판정을 유스케이스가 하고 예외로 표현한다는 구조(LAY-4)를 고정한다. Red 는 컴파일 실패 |
+| T-11 | `StayMappingIndexTest#from_mappingsOfSeveralSuppliers_splitsCodesBySupplier` | application | A 2건·B 1건 매핑 → `codesBySupplier()` 가 공급사별로 갈린 목록 | ✅ | 높음 — 어댑터는 코드만 보고 공급사를 알 수 없어(D-F5-12) 이 분배가 틀리면 A 코드를 B 에 묻는다. Red 없이 통과(T-01 사이클에서 함께 구현), **변이 검사 D**(공급사 무시하고 한 통에 담기)에서 실패 확인 |
+| T-12 | `StayMappingIndexTest#lookup_unknownCode_returnsEmpty` (Parameterized 2) | application | 색인에 없는 숙소 코드 / 객실 코드 → `Optional.empty` | ✅ | 중간 — 미매핑 판정이 색인 안에 있다는 것(OOP-8)의 직접 확인. T-04·T-05 가 유스케이스 쪽에서 같은 규칙을 덮는다. Red 없이 통과 |
+| T-13 | `PropertyJpaRepositoryTest#findAllSearchTargets_returnsOnlyActiveProperties` | repository | A 의 INACTIVE 1·ACTIVE 1 + B 의 ACTIVE 1 → ACTIVE 둘만, 공급사 구분 없이 | ✅ | 높음 — D-F7-5. 필터가 메서드 **안**에 있어야 호출자가 lifecycle 을 모른다. 파생 쿼리라 Red 없이 통과했고 **변이 검사 E**(`findAll()` 로 교체)에서 T-14 와 함께 실패했다 |
+| T-14 | `RoomJpaRepositoryTest#findAllSearchTargetsByPropertyIdIn_returnsOnlyActiveRoomsOfGivenProperties` | repository | 지정 숙소의 INACTIVE 1·ACTIVE 1 + 다른 숙소의 ACTIVE 1 → 지정 숙소의 ACTIVE 1건만 | ✅ | 높음 — 범위(IN)와 상태(ACTIVE) 두 조건이 함께 걸리는지. 근거는 T-13 과 같은 변이 검사 E |
+| T-15 | `StaySearchE2ETest#search_bothSuppliersRespond_returnsMergedResultsInFixedOrder` | E2E | 매핑 2건 저장(JPA 경유) + 두 공급사 정상 → 200, 결과 2건의 필드 11종·정렬·`suppliers` 둘 다 OK, `stays-search` 스니펫 생성 | ✅ | 높음 — 요청 1건이 매핑 조회 → 병렬 호출 → 역매핑 → 응답을 끊김 없이 지나는지를 보는 유일한 테스트. Red 는 404 |
+| T-16 | `StaySearchE2ETest#search_invalidRequestParameters_returnsBadRequestWithViolatedFieldName` (Parameterized 3) | E2E | 과거 `checkIn` / `checkOut == checkIn` / `adults=0` → 400 · `INVALID_INPUT` · message 에 위반 필드명 | ✅ | 높음 — 쿼리 파라미터 DTO 의 `@Valid` 가 **기존 advice 의 `MethodArgumentNotValidException` 핸들러로 떨어지는지**를 확인한다(§8 「미리 확인한 걸림돌」 1). Red 없이 통과했고 **변이 검사 F**(`@Min(1)` 제거)에서 `adults=0` 케이스만 실패했다 |
+| T-17 | `StaySearchE2ETest#search_oneSupplierFailed_returnsSurvivingResultsWithFailedStatus` | E2E | A 정상·B 실패 → 200, 결과는 A 것만, `suppliers[B].status=FAILED` | ✅ | 높음 — 수용 기준 3 을 응답 계약 수준에서. 부분 실패를 500 이나 빈 응답으로 바꾸는 회귀를 막는다 |
+| T-18 | `StaySearchE2ETest#search_allSuppliersFailed_returnsBadGatewayWithoutData` | E2E | A·B 모두 실패 → 502 · `ALL_SUPPLIERS_FAILED` · `data` 없음 | ✅ | 높음 — 수용 기준 4. Red 가 500(마지막 그물)이었고, advice 핸들러가 없으면 우리 코드 예외와 상류 실패가 같은 상태로 섞인다 |
+| T-19 | `StaySearchE2ETest#search_withoutAnyMapping_returnsEmptyResultsAndSuppliers` | E2E | 매핑 미저장 → 200 · `results`·`suppliers` 둘 다 빈 배열 | ✅ | 중간 — T-09 가 유스케이스 쪽에서 같은 규칙을 덮지만, 이 테스트만 "빈 상태의 앱에 첫 요청이 들어오면 500 이 아니라 200" 을 끝단에서 확인한다 |
+| T-20 | `SearchStaysUseCaseTest#search_supplierResultsAreEmpty_returnsEmptyResultWithoutFailing` | application | 매핑은 있는데 공급사 결과 목록이 빈 채로 옴 → 예외 없이 빈 `items`·빈 `outcomes` | ✅ | 높음 — `allMatch` 의 **공허참**으로 아무도 실패하지 않은 검색이 502 로 나가던 갈래를 막는다. Red 가 실제로 `AllSuppliersFailedException` 이었다 (리뷰 round-1 위반 #3) |
+
+- **T-20 은 설계의 테스트 리스트 밖이다.** 리뷰 round-1 이 `Collected.allFailed()` 의 빈 목록 공허참을 짚었고(위반 #3, D-F7-3·D-F7-15), 고친 조건이 다시 풀리는 것을 막을 테스트가 리스트에 없었다. 설계가 이 갈래를 빠뜨린 이유는 "어댑터가 공급사마다 결과를 채우므로 목록이 비지 않는다"는 전제였는데, 그 보장은 **어댑터의 구현일 뿐 포트 계약(`List<SupplierAvailabilityResult> searchAll(...)`)에는 없다.** 계약이 허용하는 입력에 대한 갈래라 새 결정이 아니라 기존 결정(전원 실패만 502)의 경계를 고정하는 것이며, 그래서 설계 이탈 요청이 아니라 리스트 밖 테스트 1건으로 더했다.
+- **만들지 않은 것 (TDD-8, 설계 §5)**: 단순 DTO 생성·변환(`StaySearchResponse`·`StayResultResponse`·`SupplierStatusResponse` — T-15·T-17 이 응답 JSON 으로 덮는다) · `soldOut()` 파생 단독(T-03) · `FanOutExecutor`·어댑터·번역기 동작(F3a·F5) · **로그 출력 자체**(부수효과라 검증이 취약하고, 레벨의 입력이 되는 status 판정은 T-06~T-08 이 고정한다 — 대신 네 갈래의 실제 출력을 눈으로 확인해 `02-implementation.md` 에 남겼다) · 실제 소켓·타임아웃(§7 실측, 이번 범위 밖).
+- **Red 없이 통과한 것 7건**(T-03·T-04·T-05·T-11·T-12·T-13·T-16)은 전부 **앞선 사이클이 그 규칙을 함께 구현한 경우**다. 역매핑과 색인은 T-01 을, 요청 제약은 T-15 를 통과시키는 데 필요해 그 사이클에서 들어갔고, 리포지터리 둘은 파생 쿼리라 쓸 프로덕션 코드가 없었다. 그래서 여섯 건에 **변이 검사 A~F** 를 붙여 각각 "그 줄을 고치면 이 테스트가 실패한다"를 확인했다(상세는 `02-implementation.md` 「변이 검사」). T-12 만 변이를 만들지 않았는데, `Optional` 반환 자체를 바꾸면 컴파일이 깨져 변이가 성립하지 않기 때문이다.
+- **API 문서가 테스트 산출물이라는 주장의 근거**: 응답에 없는 필드(`data.results[].cancellationPolicy`)를 문서에 적는 변이를 넣자 T-15·T-17 이 실패했다. 문서와 코드의 불일치가 사람 대조가 아니라 빌드로 막힌다는 D-F7-10 이 실제로 성립한다.
+- **E2E 격리는 `@Transactional` 롤백**이다. T-19 가 "매핑 테이블이 비어 있음"을 요구하는데 이 앱에는 매핑을 지우는 포트가 없어(F6 의 동기화 경로도 삭제하지 않는다) 앞 테스트의 저장이 남으면 성립하지 않는다. MockMvc 가 같은 스레드에서 도는 덕에 유스케이스가 트랜잭션 없이도(D-F7-6) 테스트가 저장한 행을 본다.
+- **날짜는 실행일 기준**(`LocalDate.now().plusDays(3)`)이다. `@FutureOrPresent` 때문에 고정 날짜를 쓰면 그날이 지나는 순간 테스트가 썩고, 먼 미래로 도망가면 그 값이 그대로 API 문서의 예시가 된다.
