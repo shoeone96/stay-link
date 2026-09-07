@@ -189,3 +189,135 @@ beanProviderSame=true
    Properties 와 그 테스트, 관련 주석 정정
 4. `feat: [F9] 두 어댑터·설정에 데코레이터 배선과 커넥션 풀 명시` — 어댑터 둘 · 설정 둘 · yaml 다섯
 5. `docs: [F9] 테스트 정리표` — `docs/test-cases.md` · 이 파일
+
+---
+
+## fix-1 (2026-09-07 23:17)
+
+status: 완료
+
+리뷰 round-1 의 **코드 항목만** 처리했다 — #1(error) · #2 · #3 · #8 · #9. 문서 항목(#4·#5·#6·#7·#10)은
+메인 세션 몫이라 손대지 않았다. #1 은 코드가 아니라 **설계가 틀린 경우**라 `01-design.md` 의 D-F9-6
+카드·§3.2·§3.4·§3.6·§5 를 함께 고쳤다(설계 이탈이 아니라 결함 정정).
+
+### 처리한 위반
+
+| 위반 ID(규칙 ID·파일) | 처리 | 미처리 사유 |
+|---|---|---|
+| #1 error · D-F9-6 · `SupplierHttpClientConfig.java` · `FailureClassifier.java` | ① 풀 대기 타임아웃의 유도 기준을 `per-call` 에서 **시도별 상한**으로 바꿨다 ② `PoolAcquireTimeoutException` 전용 규칙을 `TimeoutException` 규칙 앞에 넣고 `POOL_EXHAUSTED` 유형을 더해 재시도·서킷 양쪽에서 뺐다 ③ 설계의 D-F9-6·§3.2·§3.4·§3.6·§5 를 같은 내용으로 정정 | — |
+| #2 warn · CLN-4 · `SupplierHttpClientConfig.java:86`~`88`·`:52` | 자바독을 **호스트별 풀** 기준으로 다시 썼다. 크기는 공급사당 50(천장은 호스트마다 50), 대기 타임아웃만 자원 전체에 값 하나로 걸린다는 구분을 표로 남겼다 | — |
+| #3 warn · test-standard 「환경 전제」 · `build.gradle.kts:41` | 팀 리드 승인을 받아 `01-design.md` §5 에 「테스트 스택 보정」 한 문단으로 근거를 남겼다. 좌표 자체는 그대로 | — |
+| #8 warn · CLN-4 · `CatalogResilienceProperties.java:30` | "수집용" → "검색용" | — |
+| #9 warn · CLN-4 · `ResiliencePolicy.java:166` | U+200C 제거. 저장소의 `.java`·`docs/**.md` 전체를 같은 정규식으로 훑어 다른 보이지 않는 문자가 없음을 확인했다(`03-review.md` 가 인용한 한 줄 제외) | — |
+
+### #1 을 어떻게 닫았나
+
+**부등식.** 옳은 조건은 `풀 대기 < 시도별 상한` 이다. 시도별 상한이 `(per-call − 백오프 합) ÷ 시도 수`
+로 유도되므로 풀 대기도 거기서 파생시켰다.
+
+```
+pendingAcquireTimeout = min(용도별 attemptTimeout) ÷ 2
+```
+
+- **기준이 `min` 인 이유**: 풀은 크기만 호스트별로 갈리고 **대기 타임아웃은 자원 전체에 값 하나**다.
+  검색용·수집용이 같은 `ReactorResourceFactory` 를 쓰므로, 한 경로에서라도 시도별 상한이 더 짧으면
+  그쪽 풀 고갈이 다시 `TIMEOUT` 이 된다. 검색용이 항상 짧다고 가정하지 않은 이유는 **테스트 설정에서
+  실제로 뒤집혀 있기** 때문이다(검색 850ms · 수집 750ms).
+- **배선**: 풀 빈이 `List<SupplierResilience>` 를 받아 각 데코레이터의 `attemptTimeout()` 중 최솟값을
+  쓴다. 값을 어디에도 다시 적지 않으므로 `per-call`·시도 수·백오프가 바뀌어도 부등식이 따라 움직인다.
+- **몫 2 를 남긴 이유**: 시도 하나는 풀 대기 + 연결 + 요청·응답을 다 담는다. 나머지 절반이 그 뒤의
+  몫이고, 여유가 이보다 작으면 정상 트래픽에서도 대기가 상한에 닿는다.
+- **테스트를 두지 않았다.** 값이 자기가 지켜야 할 바로 그 상한에서 나오므로 확인할 것이 `x ÷ 2 < x`
+  뿐이다. 어긋날 수 있는 자리가 남아 있을 때만 테스트가 값을 한다.
+
+**분류.** 부등식만으로는 절반도 못 닫는다 — `PoolAcquireTimeoutException` 이
+`java.util.concurrent.TimeoutException` 을 **상속**하고 WebClient 가 전송 실패를
+`WebClientRequestException` 으로 감싸므로, 규칙을 더하지 않으면 어느 경로로 와도 `TIMEOUT` 이나
+`UNAVAILABLE` 이 된다. 그래서 두 자리를 고쳤다.
+
+| 자리 | 왜 필요한가 |
+|---|---|
+| `matchOne` 의 `TimeoutException` 규칙 **앞** | 상속 관계라 순서가 뒤집히면 조용히 `TIMEOUT` 이 된다 |
+| `byTransportFailure` 의 사슬 순회 | 사슬 맨 바깥이 `WebClientRequestException` 이라 위 규칙에 닿기 전에 여기서 먼저 걸린다. 실제 호출에서 나오는 모양이 이쪽이다 |
+
+**값을 더한 근거는 D-F9-8 과 같다** — 읽을 소비자가 실재하는가. F7 이 요약 로그에 `reason` 을 싣기
+시작했으므로 소비자가 있고, `TIMEOUT` 으로 적으면 그 줄이 "공급사가 느리다"는 거짓 문장이 되어 새벽에
+멀쩡한 공급사를 의심하게 만든다.
+
+**타입이 `reactor.netty.internal.shaded.reactor.pool.PoolAcquireTimeoutException` 인 것을 확인했다.**
+reactor-netty 1.3.7 이 reactor-pool 을 shade 해서 넣으므로 공개 좌표(`io.projectreactor.addons:reactor-pool`)
+가 의존성 트리에 없고, 그 이름 말고는 풀 고갈을 가릴 방법이 없다(`reactor.netty.resources` 어디에도 이
+예외를 다시 감싸는 코드가 없어 그대로 올라온다 — jar 를 풀어 확인). 메시지 문자열로 보는 대안은 조용히
+어긋나지만, 타입으로 보면 shade 경로가 바뀌는 순간 **컴파일이 깨져** 드러난다. 새 의존성은 없다.
+
+### 변경 파일
+
+프로덕션
+
+- `core/.../SupplierErrorCode.java` — `POOL_EXHAUSTED` 추가, 자바독 정정
+- `supplier-client/.../FailureClassifier.java` — 풀 고갈 규칙 둘
+- `supplier-client/.../SupplierFailurePolicy.java` — 자바독(두 표 어디에도 없는 이유)
+- `supplier-client/.../SupplierHttpClientConfig.java` — 유도 기준 변경, 호스트별 풀 자바독 정정
+- `supplier-client/.../SupplierResilience.java` — `attemptTimeout()` 접근자(풀 배선이 읽는다)
+- `supplier-client/.../CatalogResilienceProperties.java` · `.../ResiliencePolicy.java` — 주석 정정
+
+테스트
+
+- `FailureClassifierTest` — T-21(2 케이스)과 예외 팩토리
+- `SupplierFailurePolicyTest` — T-03·T-04 에 `POOL_EXHAUSTED` 행
+- `SupplierResilienceTest` — T-22, 서킷 계측 헬퍼를 `breakerOf` 로 묶고 실패 표본 수 헬퍼 추가
+- `SupplierCatalogConfigTest` — 시도별 상한을 리플렉션이 아니라 새 접근자로 읽는다
+
+문서
+
+- `docs/features/supplier-resilience/01-design.md` — D-F9-6 카드에 정정 행 · §3.2 유도 문단 · §3.4 표에
+  `POOL_EXHAUSTED` 행과 근거 · §3.6 풀 설정 표 · §5 테스트 스택 보정과 T-21·T-22 · T-03·T-04 케이스 수
+- `docs/test-cases.md` — F9 절 집계와 새 행
+
+### 변이 검사 (fix-1)
+
+새 테스트가 Red 없이 통과했으므로(고친 뒤에 썼다) 네 갈래를 하나씩 되돌려 확인하고 복구했다.
+
+| 변이 | 무엇을 바꿨나 | 실패한 테스트 |
+|---|---|---|
+| E | `RETRYABLE` 에 `POOL_EXHAUSTED` 추가 | T-03 의 해당 행 · T-22 |
+| F | `CIRCUIT_FAILURES` 에 `POOL_EXHAUSTED` 추가 | T-04 의 해당 행 · T-22 |
+| G | `byTransportFailure` 의 풀 규칙 제거 | T-21 "WebClient 가 감싼 모양" · T-22 |
+| H | `matchOne` 의 풀 규칙 제거 | T-21 "감싸이지 않은 모양" |
+
+G 와 H 가 서로 다른 케이스를 잡는 것이 두 규칙이 모두 필요하다는 증거다. E·F 가 T-22 를 함께 깨는 것은
+그 테스트가 재시도(구독 수)와 서킷 표본 수를 같이 보기 때문이다.
+
+### 전체 테스트 결과
+
+- 총 272 · 통과 272 · 실패 0 · 건너뜀 0
+- 근거: `./gradlew test --rerun-tasks` 뒤의 `**/build/test-results/test/TEST-*.xml`
+- 모듈별: `core` 80 · `supplier-client` 165 · `api-app` 17 · `persistence` 7 · `batch-app` 3
+- 직전 267 에서 +5 (T-21 2 · T-22 1 · T-03·T-04 각 1)
+
+### 설계 이탈 요청
+
+없음. `01-design.md` 를 고쳤으나 이는 팀 리드가 지시한 **결함 정정**이며, 새 결정을 만든 자리는
+`POOL_EXHAUSTED` 값 추가 하나다. 그 판단 기준(소비자가 실재하는가)은 D-F9-8 이 이미 세운 것이라
+새 기준을 만들지 않았다.
+
+### 남은 이슈
+
+- **풀 고갈의 실제 동작은 여전히 재지 않았다.** 리뷰 #10(k6 로 풀 고갈을 강제해 어떤 유형이 기록되는지
+  관측)은 메인 세션 몫이다. 이번에 고정한 것은 "그 예외가 오면 어떻게 분류·판정되는가" 까지이고,
+  "그 예외가 실제로 오는가" 는 실기동에서 확인해야 한다.
+- `docs/features/supplier-resilience/design.html` 의 「풀 대기 타임아웃 `< per-call`」 서술(683 행)과
+  D-F9-6 요약(1275 행), 그림 3 설명(667 행)이 아직 낡은 부등식을 들고 있다. 쓰기 범위 밖이라 손대지
+  않았고 리드에게 보고했다.
+
+### 04-runtime-verification.md 에 반영할 것 (메인 세션 몫)
+
+「커넥션 풀 획득 대기는 관측되지 않았다」 절과 남은 이슈의 마지막 항목이 fix-1 로 두 군데 낡았다.
+
+- **값 서술**: "획득 대기 = `per-call` ÷ 2" 는 이제 **`min(용도별 attemptTimeout) ÷ 2`** 다. 검색 경로에서
+  2s → 925ms, 값이 아니라 유도 기준이 바뀐 것이라 `per-call` 을 조정해도 부등식이 따라 움직인다.
+- **관측 방법이 생겼다**: 이전에는 풀 대기가 걸려도 `TIMEOUT` 으로 기록돼 공급사 지연과 구분되지
+  않았다. 이제 요약 로그의 `reason` 이 **`POOL_EXHAUSTED`** 로 갈리므로 그 값을 세는 것만으로 관측된다.
+  재현 조건은 **서킷을 끄고**(그래야 포화가 만들어진다 — 관측 5의 이유) 동시 호출을 호스트당 50 이상으로
+  올리는 것이고, 확인할 것은 두 가지다: ① `reason=POOL_EXHAUSTED` 가 나오는가 ② 그때 그 공급사의 서킷이
+  **열리지 않는가**(자사 병목이 표본이 되지 않는다는 것이 이 수정의 요점이다).
